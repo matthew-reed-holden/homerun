@@ -2,12 +2,10 @@ package daemon
 
 import (
 	"context"
-	"net/http"
+	"errors"
 	"strings"
-	"sync"
 	"testing"
 
-	"github.com/google/go-github/v92/github"
 	"github.com/matthew-reed-holden/homerun/internal/event"
 	"github.com/matthew-reed-holden/homerun/internal/gh"
 )
@@ -216,30 +214,10 @@ func TestShutdownLeavesQueuedRunForRecovery(t *testing.T) {
 	}
 }
 
-// failingReporter fails the failOn'th CreateCheck with an error GitHub would
-// not let a retry fix.
-type failingReporter struct {
-	*gh.Fake
-	mu     sync.Mutex
-	n      int
-	failOn int
-}
-
-func (r *failingReporter) CreateCheck(ctx context.Context, repo, sha, name, externalID string) (int64, error) {
-	r.mu.Lock()
-	r.n++
-	fail := r.n == r.failOn
-	r.mu.Unlock()
-	if fail {
-		return 0, &github.ErrorResponse{Response: &http.Response{StatusCode: http.StatusUnprocessableEntity}, Message: "boom"}
-	}
-	return r.Fake.CreateCheck(ctx, repo, sha, name, externalID)
-}
-
 func TestPartialClaimClosesCreatedChecksAsFailure(t *testing.T) {
 	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
 	h.poll()
-	h.d.opts.Reporter = &failingReporter{Fake: h.fake, failOn: 2}
+	h.rep.set(2, nil)
 	sha := h.push(map[string]string{"a.txt": "a"})
 	h.poll()
 	cs := h.fake.Checks(repo, sha)
@@ -277,4 +255,69 @@ func TestPRHeadNotYetFetchableIsRetriedNextPoll(t *testing.T) {
 		t.Fatalf("want the jobs claimed once fetchable, got %+v", cs)
 	}
 	h.waitDone(head)
+}
+
+func TestFirstClaimFailureLeavesNoRunAndRetries(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	h.rep.set(1, nil)
+	sha := h.push(map[string]string{"a.txt": "a"})
+	h.poll()
+	if cs := h.fake.Checks(repo, sha); len(cs) != 0 {
+		t.Fatalf("checks after failed first claim: %+v", cs)
+	}
+	if runs, _ := h.d.store.List(); len(runs) != 0 {
+		t.Fatalf("failed claim left stored runs: %+v", runs)
+	}
+	h.d.mu.Lock()
+	n := len(h.d.runs)
+	h.d.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("failed claim left %d tracked runs", n)
+	}
+	h.poll()
+	if cs := h.fake.Checks(repo, sha); len(cs) != 2 {
+		t.Fatalf("want a retry to claim both jobs, got %d checks", len(cs))
+	}
+	h.waitDone(sha)
+}
+
+func TestCallerCancelMidClaimStillCompletesClaim(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	sha := h.push(map[string]string{"a.txt": "a"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h.rep.set(0, func(n int) {
+		if n == 1 {
+			cancel()
+		}
+	})
+	ev := event.Event{Name: "push", Repo: repo, DefaultBranch: "main", SHA: sha, Ref: "refs/heads/main", Before: event.Zero}
+	run, err := h.d.Start(ctx, ev)
+	if err != nil || run == nil {
+		t.Fatalf("start: run=%v err=%v", run, err)
+	}
+	cs := h.waitDone(sha)
+	if len(cs) != 2 {
+		t.Fatalf("want both checks created, got %+v", cs)
+	}
+	for name, c := range cs {
+		if c.Conclusion == "failure" {
+			t.Errorf("%s closed as failure: %+v", name, c.Updates)
+		}
+	}
+}
+
+func TestSetupFailureHidesStateDir(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	sha := h.git("rev-parse", "HEAD")
+	ev := event.Event{Name: "push", Repo: repo, DefaultBranch: "main", SHA: sha, Ref: "refs/heads/main"}
+	cause := errors.New("open " + h.d.opts.StateDir + "/work/x/.github/homerun.yml: permission denied")
+	h.d.failSetup(context.Background(), ev, cause)
+	c := h.waitDone(sha)["homerun"]
+	got := lastSummary(c)
+	if strings.Contains(got, h.d.opts.StateDir) || !strings.Contains(got, "<state>/work/x/.github/homerun.yml") {
+		t.Fatalf("summary leaks or loses the path: %q", got)
+	}
 }

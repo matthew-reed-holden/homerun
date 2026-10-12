@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-github/v92/github"
 	"github.com/matthew-reed-holden/homerun/internal/config"
 	"github.com/matthew-reed-holden/homerun/internal/gh"
 )
@@ -37,13 +39,56 @@ type harness struct {
 	src  string
 	act  string
 	fake *gh.Fake
+	rep  *reporter
 	d    *Daemon
+}
+
+// reporter is the Fake as the daemon sees it, but like the real client it
+// fails calls whose ctx is done, and it can inject faults into CreateCheck.
+type reporter struct {
+	*gh.Fake
+	mu      sync.Mutex
+	creates int
+	failOn  int               // fail this CreateCheck (1-based) with an error retries cannot fix
+	after   func(creates int) // runs after each successful CreateCheck
+}
+
+func (r *reporter) set(failOn int, after func(int)) {
+	r.mu.Lock()
+	r.failOn, r.after = failOn, after
+	r.mu.Unlock()
+}
+
+func (r *reporter) CreateCheck(ctx context.Context, repo, sha, name, externalID string) (int64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	r.mu.Lock()
+	r.creates++
+	n, fail, after := r.creates, r.creates == r.failOn, r.after
+	r.mu.Unlock()
+	if fail {
+		return 0, &github.ErrorResponse{Response: &http.Response{StatusCode: http.StatusUnprocessableEntity}, Message: "boom"}
+	}
+	id, err := r.Fake.CreateCheck(ctx, repo, sha, name, externalID)
+	if err == nil && after != nil {
+		after(n)
+	}
+	return id, err
+}
+
+func (r *reporter) UpdateCheck(ctx context.Context, repo string, id int64, u gh.Update) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return r.Fake.UpdateCheck(ctx, repo, id, u)
 }
 
 func newHarness(t *testing.T, files map[string]string) *harness {
 	t.Helper()
 	tmp := t.TempDir()
 	h := &harness{t: t, tmp: tmp, src: filepath.Join(tmp, "src"), act: filepath.Join(tmp, "act"), fake: gh.NewFake(1)}
+	h.rep = &reporter{Fake: h.fake}
 	h.git("init", "-q", "-b", "main", h.src)
 	sha := h.commit(files)
 	h.fake.SetDefault(repo, "main")
@@ -56,7 +101,7 @@ func newHarness(t *testing.T, files map[string]string) *harness {
 		Repos:     map[string]config.UserRepo{repo: {Secrets: map[string]config.Secret{"MYSEC": {Value: "s3cr3t-value"}}}},
 	}
 	// file:// so the mirror gets only reachable objects, as from GitHub.
-	d, err := New(Options{Config: cfg, Source: h.fake, Reporter: h.fake, AppID: 1,
+	d, err := New(Options{Config: cfg, Source: h.fake, Reporter: h.rep, AppID: 1,
 		StateDir: filepath.Join(tmp, "state"), Act: h.act, GitURL: func(string) string { return "file://" + h.src }})
 	if err != nil {
 		t.Fatal(err)

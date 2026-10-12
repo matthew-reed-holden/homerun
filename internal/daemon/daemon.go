@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -110,7 +111,11 @@ func (d *Daemon) Reload() error {
 // close cancels every run and waits for their goroutines, so nothing touches
 // the state directory after it returns.
 func (d *Daemon) close() {
+	// Under mu so a concurrent Start either sees the cancellation or has
+	// already called wg.Add before Wait starts.
+	d.mu.Lock()
 	d.stop()
+	d.mu.Unlock()
 	d.wg.Wait()
 }
 
@@ -319,9 +324,19 @@ func (d *Daemon) repoLock(repo string) *sync.Mutex {
 // queues the run. It returns a nil run when nothing in the repo listens to ev.
 // Forks are not held here: callers decide whether a fork may run.
 func (d *Daemon) Start(ctx context.Context, ev event.Event) (*store.Run, error) {
+	d.mu.Lock()
 	if err := d.base.Err(); err != nil {
+		d.mu.Unlock()
 		return nil, fmt.Errorf("daemon is shutting down: %w", err)
 	}
+	d.wg.Add(1)
+	d.mu.Unlock()
+	handedOff := false
+	defer func() {
+		if !handedOff {
+			d.wg.Done()
+		}
+	}()
 	lock := d.repoLock(ev.Repo)
 	lock.Lock()
 	defer lock.Unlock()
@@ -361,21 +376,28 @@ func (d *Daemon) Start(ctx context.Context, ev event.Event) (*store.Run, error) 
 	// Saved before any claim so that recovery after a crash mid-claim can
 	// close whatever was created.
 	d.track(run)
+	// A started claim always completes: a caller's cancellation (SIGTERM, a
+	// disconnected CLI) must not turn a half-made claim into a permanent failure.
+	cctx := context.WithoutCancel(ctx)
 	for i, c := range run.Checks {
 		var id int64
-		err := gh.Retry(ctx, func() (err error) {
-			id, err = d.opts.Reporter.CreateCheck(ctx, ev.Repo, ev.SHA, c.Name, ev.Key())
+		err := gh.Retry(cctx, func() (err error) {
+			id, err = d.opts.Reporter.CreateCheck(cctx, ev.Repo, ev.SHA, c.Name, ev.Key())
 			return err
 		})
 		if err != nil {
+			m.RemoveWorktree(cctx, run.Worktree)
+			if i == 0 {
+				// Nothing was claimed, so the next poll retries; keep no trace.
+				d.forget(run)
+				return nil, err
+			}
 			// The created checks are the claim, so they must not wait forever;
 			// failure (not cancelled) because homerun, not the user, broke.
-			cctx := context.WithoutCancel(ctx)
 			for _, made := range run.Checks[:i] {
-				d.complete(cctx, run, made, "failure", "homerun could not start this run", "homerun error: "+err.Error(), "")
+				d.complete(cctx, run, made, "failure", "homerun could not start this run", "homerun error: "+d.scrub(err.Error()), "")
 			}
 			d.setStatus(run, "done")
-			m.RemoveWorktree(ctx, run.Worktree)
 			return nil, err
 		}
 		d.mu.Lock()
@@ -391,7 +413,7 @@ func (d *Daemon) Start(ctx context.Context, ev event.Event) (*store.Run, error) 
 	if ev.Name == "pull_request" {
 		key = ev.Repo + "|" + ev.Key()
 	}
-	d.wg.Add(1)
+	handedOff = true
 	d.sched.Submit(d.base, run.ID, key, ev.Repo, p.repo.MaxParallel, func(ctx context.Context, slot int) {
 		defer d.wg.Done()
 		d.execute(ctx, run, p, slot)
@@ -454,7 +476,7 @@ func (d *Daemon) changedFiles(ctx context.Context, m *git.Mirror, ev event.Event
 
 // failSetup reports a problem that stopped homerun before any job could run.
 func (d *Daemon) failSetup(ctx context.Context, ev event.Event, cause error) error {
-	if err := d.singleCheck(ctx, ev, "failure", "homerun could not start this run", "homerun error: "+cause.Error()); err != nil {
+	if err := d.singleCheck(ctx, ev, "failure", "homerun could not start this run", "homerun error: "+d.scrub(cause.Error())); err != nil {
 		return errors.Join(cause, fmt.Errorf("reporting the failure: %w", err))
 	}
 	return cause
@@ -477,6 +499,27 @@ func (d *Daemon) singleCheck(ctx context.Context, ev event.Event, conclusion, ti
 		return d.opts.Reporter.UpdateCheck(uctx, ev.Repo, id, gh.Update{Name: "homerun", Status: "completed",
 			Conclusion: conclusion, Title: title, Summary: summary})
 	})
+}
+
+// scrub hides the state directory in text bound for a check run, which may be
+// public: the path usually carries the user's home directory and name.
+func (d *Daemon) scrub(s string) string {
+	if d.opts.StateDir == "" {
+		return s
+	}
+	return strings.ReplaceAll(s, d.opts.StateDir, "<state>")
+}
+
+// forget drops a run that never claimed anything, so it is neither shown nor recovered.
+func (d *Daemon) forget(run *store.Run) {
+	d.mu.Lock()
+	delete(d.runs, run.ID)
+	d.mu.Unlock()
+	if dir, err := d.store.RunDir(run.ID); err == nil {
+		if err := os.RemoveAll(dir); err != nil {
+			slog.Warn("remove run", "run", run.ID, "err", err)
+		}
+	}
 }
 
 func (d *Daemon) track(run *store.Run) {
