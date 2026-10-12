@@ -742,5 +742,53 @@ func (d *Daemon) closeOpen(ctx context.Context, run *store.Run, conclusion, summ
 	d.closeWhere(ctx, run, func(*store.Check) bool { return true }, conclusion, summary, "")
 }
 
-// recover is completed in Task 15.
-func (d *Daemon) recover(ctx context.Context) {}
+const restartedSummary = "runner restarted"
+
+// recover takes over runs a previous daemon left queued or running, after a
+// crash or a shutdown: it closes their check runs and queues them again.
+// Starting fresh is simpler and safer than resuming act.
+func (d *Daemon) recover(ctx context.Context) {
+	runs, err := d.store.List()
+	if err != nil {
+		slog.Error("reading run history", "err", err)
+		return
+	}
+	var stranded []*store.Run
+	d.mu.Lock()
+	for _, r := range runs {
+		// A run this daemon already tracks is live here, not stranded.
+		if _, ok := d.runs[r.ID]; ok {
+			continue
+		}
+		d.runs[r.ID] = r
+		if r.Status == "queued" || r.Status == "running" {
+			stranded = append(stranded, r)
+		}
+	}
+	d.mu.Unlock()
+	// Results finished before the outage or crash go out first, so closing
+	// below never overwrites a real conclusion with "runner restarted".
+	d.flushReports(ctx)
+	rctx := context.WithoutCancel(ctx)
+	for _, r := range stranded {
+		d.closeOpen(rctx, r, "cancelled", restartedSummary)
+		// Marked before re-queueing: a crash in between loses the re-run but
+		// can never run the commit twice.
+		d.setStatus(r, "cancelled")
+		if _, ok := d.config().Repos[r.Repo]; !ok {
+			slog.Warn("not re-queueing a run for an unregistered repo", "run", r.ID, "repo", r.Repo)
+			continue
+		}
+		// Recomputed rather than read from meta.json, so a bad file cannot
+		// point the removal elsewhere.
+		wt := filepath.Join(d.opts.StateDir, "work", r.ID)
+		if _, err := os.Stat(wt); err == nil {
+			if err := d.mirror(r.Repo).RemoveWorktree(rctx, wt); err != nil {
+				slog.Warn("remove worktree", "run", r.ID, "err", err)
+			}
+		}
+		if _, err := d.Start(ctx, r.Event); err != nil {
+			slog.Error("re-queueing run", "run", r.ID, "err", err)
+		}
+	}
+}
