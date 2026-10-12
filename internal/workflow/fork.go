@@ -12,8 +12,8 @@ import (
 
 // ForkUnsafeJobs lists the jobs a fork PR must not run, in file order: jobs
 // aimed at the host or at self-hosted runners, and jobs whose container or
-// services set options or volumes (act honours --privileged and -v /:/host
-// there). Anything it cannot read statically (an expression standing in for a
+// services set options, volumes or ports (act honours --privileged, -v /:/host
+// and host port bindings such as 0.0.0.0:22:22 there). Anything it cannot read statically (an expression standing in for a
 // whole container or services value) counts as unsafe, and merge keys,
 // duplicate keys or non-mapping jobs are an error. A
 // reusable-workflow job is safe only if it calls a local workflow, read from
@@ -55,6 +55,9 @@ func (fc *forkChecker) unsafeJobs(rel string, depth int) ([]string, error) {
 	}
 	if len(root.Content) == 0 {
 		return nil, fmt.Errorf("%s: empty workflow", rel)
+	}
+	if err := acyclic(&root, 0, map[*yaml.Node]bool{}, map[*yaml.Node]bool{}); err != nil {
+		return nil, fmt.Errorf("%s: %w: %v", rel, errShape, err)
 	}
 	top := resolve(root.Content[0])
 	if top.Kind != yaml.MappingNode {
@@ -143,8 +146,49 @@ func resolve(n *yaml.Node) *yaml.Node {
 	return n
 }
 
+// maxNesting bounds every walk over a workflow's nodes. yaml.v3 accepts an
+// anchor that contains an alias to itself, and following it would recurse
+// until the stack overflows, which kills the daemon.
+const maxNesting = 64
+
+// acyclic refuses alias cycles and nesting deeper than maxNesting. done makes
+// the walk linear in the number of nodes even when aliases share subtrees.
+func acyclic(n *yaml.Node, depth int, onPath, done map[*yaml.Node]bool) error {
+	if n == nil || done[n] {
+		return nil
+	}
+	if onPath[n] {
+		return errors.New("alias cycle")
+	}
+	if depth > maxNesting {
+		return errors.New("nesting too deep")
+	}
+	onPath[n] = true
+	if n.Alias != nil {
+		if err := acyclic(n.Alias, depth+1, onPath, done); err != nil {
+			return err
+		}
+	}
+	for _, c := range n.Content {
+		if err := acyclic(c, depth+1, onPath, done); err != nil {
+			return err
+		}
+	}
+	delete(onPath, n)
+	done[n] = true
+	return nil
+}
+
 // anyScalar reports whether f holds for any scalar in n, keys included.
+// Past maxNesting it answers true, so a predicate meaning "unsafe" fails closed.
 func anyScalar(n *yaml.Node, f func(string) bool) bool {
+	return anyScalarDepth(n, f, 0)
+}
+
+func anyScalarDepth(n *yaml.Node, f func(string) bool, depth int) bool {
+	if depth > maxNesting {
+		return true
+	}
 	n = resolve(n)
 	if n == nil {
 		return false
@@ -153,7 +197,7 @@ func anyScalar(n *yaml.Node, f func(string) bool) bool {
 		return f(n.Value)
 	}
 	for _, c := range n.Content {
-		if anyScalar(c, f) {
+		if anyScalarDepth(c, f, depth+1) {
 			return true
 		}
 	}
@@ -183,7 +227,7 @@ func containerUnsafe(n *yaml.Node) bool {
 	case n.Kind == yaml.ScalarNode:
 		return isExpr(n.Value)
 	case n.Kind == yaml.MappingNode:
-		return checkKeys(n) != nil || mapGet(n, "options") != nil || mapGet(n, "volumes") != nil
+		return checkKeys(n) != nil || mapGet(n, "options") != nil || mapGet(n, "volumes") != nil || mapGet(n, "ports") != nil
 	}
 	return false
 }

@@ -192,6 +192,8 @@ jobs:
     steps: [{run: "true"}]
   priv: {runs-on: ubuntu-latest, container: {image: x, options: --privileged}, steps: [{run: "true"}]}
   vol: {runs-on: ubuntu-latest, services: {db: {image: x, volumes: ["/:/host"]}}, steps: [{run: "true"}]}
+  ports: {runs-on: ubuntu-latest, services: {db: {image: x, ports: ["5432:5432"]}}, steps: [{run: "true"}]}
+  cports: {runs-on: ubuntu-latest, container: {image: x, ports: ["0.0.0.0:22:22"]}, steps: [{run: "true"}]}
   aliased: {runs-on: ubuntu-latest, services: {db: *svc}, steps: [{run: "true"}]}
   exprctr: {runs-on: ubuntu-latest, container: "${{ matrix.c }}", steps: [{run: "true"}]}
   reusable: {uses: ./.github/workflows/other.yml}
@@ -200,7 +202,7 @@ jobs:
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"host", "selfhosted", "group", "matrixhost", "priv", "vol", "aliased", "exprctr", "reusable"}
+	want := []string{"host", "selfhosted", "group", "matrixhost", "priv", "vol", "ports", "cports", "aliased", "exprctr", "reusable"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -305,5 +307,36 @@ func TestForkUnsafeJobsReadsEachCalleeOnce(t *testing.T) {
 	// The callee calls itself, so it is unsafe and every caller is skipped.
 	if len(got) != 50 || fc.reads != 2 {
 		t.Fatalf("%d unsafe, %d reads; want 50 and 2", len(got), fc.reads)
+	}
+}
+
+const cyclicYML = `on: pull_request
+jobs:
+  a:
+    runs-on: &r [ubuntu-latest, *r]
+    steps: [{run: "true"}]
+`
+
+func TestCyclicAnchorsDoNotCrash(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "w.yml", cyclicYML)
+	if got, err := ForkUnsafeJobs(root, "w.yml"); err == nil {
+		t.Fatalf("fork check accepted a cyclic workflow: %v", got)
+	}
+	Load(root, "w.yml") // must return, error or not
+	for _, body := range []string{
+		"on: &o [push, *o]\njobs: {a: {runs-on: x}}\n",
+		"on: {push: &f {branches: [*f]}}\njobs: {a: {runs-on: x}}\n",
+		"on: push\njobs: {a: {name: &n [*n], runs-on: x}}\n",
+	} {
+		write(t, root, "l.yml", body)
+		Load(root, "l.yml")
+		if _, err := ForkUnsafeJobs(root, "l.yml"); err == nil {
+			t.Errorf("fork check accepted %q", body)
+		}
+	}
+	for _, args := range [][2][]string{{{"a"}, nil}, {nil, {"a"}}} {
+		write(t, root, "w.yml", cyclicYML)
+		PrepareJobs(root, "w.yml", args[0], args[1])
 	}
 }

@@ -84,6 +84,7 @@ jobs:
   onhost: {runs-on: homerun-host, steps: [{run: "true"}]}
   priv: {runs-on: ubuntu-latest, container: {image: x, options: --privileged}, steps: [{run: "true"}]}
   svc: {runs-on: ubuntu-latest, services: {db: {image: x, volumes: ["/:/host"]}}, steps: [{run: "true"}]}
+  ports: {runs-on: ubuntu-latest, services: {db: {image: x, ports: ["5432:5432"]}}, steps: [{run: "true"}]}
 `})
 	// act still mentions a disabled job; its check must stay neutral.
 	h.output(`{"jobID":"build","matrix":{},"jobResult":"success","msg":"ok"}
@@ -94,7 +95,7 @@ jobs:
 	t.Setenv("FAKE_ACT_ARGS", argsFile)
 	head := startFork(t, h, map[string]string{"f.txt": "f"})
 	cs := h.waitDone(head)
-	for _, job := range []string{"onhost", "priv", "svc"} {
+	for _, job := range []string{"onhost", "priv", "svc", "ports"} {
 		c := cs["homerun / CI / "+job]
 		if c == nil || c.Conclusion != "neutral" || lastSummary(c) != "skipped: fork PR" {
 			t.Fatalf("%s: %+v", job, c)
@@ -536,6 +537,27 @@ jobs:
 		if c.Conclusion != "failure" || !strings.HasPrefix(lastSummary(c), "homerun error:") {
 			t.Errorf("%s: %s %q", name, c.Conclusion, lastSummary(c))
 		}
+	}
+	h.waitRun(head, "done")
+	if _, err := os.Stat(argsFile); err == nil {
+		t.Fatal("act ran the fork workflow")
+	}
+}
+
+func TestForkCyclicAnchorFailsSetup(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": `name: CI
+on: [push, pull_request]
+jobs:
+  a:
+    runs-on: &r [ubuntu-latest, *r]
+    steps: [{run: "true"}]
+`})
+	argsFile := filepath.Join(h.tmp, "args")
+	t.Setenv("FAKE_ACT_ARGS", argsFile)
+	head := startFork(t, h, map[string]string{"f.txt": "f"})
+	c := h.waitDone(head)["homerun / CI / a"]
+	if c == nil || c.Conclusion != "failure" || !strings.HasPrefix(lastSummary(c), "homerun error:") {
+		t.Fatalf("a: %+v", c)
 	}
 	h.waitRun(head, "done")
 	if _, err := os.Stat(argsFile); err == nil {
