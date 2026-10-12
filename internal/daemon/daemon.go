@@ -298,7 +298,9 @@ func (d *Daemon) handle(ctx context.Context, ev event.Event, checks []gh.Check) 
 	d.mu.Lock()
 	done := d.seen[k] == ev.SHA
 	d.mu.Unlock()
-	if done {
+	if done || d.awaitingRequeue(ev) {
+		// Not marked seen: requeue alone owns the commit, and a stranded run
+		// that never claimed it would otherwise be started twice.
 		return nil
 	}
 	if !claimed(checks, d.opts.AppID, ev.Key()) {
@@ -321,6 +323,17 @@ func (d *Daemon) handle(ctx context.Context, ev event.Event, checks []gh.Check) 
 		return d.store.SaveState(d.state)
 	}
 	return nil
+}
+
+func (d *Daemon) awaitingRequeue(ev event.Event) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, r := range d.runs {
+		if r.Status == "requeue" && r.Repo == ev.Repo && r.Event.SHA == ev.SHA && r.Event.Key() == ev.Key() {
+			return true
+		}
+	}
+	return false
 }
 
 func claimed(checks []gh.Check, appID int64, key string) bool {
@@ -855,15 +868,20 @@ func (d *Daemon) requeue(ctx context.Context) {
 		// Recomputed rather than read from meta.json, so a bad file cannot
 		// point the removal elsewhere.
 		wt := filepath.Join(d.opts.StateDir, "work", r.ID)
+		if _, ok := d.config().Repos[r.Repo]; !ok {
+			// The repo name came from meta.json, so it must not choose a mirror
+			// directory to run git in.
+			slog.Warn("not re-queueing a run for an unregistered repo", "run", r.ID, "repo", r.Repo)
+			if err := os.RemoveAll(wt); err != nil {
+				slog.Warn("remove worktree", "run", r.ID, "err", err)
+			}
+			d.setStatus(r, "cancelled")
+			continue
+		}
 		if _, err := os.Stat(wt); err == nil {
 			if err := d.mirror(r.Repo).RemoveWorktree(rctx, wt); err != nil {
 				slog.Warn("remove worktree", "run", r.ID, "err", err)
 			}
-		}
-		if _, ok := d.config().Repos[r.Repo]; !ok {
-			slog.Warn("not re-queueing a run for an unregistered repo", "run", r.ID, "repo", r.Repo)
-			d.setStatus(r, "cancelled")
-			continue
 		}
 		// The old run is retired when the new one is saved, before it claims
 		// anything, so at no point can both be recovered and run.

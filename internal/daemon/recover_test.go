@@ -3,6 +3,8 @@ package daemon
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -110,7 +112,10 @@ func TestRecoverClosesStrandedChecksAndRequeues(t *testing.T) {
 	h.d.recover(context.Background())
 
 	waitRestartedAndRerun(t, h, sha, id)
-	runs, _ := h.d.store.List()
+	runs, err := h.d.store.List()
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, r := range runs {
 		if r.ID == stale.ID && r.Status != "cancelled" {
 			t.Fatalf("stale run status %s", r.Status)
@@ -173,7 +178,10 @@ func TestRecoverAfterShutdownRequeuesOnce(t *testing.T) {
 			t.Errorf("%s left %s", c.Name, c.Status)
 		}
 	}
-	runs, _ := h.d.store.List()
+	runs, err := h.d.store.List()
+	if err != nil {
+		t.Fatal(err)
+	}
 	statuses := map[string]int{}
 	for _, r := range runs {
 		statuses[r.Status]++
@@ -202,7 +210,10 @@ func TestRecoverSendsPendingReports(t *testing.T) {
 	if len(cs) != 1 || cs[0].Conclusion != "success" {
 		t.Fatalf("pending report not delivered: %+v", cs)
 	}
-	runs, _ := h.d.store.List()
+	runs, err := h.d.store.List()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(runs) != 1 || runs[0].Checks[0].Pending != nil || runs[0].Status != "done" {
 		t.Fatalf("stored run after flush: %+v", runs)
 	}
@@ -312,4 +323,68 @@ func TestSecondDaemonIsRefused(t *testing.T) {
 		t.Fatalf("after the first daemon stopped: %v", err)
 	}
 	d.close()
+}
+
+// A stranded run that never claimed its commit: while its requeue keeps
+// failing, the poller must not start the commit on its own.
+func TestUnclaimedStrandedRunIsStartedOnlyByRequeue(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	sha := h.push(map[string]string{"a.txt": "a"})
+	ev := event.Event{Name: "push", Repo: repo, DefaultBranch: "main", SHA: sha, Ref: "refs/heads/main", Before: event.Zero}
+	stale := &store.Run{ID: "20260101T000000-0000cc", Repo: repo, Event: ev, Status: "queued", Created: time.Now(),
+		Checks: []*store.Check{{Name: "homerun / CI / build", Workflow: ".github/workflows/ci.yml", JobID: "build"}}}
+	if err := h.d.store.Save(stale); err != nil {
+		t.Fatal(err)
+	}
+	// Fails recovery's requeue and the next poll's; the poll's own Start would succeed.
+	h.d.opts.Source = &flakySource{Fake: h.fake, fails: 2}
+
+	h.d.recover(context.Background())
+	h.poll()
+	if cs := h.fake.Checks(repo, sha); len(cs) != 0 {
+		t.Fatalf("poller started the commit while requeue owns it: %d checks", len(cs))
+	}
+	h.poll()
+	h.waitDone(sha)
+	h.waitRun(sha, "done")
+	h.poll()
+	for _, name := range []string{"homerun / CI / build", "homerun / CI / docker"} {
+		if n := countChecks(h, sha, name); n != 1 {
+			t.Errorf("%s: want 1 check, got %d", name, n)
+		}
+	}
+	st := storedStatuses(t, h)
+	if len(st) != 2 || st[stale.ID] != "cancelled" {
+		t.Fatalf("runs: %v", st)
+	}
+}
+
+func TestRequeueForUnregisteredRepoRunsNoGit(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	ev := event.Event{Name: "push", Repo: "../../evil", DefaultBranch: "main", SHA: strings.Repeat("a", 40), Ref: "refs/heads/main"}
+	stale := &store.Run{ID: "20260101T000000-0000dd", Repo: ev.Repo, Event: ev, Status: "running", Created: time.Now(),
+		Checks: []*store.Check{{Name: "homerun / CI / build"}}}
+	if err := h.d.store.Save(stale); err != nil {
+		t.Fatal(err)
+	}
+	wt := filepath.Join(h.d.opts.StateDir, "work", stale.ID)
+	if err := os.MkdirAll(wt, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	h.d.recover(context.Background())
+
+	if _, err := os.Stat(wt); !os.IsNotExist(err) {
+		t.Errorf("worktree not removed: %v", err)
+	}
+	h.d.mu.Lock()
+	n := len(h.d.mirrors)
+	h.d.mu.Unlock()
+	if n != 0 {
+		t.Errorf("a mirror was opened for an unregistered repo")
+	}
+	if st := storedStatuses(t, h); st[stale.ID] != "cancelled" {
+		t.Fatalf("runs: %v", st)
+	}
 }
