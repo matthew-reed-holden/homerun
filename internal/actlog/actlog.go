@@ -103,6 +103,10 @@ func (p *Parser) Feed(line []byte) []Event {
 	return out
 }
 
+// Raw masks a line that is not part of act's job log, such as act's own
+// logrus output on stderr, the same way Feed masks one on stdout.
+func (p *Parser) Raw(line []byte) string { return p.rawText(line) }
+
 // rawText masks a non-log line. Valid JSON is decoded first because a secret
 // containing a quote or backslash is escaped in the raw text and would not match.
 func (p *Parser) rawText(line []byte) string {

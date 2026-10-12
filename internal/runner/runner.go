@@ -187,8 +187,11 @@ func (r *Runner) Run(ctx context.Context, s Spec, onEvent func(actlog.Event)) er
 	}()
 	go func() {
 		defer wg.Done()
+		// act's stderr is logrus JSON, where a secret with a quote or backslash
+		// is escaped and would slip past masking the raw text.
+		p := &actlog.Parser{Mask: s.Mask}
 		readLines(stderr, func(l []byte) {
-			events <- actlog.Event{Kind: actlog.Line, Text: s.Mask(string(l))}
+			events <- actlog.Event{Kind: actlog.Line, Text: p.Raw(l)}
 		})
 	}()
 	go func() { wg.Wait(); close(events) }()

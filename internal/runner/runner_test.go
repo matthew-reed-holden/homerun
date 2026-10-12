@@ -310,3 +310,25 @@ func TestRunForkIgnoresSecrets(t *testing.T) {
 		t.Fatalf("fork run lost the placeholder token:\n%s", env)
 	}
 }
+
+func TestRunMasksJSONStderr(t *testing.T) {
+	tmp := t.TempDir()
+	errOut := filepath.Join(tmp, "stderr.json")
+	os.WriteFile(errOut, []byte(`{"level":"info","msg":"token pa\"ss\\word here"}`+"\n"), 0o644)
+	t.Setenv("FAKE_ACT_OUTPUT", "")
+	t.Setenv("FAKE_ACT_STDERR", errOut)
+	r := newRunner(t, Runner{CacheRoot: tmp})
+	secret := `pa"ss\word`
+	var texts []string
+	err := r.Run(context.Background(), Spec{Dir: t.TempDir(), Event: "push", EventPath: "/e", Workflow: "w",
+		Secrets: map[string]string{"MYSEC": secret},
+		Mask:    func(s string) string { return strings.ReplaceAll(s, secret, "***") },
+	}, func(e actlog.Event) { texts = append(texts, e.Text) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := strings.Join(texts, "\n")
+	if strings.Contains(all, "pa") || !strings.Contains(all, "token *** here") {
+		t.Fatalf("stderr not masked: %q", texts)
+	}
+}

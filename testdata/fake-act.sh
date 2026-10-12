@@ -5,5 +5,6 @@
 [ -n "$FAKE_ACT_LS" ] && ls -A > "$FAKE_ACT_LS"
 [ -n "$FAKE_ACT_OUTPUT" ] && cat "$FAKE_ACT_OUTPUT"
 echo "fake act stderr" >&2
+[ -n "$FAKE_ACT_STDERR" ] && cat "$FAKE_ACT_STDERR" >&2
 [ -n "$FAKE_ACT_SLEEP" ] && exec sleep "$FAKE_ACT_SLEEP"
 exit "${FAKE_ACT_EXIT:-0}"
