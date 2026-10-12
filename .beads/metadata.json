@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "local_git_workflows",
+  "project_id": "5d4aa580-af84-4248-8568-4279a0d6d762"
+}
