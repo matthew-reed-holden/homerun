@@ -45,6 +45,7 @@ type Daemon struct {
 	lock   *os.File                                  // flocked for the daemon's lifetime
 	wg     sync.WaitGroup                            // scheduled runs, so shutdown can wait for them
 	retry  func(context.Context, func() error) error // gh.Retry; tests replace its backoff
+	kick   chan struct{}                             // buffered 1: a poll requested before the next tick
 
 	mu        sync.Mutex
 	cfg       *config.User
@@ -83,6 +84,7 @@ func New(o Options) (*Daemon, error) {
 	base, stop := context.WithCancel(context.Background())
 	return &Daemon{
 		opts: o, store: st, state: state, cfg: o.Config, base: base, stop: stop, lock: lock, retry: gh.Retry,
+		kick:      make(chan struct{}, 1),
 		runner:    &runner.Runner{Act: o.Act, Platforms: o.Config.Platforms, CacheRoot: filepath.Join(o.StateDir, "act-cache")},
 		sched:     sched.New(o.Config.MaxParallel),
 		seen:      map[string]string{},
@@ -136,6 +138,12 @@ func (d *Daemon) Reload() error {
 	d.mu.Lock()
 	d.cfg = cfg
 	d.mu.Unlock()
+	// A newly added repo should not wait a whole poll interval. Non-blocking:
+	// a kick already pending covers this reload too.
+	select {
+	case d.kick <- struct{}{}:
+	default:
+	}
 	return nil
 }
 
@@ -162,6 +170,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-t.C:
+		case <-d.kick:
 		}
 	}
 }

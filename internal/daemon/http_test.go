@@ -190,3 +190,36 @@ func TestHTTPFollowLogAndCancel(t *testing.T) {
 		}
 	}
 }
+
+func TestReloadPollsWithoutWaitingForTicker(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	cfgPath := filepath.Join(h.tmp, "config.yml")
+	if err := os.WriteFile(cfgPath, []byte("poll_interval: 1h\nplatforms: {ubuntu-latest: img}\nrepos:\n  o/r: {secrets: {MYSEC: s3cr3t-value}}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.d.opts.ConfigPath = cfgPath
+	h.syncAct()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { defer close(done); h.d.Run(ctx) }()
+	t.Cleanup(func() { cancel(); <-done })
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		h.d.mu.Lock()
+		baselined := h.d.views[repo] != nil
+		h.d.mu.Unlock()
+		if baselined {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("first poll never ran")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	sha := h.push(map[string]string{"a.txt": "a"})
+	c, _ := serve(t, h)
+	if err := c.Reload(ctx); err != nil {
+		t.Fatal(err)
+	}
+	h.waitDone(sha)
+}
