@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -69,6 +70,24 @@ func Env(secrets map[string]string) []string {
 	return env
 }
 
+// ValidateSecrets refuses secrets act cannot take: it uppercases names and
+// prompts or exits on missing or empty values. Host commands share the check
+// so a name can never shadow a variable from the allowlisted environment.
+func ValidateSecrets(secrets map[string]string) error {
+	for n, v := range secrets {
+		if !secretName.MatchString(n) {
+			return fmt.Errorf("invalid secret name %q", n)
+		}
+		if slices.Contains(envAllow, n) {
+			return fmt.Errorf("secret name %q collides with a reserved environment variable", n)
+		}
+		if v == "" {
+			return fmt.Errorf("secret %q has an empty value", n)
+		}
+	}
+	return nil
+}
+
 func (r *Runner) Run(ctx context.Context, s Spec, onEvent func(actlog.Event)) error {
 	if s.Mask == nil {
 		s.Mask = func(v string) string { return v }
@@ -77,20 +96,11 @@ func (r *Runner) Run(ctx context.Context, s Spec, onEvent func(actlog.Event)) er
 		// Enforced here as well as by callers: a fork's code must never see a secret.
 		s.Secrets = nil
 	}
-	// act uppercases secret names and prompts/exits on missing or empty values.
+	if err := ValidateSecrets(s.Secrets); err != nil {
+		return err
+	}
 	secrets := make(map[string]string, len(s.Secrets)+1)
 	for n, v := range s.Secrets {
-		if !secretName.MatchString(n) {
-			return fmt.Errorf("invalid secret name %q", n)
-		}
-		for _, k := range envAllow {
-			if n == k {
-				return fmt.Errorf("secret name %q collides with a reserved environment variable", n)
-			}
-		}
-		if v == "" {
-			return fmt.Errorf("secret %q has an empty value", n)
-		}
 		secrets[n] = v
 	}
 	// Without GITHUB_TOKEN act runs `gh auth token` on the host and injects the user's own token.

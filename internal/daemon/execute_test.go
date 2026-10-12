@@ -612,3 +612,19 @@ func TestMatrixWithNoSuccessfulLegFails(t *testing.T) {
 		t.Fatalf("parent %+v, want failure", c)
 	}
 }
+
+func TestChecksOnlyRepoValidatesSecrets(t *testing.T) {
+	for _, tc := range []struct{ name, value string }{{"MYSEC", ""}, {"PATH", "x"}, {"my_sec", "x"}} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t, map[string]string{"README": "r"})
+			h.poll()
+			h.setSecret(tc.name, tc.value)
+			sha := h.push(map[string]string{".github/homerun.yml": "secrets: [" + tc.name + "]\nchecks:\n  lint: \"true\"\n"})
+			h.poll()
+			c := h.waitDone(sha)["homerun / checks / lint"]
+			if c == nil || c.Conclusion != "failure" || !strings.HasPrefix(lastSummary(c), "homerun error:") {
+				t.Fatalf("checks: %+v", c)
+			}
+		})
+	}
+}

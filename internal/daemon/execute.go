@@ -177,6 +177,9 @@ func (d *Daemon) secrets(ctx context.Context, repo string, rc *config.Repo, fork
 		}
 		out[name] = v
 	}
+	if err := runner.ValidateSecrets(out); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
