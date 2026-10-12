@@ -2,9 +2,11 @@ package git
 
 import (
 	"context"
+	"encoding/base64"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -79,12 +81,126 @@ func TestMirror(t *testing.T) {
 }
 
 func TestAuthEnvKeepsTokenOutOfArgs(t *testing.T) {
-	env := authEnv("tok123")
-	joined := strings.Join(env, "\n")
-	if !strings.Contains(joined, "GIT_CONFIG_KEY_0=http.https://github.com/.extraheader") || strings.Contains(joined, "tok123") {
-		t.Fatalf("token must be base64 in env only: %v", env)
+	cred := base64.StdEncoding.EncodeToString([]byte("x-access-token:tok123"))
+	want := []string{
+		"GIT_CONFIG_COUNT=1",
+		"GIT_CONFIG_KEY_0=http.https://github.com/.extraheader",
+		"GIT_CONFIG_VALUE_0=Authorization: Basic " + cred,
+	}
+	got := authEnv("tok123")
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("authEnv = %v", got)
+	}
+	if strings.Contains(strings.Join(got, "\n"), "tok123") {
+		t.Fatal("raw token in env")
 	}
 	if authEnv("") != nil {
 		t.Fatal("no token, no env")
+	}
+
+	src := t.TempDir()
+	gitT(t, src, "init", "-q", "-b", "main")
+	commit(t, src, "a.txt", "a")
+	m := &Mirror{Dir: filepath.Join(t.TempDir(), "m.git"), URL: "file://" + src}
+	for i := 0; i < 2; i++ { // clone, then fetch
+		if err := m.Fetch(context.Background(), "tok123"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg, err := os.ReadFile(filepath.Join(m.Dir, "config"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(cfg), "tok123") || strings.Contains(string(cfg), cred) {
+		t.Fatalf("token persisted in mirror config:\n%s", cfg)
+	}
+}
+
+func TestRevsCannotInjectOptions(t *testing.T) {
+	ctx := context.Background()
+	src := t.TempDir()
+	gitT(t, src, "init", "-q", "-b", "main")
+	head := commit(t, src, "a.txt", "a")
+	m := &Mirror{Dir: filepath.Join(t.TempDir(), "m.git"), URL: src}
+	if err := m.Fetch(ctx, ""); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(t.TempDir(), "x")
+	if err := m.AddWorktree(ctx, "--help", filepath.Join(t.TempDir(), "wt")); err == nil {
+		t.Fatal("option-like sha accepted")
+	}
+	if _, err := m.ChangedFiles(ctx, "--output="+out, head); err == nil {
+		t.Fatal("option-like base accepted")
+	}
+	if _, err := m.ChangedFiles(ctx, head, "--output="+out); err == nil {
+		t.Fatal("option-like head accepted")
+	}
+	if _, err := m.RevParse(ctx, "--output="+out); err == nil {
+		t.Fatal("option-like ref accepted")
+	}
+	if _, err := os.Stat(out); err == nil {
+		t.Fatal("injected option created a file")
+	}
+}
+
+func TestRemoveWorktreeAfterCancel(t *testing.T) {
+	src := t.TempDir()
+	gitT(t, src, "init", "-q", "-b", "main")
+	head := commit(t, src, "a.txt", "a")
+	m := &Mirror{Dir: filepath.Join(t.TempDir(), "m.git"), URL: src}
+	if err := m.Fetch(context.Background(), ""); err != nil {
+		t.Fatal(err)
+	}
+	wt := filepath.Join(t.TempDir(), "wt")
+	if err := m.AddWorktree(context.Background(), head, wt); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := m.RemoveWorktree(ctx, wt); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(wt); !os.IsNotExist(err) {
+		t.Fatal("dir not removed")
+	}
+	if list := gitT(t, m.Dir, "worktree", "list", "--porcelain"); strings.Contains(list, "wt") {
+		t.Fatalf("stale registration:\n%s", list)
+	}
+	if _, err := os.Stat(filepath.Join(m.Dir, "worktrees")); err == nil {
+		ents, _ := os.ReadDir(filepath.Join(m.Dir, "worktrees"))
+		if len(ents) != 0 {
+			t.Fatalf("worktrees/ not empty: %v", ents)
+		}
+	}
+}
+
+func TestErrorsScrubToken(t *testing.T) {
+	const tok = "sekrettoken"
+	cred := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + tok))
+	for _, leak := range []string{tok, cred} {
+		m := &Mirror{Dir: filepath.Join(t.TempDir(), "m.git"), URL: "/nonexistent/" + leak}
+		err := m.Fetch(context.Background(), tok)
+		if err == nil {
+			t.Fatal("expected failure")
+		}
+		if strings.Contains(err.Error(), tok) || strings.Contains(err.Error(), cred) {
+			t.Fatalf("error leaks credential: %v", err)
+		}
+	}
+}
+
+func TestChangedFilesUnquoted(t *testing.T) {
+	ctx := context.Background()
+	src := t.TempDir()
+	gitT(t, src, "init", "-q", "-b", "main")
+	base := commit(t, src, "a.txt", "a")
+	head := commit(t, src, "dir/h\u00e9llo wor\"ld.txt", "b")
+	m := &Mirror{Dir: filepath.Join(t.TempDir(), "m.git"), URL: src}
+	if err := m.Fetch(ctx, ""); err != nil {
+		t.Fatal(err)
+	}
+	files, err := m.ChangedFiles(ctx, base, head)
+	if err != nil || len(files) != 1 || files[0] != "dir/h\u00e9llo wor\"ld.txt" {
+		t.Fatalf("files = %q %v", files, err)
 	}
 }
