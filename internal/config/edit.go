@@ -13,6 +13,10 @@ import (
 )
 
 func AddRepo(path, repo string) error {
+	// LoadUser rejects bad names, so writing one would break the daemon's next reload.
+	if !ValidRepo(repo) {
+		return fmt.Errorf("repo %q must be owner/name", repo)
+	}
 	return edit(path, func(root *yaml.Node) {
 		repos := ensureMap(root, "repos")
 		if mapGet(repos, repo) == nil {
@@ -21,11 +25,18 @@ func AddRepo(path, repo string) error {
 	})
 }
 
+// SetApp with an empty keyCmd sets only the id, leaving any existing private_key alone.
 func SetApp(path string, id int64, keyCmd string) error {
 	return edit(path, func(root *yaml.Node) {
+		idNode := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!int", Value: strconv.FormatInt(id, 10)}
+		if keyCmd == "" {
+			app := ensureMap(root, "app")
+			setKey(app, "id", idNode)
+			return
+		}
 		key := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map", Style: yaml.FlowStyle, Content: []*yaml.Node{str("cmd"), str(keyCmd)}}
 		app := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map", Content: []*yaml.Node{
-			str("id"), {Kind: yaml.ScalarNode, Tag: "!!int", Value: strconv.FormatInt(id, 10)},
+			str("id"), idNode,
 			str("private_key"), key,
 		}}
 		setKey(root, "app", app)
@@ -34,6 +45,10 @@ func SetApp(path string, id int64, keyCmd string) error {
 
 // edit round-trips the file through yaml.Node so the user's comments survive.
 func edit(path string, fn func(root *yaml.Node)) error {
+	// Edit the target of a dotfile-managed symlink instead of replacing the link.
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		path = real
+	}
 	b, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err

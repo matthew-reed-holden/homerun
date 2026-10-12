@@ -79,3 +79,53 @@ func TestEditLeavesFileUntouchedOnBadYAML(t *testing.T) {
 		t.Fatalf("stray files: %v", ents)
 	}
 }
+
+func TestAddRepoRejectsBadName(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "config.yml")
+	if err := AddRepo(p, "not-a-repo"); err == nil {
+		t.Fatal("expected error")
+	}
+	if _, err := os.Stat(p); err == nil {
+		t.Fatal("config written for invalid name")
+	}
+}
+
+func TestEditFollowsSymlink(t *testing.T) {
+	dir := t.TempDir()
+	real := filepath.Join(dir, "dots", "config.yml")
+	os.MkdirAll(filepath.Dir(real), 0o700)
+	os.WriteFile(real, []byte("# mine\nmax_parallel: 2\n"), 0o600)
+	link := filepath.Join(dir, "config.yml")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := AddRepo(link, "a/b"); err != nil {
+		t.Fatal(err)
+	}
+	if fi, _ := os.Lstat(link); fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatal("symlink replaced")
+	}
+	if b, _ := os.ReadFile(real); !strings.Contains(string(b), "a/b") || !strings.Contains(string(b), "# mine") {
+		t.Fatalf("target not edited:\n%s", b)
+	}
+}
+
+func TestSetAppIDOnlyKeepsKey(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "config.yml")
+	if err := SetApp(p, 1, ""); err != nil {
+		t.Fatal(err)
+	}
+	if u, _, err := LoadUser(p); err != nil || u.App.ID != 1 || u.App.PrivateKey != (Secret{}) {
+		t.Fatalf("%+v %v", u, err)
+	}
+	if err := SetApp(p, 1, "cat k"); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetApp(p, 2, ""); err != nil {
+		t.Fatal(err)
+	}
+	u, _, err := LoadUser(p)
+	if err != nil || u.App.ID != 2 || u.App.PrivateKey.Cmd != "cat k" {
+		t.Fatalf("%+v %v", u, err)
+	}
+}
