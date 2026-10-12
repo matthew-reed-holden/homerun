@@ -138,3 +138,35 @@ func TestPrepareJobsRunsOnForms(t *testing.T) {
 		})
 	}
 }
+
+func TestPrepareJobsMissingJobFailsClosed(t *testing.T) {
+	const wf = "on: push\njobs:\n  a:\n    runs-on: x\n"
+	if _, err := prepare(t, wf, nil, []string{"ghost"}); err == nil {
+		t.Fatal("expected error for job not in jobs")
+	}
+	// A job that only exists via a merge key is not a direct key either.
+	const merged = "on: push\nx: &all\n  b:\n    runs-on: x\njobs:\n  <<: *all\n"
+	if _, err := prepare(t, merged, nil, []string{"b"}); err == nil {
+		t.Fatal("expected error for merged-in job")
+	}
+}
+
+func TestPrepareJobsMergeKeyFailsClosed(t *testing.T) {
+	const jobsMerge = "on: push\nx: &all\n  b:\n    runs-on: x\njobs:\n  a:\n    runs-on: x\n  <<: *all\n"
+	if _, err := prepare(t, jobsMerge, nil, []string{"a"}); err == nil {
+		t.Fatal("jobs merge key: expected error")
+	}
+	const jobMerge = "on: push\nx: &body\n  if: true\njobs:\n  a:\n    <<: *body\n    runs-on: x\n"
+	if _, err := prepare(t, jobMerge, nil, []string{"a"}); err == nil {
+		t.Fatal("job merge key: expected error")
+	}
+}
+
+func TestPrepareJobsDuplicateKeysFailClosed(t *testing.T) {
+	if _, err := prepare(t, "on: push\njobs:\n  a:\n    runs-on: x\n  a:\n    runs-on: y\n", nil, []string{"a"}); err == nil {
+		t.Fatal("duplicate job: expected error")
+	}
+	if _, err := prepare(t, "on: push\njobs:\n  a:\n    if: true\n    if: true\n", nil, []string{"a"}); err == nil {
+		t.Fatal("duplicate key in job: expected error")
+	}
+}

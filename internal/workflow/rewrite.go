@@ -45,18 +45,28 @@ func PrepareJobs(root, rel string, host, disable []string) error {
 		return fmt.Errorf("%s: empty workflow", rel)
 	}
 	jobs := mapGet(doc.Content[0], "jobs")
-	if jobs == nil {
-		return nil
+	// workflow.Load decodes through yaml.v3 struct decoding, which resolves merge keys
+	// and tolerates the shapes below; refusing them keeps the file from being read two ways.
+	if jobs == nil || jobs.Kind != yaml.MappingNode {
+		return fmt.Errorf("%s: jobs is not a mapping; cannot rewrite %v", rel, slices.Concat(host, disable))
 	}
+	if err := checkKeys(jobs); err != nil {
+		return fmt.Errorf("%s: jobs: %w", rel, err)
+	}
+	seen := map[string]bool{}
 	for i := 0; i+1 < len(jobs.Content); i += 2 {
 		id, job := jobs.Content[i].Value, jobs.Content[i+1]
 		isDisable, isHost := slices.Contains(disable, id), slices.Contains(host, id)
 		if !isDisable && !isHost {
 			continue
 		}
+		seen[id] = true
 		// An alias or null job would be skipped silently, leaving a fork-disabled job running.
 		if job.Kind != yaml.MappingNode {
 			return fmt.Errorf("%s: jobs.%s: not a mapping; cannot rewrite", rel, id)
+		}
+		if err := checkKeys(job); err != nil {
+			return fmt.Errorf("%s: jobs.%s: %w", rel, id, err)
 		}
 		switch {
 		case isDisable:
@@ -65,6 +75,11 @@ func PrepareJobs(root, rel string, host, disable []string) error {
 			return fmt.Errorf("%s: jobs.%s: reusable workflow jobs cannot run on the host", rel, id)
 		default:
 			mapSet(job, "runs-on", HostLabel)
+		}
+	}
+	for _, id := range slices.Concat(host, disable) {
+		if !seen[id] {
+			return fmt.Errorf("%s: jobs.%s: not a direct key of jobs", rel, id)
 		}
 	}
 	out, err := yaml.Marshal(&doc)
@@ -103,4 +118,19 @@ func mapSet(m *yaml.Node, key, val string) {
 		}
 	}
 	m.Content = append(m.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: key}, v)
+}
+
+func checkKeys(m *yaml.Node) error {
+	keys := map[string]bool{}
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		k := m.Content[i]
+		if k.Tag == "!!merge" {
+			return fmt.Errorf("merge key not supported")
+		}
+		if keys[k.Value] {
+			return fmt.Errorf("duplicate key %q", k.Value)
+		}
+		keys[k.Value] = true
+	}
+	return nil
 }
