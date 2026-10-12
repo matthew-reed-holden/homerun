@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/matthew-reed-holden/homerun/internal/api"
 	"github.com/matthew-reed-holden/homerun/internal/config"
@@ -197,55 +198,85 @@ func cmdRun(args []string) error {
 		return nil
 	}
 	fmt.Printf("Queued run %s.\n", resp.RunID)
-	body, err := c.Log(ctx, resp.RunID, true)
-	var se *api.StatusError
-	if errors.As(err, &se) && se.Code == http.StatusNotFound {
-		fmt.Println("Follow it in the dashboard: homerun")
-		return nil
+	if err := streamLog(ctx, c, resp.RunID); err != nil {
+		return err
 	}
+	run, err := waitRun(ctx, c, resp.RunID)
 	if err != nil {
 		return err
 	}
-	// The log carries output from the commit under test.
-	err = termsafe.Copy(os.Stdout, body)
-	body.Close()
-	if err != nil {
-		return err
-	}
-	return runOutcome(ctx, c, resp.RunID)
+	msg, err := summarize(run)
+	fmt.Println(msg)
+	return err
 }
 
-// runOutcome reads the finished run's checks back from the daemon so the exit
-// status can tell scripts whether it passed.
-func runOutcome(ctx context.Context, c *api.Client, id string) error {
-	st, err := c.State(ctx)
-	if err != nil {
+const pollEvery = time.Second
+
+// streamLog follows the run's log, waiting while the run is queued (it has
+// no log until it starts). A run that ends without ever starting has none.
+func streamLog(ctx context.Context, c *api.Client, id string) error {
+	waiting := false
+	for {
+		body, err := c.Log(ctx, id, true)
+		var se *api.StatusError
+		if errors.As(err, &se) && se.Code == http.StatusNotFound {
+			run, err := c.Run(ctx, id)
+			if err != nil {
+				return err
+			}
+			if run.Finished() {
+				return nil
+			}
+			if !waiting {
+				fmt.Println("Waiting for a free slot…")
+				waiting = true
+			}
+			time.Sleep(pollEvery)
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		// The log carries output from the commit under test.
+		err = termsafe.Copy(os.Stdout, body)
+		body.Close()
 		return err
 	}
+}
+
+// waitRun polls until the run will not change again: the log stream can end
+// before the last check is reported.
+func waitRun(ctx context.Context, c *api.Client, id string) (*api.Run, error) {
+	for {
+		run, err := c.Run(ctx, id)
+		if err != nil || run.Finished() {
+			return run, err
+		}
+		time.Sleep(pollEvery)
+	}
+}
+
+// summarize decides the exit status from the run's own checks.
+func summarize(run *api.Run) (string, error) {
 	var passed, failed int
-	for _, r := range st.Repos {
-		for _, it := range r.Items {
-			for _, ck := range it.Checks {
-				if ck.RunID != id {
-					continue
-				}
-				switch ck.Conclusion {
-				case "success", "skipped", "neutral":
-					passed++
-				default:
-					failed++
-				}
-			}
+	for _, ck := range run.Checks {
+		switch ck.Conclusion {
+		case "success", "skipped", "neutral":
+			passed++
+		default:
+			failed++
 		}
 	}
-	if passed+failed == 0 {
-		return fmt.Errorf("run %s: no results found", id)
+	msg := fmt.Sprintf("run %s: %s, %d passed, %d failed", run.ID, run.Status, passed, failed)
+	switch {
+	case run.Status != "done":
+		return msg, fmt.Errorf("run %s did not finish (%s)", run.ID, run.Status)
+	case passed+failed == 0:
+		return msg, fmt.Errorf("run %s reported no checks", run.ID)
+	case failed > 0:
+		return msg, fmt.Errorf("run %s did not pass", run.ID)
 	}
-	fmt.Printf("run %s: %d passed, %d failed\n", id, passed, failed)
-	if failed > 0 {
-		return fmt.Errorf("run %s did not pass", id)
-	}
-	return nil
+	return msg, nil
 }
 
 func cmdDoctor(args []string) error {

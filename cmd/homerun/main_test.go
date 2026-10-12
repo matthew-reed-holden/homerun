@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/matthew-reed-holden/homerun/internal/api"
 )
 
 func build(t *testing.T) string {
@@ -55,5 +57,29 @@ func TestRunHasNoConfigFlag(t *testing.T) {
 	out, err := exec.Command(build(t), "run", "--config", "x", "o/r").CombinedOutput()
 	if err == nil || !strings.Contains(string(out), "flag provided but not defined") {
 		t.Fatalf("got %v:\n%s", err, out)
+	}
+}
+
+func TestSummarize(t *testing.T) {
+	ok := api.Check{Name: "a", Status: "completed", Conclusion: "success"}
+	bad := api.Check{Name: "b", Status: "completed", Conclusion: "failure"}
+	cancelled := api.Check{Name: "c", Status: "completed", Conclusion: "cancelled"}
+	skip := api.Check{Name: "d", Status: "completed", Conclusion: "skipped"}
+	for _, tc := range []struct {
+		name string
+		run  api.Run
+		pass bool
+	}{
+		{"all passed", api.Run{ID: "r", Status: "done", Checks: []api.Check{ok, skip}}, true},
+		{"one failed", api.Run{ID: "r", Status: "done", Checks: []api.Check{ok, bad}}, false},
+		{"cancelled check", api.Run{ID: "r", Status: "done", Checks: []api.Check{ok, cancelled}}, false},
+		{"no checks", api.Run{ID: "r", Status: "done"}, false},
+		{"run cancelled", api.Run{ID: "r", Status: "cancelled", Checks: []api.Check{ok}}, false},
+		{"requeued", api.Run{ID: "r", Status: "requeue", Checks: []api.Check{ok}}, false},
+	} {
+		msg, err := summarize(&tc.run)
+		if (err == nil) != tc.pass || !strings.Contains(msg, "run r:") {
+			t.Errorf("%s: msg %q err %v, want pass=%v", tc.name, msg, err, tc.pass)
+		}
 	}
 }

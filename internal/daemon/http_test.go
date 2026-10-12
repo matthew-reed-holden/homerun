@@ -3,8 +3,10 @@ package daemon
 import (
 	"bufio"
 	"context"
+	"errors"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -222,4 +224,46 @@ func TestReloadPollsWithoutWaitingForTicker(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.waitDone(sha)
+}
+
+func TestHTTPRunStatus(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	c, _ := serve(t, h)
+	ctx := context.Background()
+	release := h.occupySlots()
+	resp, err := c.Start(ctx, api.StartRequest{Repo: repo, Ref: "main"})
+	if err != nil || resp.RunID == "" {
+		t.Fatalf("start: %+v %v", resp, err)
+	}
+	run, err := c.Run(ctx, resp.RunID)
+	if err != nil || run.Status != "queued" || run.Finished() {
+		t.Fatalf("queued run: %+v %v", run, err)
+	}
+	release()
+	deadline := time.Now().Add(15 * time.Second)
+	for !run.Finished() {
+		if time.Now().After(deadline) {
+			t.Fatalf("run never finished: %+v", run)
+		}
+		time.Sleep(20 * time.Millisecond)
+		if run, err = c.Run(ctx, resp.RunID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if run.Status != "done" || len(run.Checks) != 2 {
+		t.Fatalf("run: %+v", run)
+	}
+	for _, ck := range run.Checks {
+		if ck.Conclusion != "success" || ck.RunID != resp.RunID {
+			t.Errorf("check %+v", ck)
+		}
+	}
+	var se *api.StatusError
+	if _, err := c.Run(ctx, "20260101T000000-ffffff"); !errors.As(err, &se) || se.Code != http.StatusNotFound {
+		t.Errorf("unknown run: %v", err)
+	}
+	if _, err := c.Run(ctx, "..%2F..%2Fetc"); !errors.As(err, &se) || se.Code != http.StatusBadRequest {
+		t.Errorf("bad id: %v", err)
+	}
 }

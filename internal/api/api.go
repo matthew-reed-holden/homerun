@@ -45,6 +45,17 @@ type State struct {
 	Repos []Repo `json:"repos"`
 }
 
+// Run is one local run as the daemon tracks it. Status is queued, running,
+// done, cancelled or requeue; only queued and running change again.
+type Run struct {
+	ID     string  `json:"id"`
+	Status string  `json:"status"`
+	Checks []Check `json:"checks"`
+}
+
+// Finished reports whether the run will not change again.
+func (r *Run) Finished() bool { return r.Status != "queued" && r.Status != "running" }
+
 type StartRequest struct {
 	Repo string `json:"repo"`
 	Ref  string `json:"ref,omitempty"`
@@ -170,6 +181,11 @@ func (c *Client) State(ctx context.Context) (*State, error) {
 func (c *Client) Start(ctx context.Context, r StartRequest) (*StartResponse, error) {
 	out := &StartResponse{}
 	return out, c.do(ctx, http.MethodPost, "/v1/runs", r, out)
+}
+
+func (c *Client) Run(ctx context.Context, runID string) (*Run, error) {
+	out := &Run{}
+	return out, c.do(ctx, http.MethodGet, "/v1/runs/"+url.PathEscape(runID), nil, out)
 }
 
 func (c *Client) Cancel(ctx context.Context, runID string) error {

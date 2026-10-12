@@ -40,6 +40,7 @@ func (d *Daemon) Handler() http.Handler {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
+	mux.HandleFunc("GET /v1/runs/{id}", d.handleRun)
 	mux.HandleFunc("GET /v1/runs/{id}/log", d.handleLog)
 	return mux
 }
@@ -111,6 +112,30 @@ func (d *Daemon) manualEvent(ctx context.Context, req api.StartRequest) (event.E
 		}
 	}
 	return event.Event{}, fmt.Errorf("no branch %s in %s", ref, req.Repo)
+}
+
+func (d *Daemon) handleRun(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if !store.ValidID(id) {
+		http.Error(w, "bad run id", http.StatusBadRequest)
+		return
+	}
+	// Copied under mu: execute mutates the run's checks while it runs.
+	d.mu.Lock()
+	run := d.runs[id]
+	var out api.Run
+	if run != nil {
+		out = api.Run{ID: run.ID, Status: run.Status, Checks: make([]api.Check, 0, len(run.Checks))}
+		for _, c := range run.Checks {
+			out.Checks = append(out.Checks, api.Check{Name: c.Name, Status: c.Status, Conclusion: c.Conclusion, RunID: run.ID})
+		}
+	}
+	d.mu.Unlock()
+	if run == nil {
+		http.Error(w, "no such run", http.StatusNotFound)
+		return
+	}
+	writeJSON(w, out)
 }
 
 func (d *Daemon) handleLog(w http.ResponseWriter, r *http.Request) {
