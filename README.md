@@ -7,7 +7,7 @@ homerun is local CI of record for GitHub repos. A daemon on your own machine wat
 ## Requirements
 
 - Linux
-- `git`, `docker` and `act` 0.2.89 or newer on `PATH`
+- `git`, `docker` and `act` 0.2.89 (other versions work but `homerun doctor` warns) on `PATH`
 
 `homerun doctor` checks all of them, including the act version.
 
@@ -82,7 +82,7 @@ With no repo config, every `push` and `pull_request` workflow runs under act wit
 - Pull requests from forks (including ones whose head repo was deleted) are held until you approve them. They get a neutral `homerun` check, "fork PR: awaiting approval". Approve with `homerun run --pr N OWNER/NAME`.
 - An approved fork run gets no secrets, and its `host_jobs` and `checks:` report neutral "skipped: fork PR". It gets no Docker socket and bridge networking. Jobs with privileged containers, volumes or ports, and unsafe reusable workflows, are skipped.
 - `.actrc`, `.secrets`, `.env`, `.vars` and `.input` from the commit are ignored.
-- Child processes get an explicit environment: a small allowlist (PATH, HOME, USER, LANG, DOCKER_HOST, XDG_RUNTIME_DIR) plus the secrets the repo names. act never sees your `~/.actrc`, `~/.config/act` or gh token. homerun passes `GITHUB_TOKEN` as a placeholder unless the repo names a `GITHUB_TOKEN` secret.
+- Child processes get an explicit environment: a small allowlist from the daemon's environment, including PATH, HOME, USER, LANG, DOCKER_HOST and XDG_RUNTIME_DIR, plus the secrets the repo names. act runs with a private HOME and XDG_CONFIG_HOME, so your `~/.actrc` and `~/.config/act` are not read, and it never sees your gh token; DOCKER_CONFIG points at your real Docker config. homerun passes `GITHUB_TOKEN` as a placeholder unless the repo names a `GITHUB_TOKEN` secret.
 - Secrets are masked in logs and check output.
 - Host jobs run with your user's privileges, so only list jobs you trust.
 
