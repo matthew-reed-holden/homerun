@@ -5,10 +5,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/matthew-reed-holden/homerun/internal/event"
@@ -40,7 +44,18 @@ type State struct {
 }
 
 // Store keeps local run history only; GitHub's check runs are the durable record.
-type Store struct{ Dir string }
+// Save, SaveState and Prune serialize on mu. List only reads, and every write
+// lands by rename, so a reader never sees a partial file.
+type Store struct {
+	Dir string
+	mu  sync.Mutex
+}
+
+// idPattern matches exactly what NewID produces. Run IDs are directory names
+// that Prune deletes with RemoveAll, so "", "." and ".." must never pass.
+var idPattern = regexp.MustCompile(`^[0-9]{8}T[0-9]{6}-[0-9a-f]{6}$`)
+
+func ValidID(id string) bool { return idPattern.MatchString(id) }
 
 func NewID() string {
 	b := make([]byte, 3)
@@ -48,10 +63,25 @@ func NewID() string {
 	return time.Now().UTC().Format("20060102T150405") + "-" + hex.EncodeToString(b)
 }
 
-func (s *Store) RunDir(id string) string  { return filepath.Join(s.Dir, "runs", id) }
-func (s *Store) LogPath(id string) string { return filepath.Join(s.RunDir(id), "log") }
+func (s *Store) RunDir(id string) (string, error) {
+	if !ValidID(id) {
+		return "", fmt.Errorf("invalid run id %q", id)
+	}
+	return filepath.Join(s.Dir, "runs", id), nil
+}
 
-func writeJSON(path string, v any) error {
+func (s *Store) LogPath(id string) (string, error) {
+	dir, err := s.RunDir(id)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "log"), nil
+}
+
+// writeFileAtomic writes v as JSON to a unique temp file beside path, then
+// renames it over path. The unique name keeps concurrent writers from
+// clobbering each other's temp file.
+func writeFileAtomic(path string, v any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
@@ -59,15 +89,49 @@ func writeJSON(path string, v any) error {
 	if err != nil {
 		return err
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	tmp := f.Name()
+	_, werr := f.Write(b)
+	if err := errors.Join(werr, f.Close()); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 func (s *Store) Save(r *Run) error {
-	return writeJSON(filepath.Join(s.RunDir(r.ID), "meta.json"), r)
+	dir, err := s.RunDir(r.ID)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return writeFileAtomic(filepath.Join(dir, "meta.json"), r)
+}
+
+// readRun loads runs/<name>/meta.json. The error wraps fs.ErrNotExist when the
+// file is missing. Any other error means the file is unusable: it does not
+// parse, or it records a different ID than the directory it sits in.
+func (s *Store) readRun(name string) (*Run, error) {
+	b, err := os.ReadFile(filepath.Join(s.Dir, "runs", name, "meta.json"))
+	if err != nil {
+		return nil, err
+	}
+	r := &Run{}
+	if err := json.Unmarshal(b, r); err != nil {
+		return nil, fmt.Errorf("corrupt meta.json: %w", err)
+	}
+	if r.ID != name {
+		return nil, fmt.Errorf("meta.json records id %q", r.ID)
+	}
+	return r, nil
 }
 
 func (s *Store) List() ([]*Run, error) {
@@ -80,34 +144,30 @@ func (s *Store) List() ([]*Run, error) {
 	}
 	var runs []*Run
 	for _, e := range entries {
-		b, err := os.ReadFile(filepath.Join(s.RunDir(e.Name()), "meta.json"))
+		if !e.IsDir() || !ValidID(e.Name()) {
+			continue
+		}
+		r, err := s.readRun(e.Name())
+		if errors.Is(err, fs.ErrNotExist) {
+			continue // crash leftover: Prune removes it by age
+		}
 		if err != nil {
-			continue // a run dir without meta is a crash leftover; Prune removes it eventually
+			slog.Warn("skipping run", "dir", e.Name(), "err", err)
+			continue
 		}
-		r := &Run{}
-		if json.Unmarshal(b, r) == nil {
-			runs = append(runs, r)
-		}
+		runs = append(runs, r)
 	}
 	sort.Slice(runs, func(i, j int) bool { return runs[i].ID > runs[j].ID })
 	return runs, nil
 }
 
+// Prune deletes finished runs older than maxAge. It also deletes run
+// directories with no usable meta.json (crash leftovers and corrupt files) once
+// the directory's mtime is older than maxAge. Deletion is always by directory
+// name, which is a valid ID, so a meta.json cannot widen what gets removed.
 func (s *Store) Prune(maxAge time.Duration, now time.Time) error {
-	runs, err := s.List()
-	if err != nil {
-		return err
-	}
-	for _, r := range runs {
-		if now.Sub(r.Created) > maxAge && (r.Status == "done" || r.Status == "cancelled") {
-			if err := os.RemoveAll(s.RunDir(r.ID)); err != nil {
-				return err
-			}
-		}
-	}
-
-	// List skips dirs without meta.json, so crash leftovers are pruned by age
-	// on their directory mtime instead.
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	entries, err := os.ReadDir(filepath.Join(s.Dir, "runs"))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
@@ -116,14 +176,23 @@ func (s *Store) Prune(maxAge time.Duration, now time.Time) error {
 		return err
 	}
 	for _, e := range entries {
-		if !e.IsDir() {
+		if !e.IsDir() || !ValidID(e.Name()) {
 			continue
 		}
-		dir := s.RunDir(e.Name())
-		if _, err := os.Stat(filepath.Join(dir, "meta.json")); err == nil || !errors.Is(err, fs.ErrNotExist) {
+		dir := filepath.Join(s.Dir, "runs", e.Name())
+		r, err := s.readRun(e.Name())
+		if err == nil {
+			if now.Sub(r.Created) > maxAge && (r.Status == "done" || r.Status == "cancelled") {
+				if err := os.RemoveAll(dir); err != nil {
+					return err
+				}
+			}
 			continue
 		}
 		info, err := e.Info()
+		if errors.Is(err, fs.ErrNotExist) {
+			continue // removed since ReadDir
+		}
 		if err != nil {
 			return err
 		}
@@ -155,5 +224,7 @@ func (s *Store) LoadState() (*State, error) {
 }
 
 func (s *Store) SaveState(st *State) error {
-	return writeJSON(filepath.Join(s.Dir, "state.json"), st)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return writeFileAtomic(filepath.Join(s.Dir, "state.json"), st)
 }
