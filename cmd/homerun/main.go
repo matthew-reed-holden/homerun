@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -19,6 +18,7 @@ import (
 	"github.com/matthew-reed-holden/homerun/internal/daemon"
 	"github.com/matthew-reed-holden/homerun/internal/gh"
 	"github.com/matthew-reed-holden/homerun/internal/setup"
+	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 	"github.com/matthew-reed-holden/homerun/internal/tui"
 )
 
@@ -206,7 +206,8 @@ func cmdRun(args []string) error {
 	if err != nil {
 		return err
 	}
-	_, err = io.Copy(os.Stdout, body)
+	// The log carries output from the commit under test.
+	err = termsafe.Copy(os.Stdout, body)
 	body.Close()
 	if err != nil {
 		return err

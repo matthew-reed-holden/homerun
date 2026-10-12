@@ -8,12 +8,12 @@ import (
 	"os/exec"
 	"strings"
 	"time"
-	"unicode"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/matthew-reed-holden/homerun/internal/api"
+	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 )
 
 type Row struct {
@@ -55,14 +55,14 @@ func Rows(r api.Repo) []Row {
 	var rows []Row
 	for i := range r.Items {
 		it := &r.Items[i]
-		rows = append(rows, Row{Text: fmt.Sprintf("%s %s  %s", Rollup(it.Checks), clean(it.Label), clean(short(it.SHA))), Item: it})
+		rows = append(rows, Row{Text: fmt.Sprintf("%s %s  %s", Rollup(it.Checks), termsafe.Line(it.Label), termsafe.Line(short(it.SHA))), Item: it})
 		for j := range it.Checks {
 			c := &it.Checks[j]
-			rows = append(rows, Row{Text: "    " + Icon(c.Status, c.Conclusion) + " " + clean(c.Name), Item: it, Check: c})
+			rows = append(rows, Row{Text: "    " + Icon(c.Status, c.Conclusion) + " " + termsafe.Line(c.Name), Item: it, Check: c})
 		}
 	}
 	if len(r.Unhandled) > 0 {
-		rows = append(rows, Row{Text: "not handled locally: " + clean(strings.Join(r.Unhandled, ", "))})
+		rows = append(rows, Row{Text: "not handled locally: " + termsafe.Line(strings.Join(r.Unhandled, ", "))})
 	}
 	return rows
 }
@@ -82,23 +82,6 @@ func window(n, sel, height int) (int, int) {
 	start := sel - height/2
 	start = max(0, min(start, n-height))
 	return start, start + height
-}
-
-// clean makes untrusted text safe for one terminal line. GitHub data and
-// daemon output can carry escapes (OSC 52 clipboard writes, cursor movement)
-// that would otherwise run on the user's terminal.
-func clean(s string) string {
-	return strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
-			return -1
-		}
-		return r
-	}, ansi.Strip(s))
-}
-
-// cleanLog is clean for log output, where a tab is common and stays readable.
-func cleanLog(s string) string {
-	return clean(strings.ReplaceAll(s, "\t", "    "))
 }
 
 // truncate cuts by display width, since the status icons are multi-byte and
@@ -218,10 +201,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		return m, tea.Batch(m.fetch(), tick())
 	case statusMsg:
-		m.status = clean(string(msg))
+		m.status = termsafe.Line(string(msg))
 	case logMsg:
 		if msg.gen == m.gen && m.logRun != "" {
-			if m.log = append(m.log, cleanLog(msg.line)); len(m.log) > 2000 {
+			if m.log = append(m.log, termsafe.Log(msg.line)); len(m.log) > 2000 {
 				m.log = m.log[len(m.log)-2000:]
 			}
 			return m, m.nextLine()
@@ -374,7 +357,7 @@ func (m *model) nextLine() tea.Cmd {
 
 func (m *model) View() string {
 	if m.err != nil && len(m.state.Repos) == 0 {
-		return "homerun: " + clean(m.err.Error()) + "\n\nStart the daemon with: homerun daemon   (q to quit)\n"
+		return "homerun: " + termsafe.Line(m.err.Error()) + "\n\nStart the daemon with: homerun daemon   (q to quit)\n"
 	}
 	topH := m.h - 3
 	if m.logRun != "" {
@@ -389,9 +372,9 @@ func (m *model) View() string {
 		for _, it := range r.Items {
 			all = append(all, it.Checks...)
 		}
-		line := Rollup(all) + " " + clean(r.Name)
+		line := Rollup(all) + " " + termsafe.Line(r.Name)
 		if r.Error != "" {
-			line = "✘ " + clean(r.Name) + " (error)"
+			line = "✘ " + termsafe.Line(r.Name) + " (error)"
 		}
 		line = truncate(line, leftW-1)
 		if i == m.repo && m.focus == 0 {
@@ -404,7 +387,7 @@ func (m *model) View() string {
 	rows := m.rows()
 	var right []string
 	if m.repo < len(m.state.Repos) && m.state.Repos[m.repo].Error != "" {
-		right = append(right, red.Render(truncate(clean(m.state.Repos[m.repo].Error), rightW-1)))
+		right = append(right, red.Render(truncate(termsafe.Line(m.state.Repos[m.repo].Error), rightW-1)))
 	}
 	start, end := window(len(rows), m.row, inner-len(right))
 	for i := start; i < end; i++ {
@@ -429,15 +412,15 @@ func (m *model) View() string {
 		for i := range ls {
 			ls[i] = truncate(ls[i], m.w)
 		}
-		b.WriteString(dim.Render(truncate(clean(m.logName)+"  (esc to close)", m.w)) + "\n" + strings.Join(ls, "\n") + "\n")
+		b.WriteString(dim.Render(truncate(termsafe.Line(m.logName)+"  (esc to close)", m.w)) + "\n" + strings.Join(ls, "\n") + "\n")
 	}
 	help := "tab switch pane · j/k move · enter log · r rerun · c cancel · o open · q quit"
 	if m.err != nil {
 		// First, so truncation to the width cannot cut the warning off.
-		help = "[stale: " + clean(m.err.Error()) + "] " + help
+		help = "[stale: " + termsafe.Line(m.err.Error()) + "] " + help
 	}
 	if m.status != "" {
-		help += "   " + clean(m.status)
+		help += "   " + termsafe.Line(m.status)
 	}
 	b.WriteString(dim.Render(truncate(help, m.w)))
 	return b.String()
