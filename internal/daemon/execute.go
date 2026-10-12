@@ -3,6 +3,7 @@ package daemon
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -194,6 +195,10 @@ type tracker struct {
 	matrix map[string][]*store.Check // job id -> leg checks
 	lost   map[string]bool           // job id -> a leg's check could not be created
 	failed bool
+	// unmapped is set when a job with no check of its own failed (a job ID
+	// changed by masking, or a reusable workflow's inner job): homerun cannot
+	// tell which open checks that failure explains.
+	unmapped bool
 }
 
 func (t *tracker) legName(e actlog.Event) string {
@@ -224,6 +229,9 @@ func (t *tracker) handle(e actlog.Event) {
 	case actlog.Finished:
 		if e.Conclusion == "failure" {
 			t.failed = true
+			if t.d.findCheck(t.run, t.wf.Path, e.JobID) == nil {
+				t.unmapped = true
+			}
 		}
 		// Results that arrive after cancellation come from act tearing down; finish decides.
 		if t.runCtx.Err() != nil {
@@ -281,7 +289,7 @@ func (t *tracker) start(e actlog.Event) {
 	}
 	ev := t.run.Event
 	var id int64
-	err := gh.Retry(t.ctx, func() (err error) {
+	err := t.d.retryFor(t.run)(t.ctx, func() (err error) {
 		id, err = t.d.opts.Reporter.CreateCheck(t.ctx, ev.Repo, ev.SHA, name, ev.Key())
 		return err
 	})
@@ -307,6 +315,9 @@ func (t *tracker) finish(actErr error) {
 	switch {
 	case t.runCtx.Err() != nil:
 		conclusion, summary = "cancelled", supersededSummary
+	case t.unmapped:
+		// Never "skipped" here: GitHub counts skipped as passing, and the failure may be these jobs'.
+		conclusion, summary = "failure", "homerun error: a job homerun could not map to a check failed, so this job's result is unknown."
 	case actErr != nil && !t.failed:
 		conclusion, summary = "failure", "homerun error: act exited without finishing this job: "+t.d.scrub(actErr.Error())
 	}
@@ -370,16 +381,22 @@ func (d *Daemon) runExtra(ctx, rctx context.Context, run *store.Run, c *store.Ch
 	err := cmd.Run()
 	w.flush()
 	conclusion, title := "success", "Succeeded"
+	summary := "```\n" + head(mk.Mask(command), maxStep) + "\n```"
+	var exit *exec.ExitError
 	switch {
 	case ctx.Err() != nil:
 		if d.base.Err() != nil {
 			return
 		}
 		conclusion, title = "cancelled", "Cancelled"
-	case err != nil:
+	case errors.As(err, &exit):
 		conclusion, title = "failure", "Failed: "+err.Error()
+	case err != nil:
+		// The command never ran (chdir, exec): homerun's fault, and the error may name the state dir.
+		msg := "homerun error: " + d.scrub(mk.Mask(err.Error()))
+		conclusion, title, summary = "failure", head(msg, maxTitle), msg+"\n"+summary
 	}
-	d.complete(rctx, run, c, conclusion, title, "`"+mk.Mask(command)+"`", codeBlock(tail))
+	d.complete(rctx, run, c, conclusion, title, summary, codeBlock(tail))
 }
 
 // codeBlock fences the last lines that fit in maxText.
@@ -407,27 +424,57 @@ func head(s string, n int) string {
 	return strings.ToValidUTF8(s[:n], "") + "…"
 }
 
-// lineWriter calls fn once per complete line, so masking never sees half a secret.
+// lineWriter calls fn once per complete line, so masking never sees half a
+// secret. Like the runner, it caps a line at maxLine and drops the rest of
+// it, so a command printing without newlines cannot grow memory unbounded.
 type lineWriter struct {
-	buf []byte
-	fn  func(string)
+	buf  []byte
+	skip bool // dropping the rest of an over-long line
+	fn   func(string)
 }
 
+const (
+	maxLine          = 1 << 20
+	truncationMarker = " [truncated]"
+)
+
 func (w *lineWriter) Write(p []byte) (int, error) {
-	w.buf = append(w.buf, p...)
-	for {
-		i := bytes.IndexByte(w.buf, '\n')
-		if i < 0 {
-			return len(p), nil
+	n := len(p)
+	for len(p) > 0 {
+		i := bytes.IndexByte(p, '\n')
+		if w.skip {
+			if i < 0 {
+				return n, nil
+			}
+			w.skip, p = false, p[i+1:]
+			continue
 		}
-		w.fn(strings.TrimRight(string(w.buf[:i]), "\r"))
-		w.buf = w.buf[i+1:]
+		if i < 0 {
+			w.buf, p = append(w.buf, p...), nil
+		} else {
+			w.buf, p = append(w.buf, p[:i]...), p[i+1:]
+			w.emit()
+			continue
+		}
+		if len(w.buf) > maxLine {
+			w.emit()
+			w.skip = true
+		}
 	}
+	return n, nil
+}
+
+func (w *lineWriter) emit() {
+	l := strings.TrimRight(string(w.buf), "\r")
+	if len(w.buf) > maxLine {
+		l = strings.ToValidUTF8(string(w.buf[:maxLine]), "") + truncationMarker
+	}
+	w.buf = w.buf[:0]
+	w.fn(l)
 }
 
 func (w *lineWriter) flush() {
 	if len(w.buf) > 0 {
-		w.fn(string(w.buf))
-		w.buf = nil
+		w.emit()
 	}
 }

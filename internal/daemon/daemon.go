@@ -41,7 +41,8 @@ type Daemon struct {
 	sched  *sched.Scheduler
 	base   context.Context // parent of every run; cancelled when Run returns
 	stop   context.CancelFunc
-	wg     sync.WaitGroup // scheduled runs, so shutdown can wait for them
+	wg     sync.WaitGroup                            // scheduled runs, so shutdown can wait for them
+	retry  func(context.Context, func() error) error // gh.Retry; tests replace its backoff
 
 	mu        sync.Mutex
 	cfg       *config.User
@@ -74,7 +75,7 @@ func New(o Options) (*Daemon, error) {
 	}
 	base, stop := context.WithCancel(context.Background())
 	return &Daemon{
-		opts: o, store: st, state: state, cfg: o.Config, base: base, stop: stop,
+		opts: o, store: st, state: state, cfg: o.Config, base: base, stop: stop, retry: gh.Retry,
 		runner:    &runner.Runner{Act: o.Act, Platforms: o.Config.Platforms, CacheRoot: filepath.Join(o.StateDir, "act-cache")},
 		sched:     sched.New(o.Config.MaxParallel),
 		seen:      map[string]string{},
@@ -623,6 +624,21 @@ func (d *Daemon) sendLock(runID string) *sync.Mutex {
 	return l
 }
 
+// retryFor returns how a run's calls to GitHub are retried. Once one of its
+// updates is pending, GitHub is likely down: a full backoff per report would
+// block the act event callback for minutes and stall act's output, so each
+// call gets one attempt and the poll loop retries.
+func (d *Daemon) retryFor(run *store.Run) func(context.Context, func() error) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, c := range run.Checks {
+		if c.Pending != nil {
+			return func(_ context.Context, fn func() error) error { return fn() }
+		}
+	}
+	return d.retry
+}
+
 // report updates a check locally and on GitHub. An update GitHub does not
 // accept is kept as Pending and re-sent by later polls, so execution carries
 // on through an outage and the results arrive when GitHub comes back.
@@ -631,6 +647,7 @@ func (d *Daemon) report(ctx context.Context, run *store.Run, c *store.Check, u g
 	lock := d.sendLock(run.ID)
 	lock.Lock()
 	defer lock.Unlock()
+	retry := d.retryFor(run)
 	d.mu.Lock()
 	c.Status = u.Status
 	if u.Conclusion != "" {
@@ -642,7 +659,7 @@ func (d *Daemon) report(ctx context.Context, run *store.Run, c *store.Check, u g
 	if err != nil {
 		slog.Warn("save run", "run", run.ID, "err", err)
 	}
-	if err := gh.Retry(ctx, func() error { return d.opts.Reporter.UpdateCheck(ctx, run.Repo, c.ID, u) }); err != nil {
+	if err := retry(ctx, func() error { return d.opts.Reporter.UpdateCheck(ctx, run.Repo, c.ID, u) }); err != nil {
 		slog.Error("report check; will retry on a later poll", "repo", run.Repo, "check", c.Name, "err", err)
 		d.mu.Lock()
 		c.Pending = &u

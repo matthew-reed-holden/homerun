@@ -317,3 +317,10 @@ func (h *harness) waitGone(path string) {
 	}
 	h.t.Fatalf("%s was not removed", path)
 }
+
+// setSecret replaces the configured value of a repo secret; call it before the run starts.
+func (h *harness) setSecret(name, value string) {
+	h.d.mu.Lock()
+	h.d.cfg.Repos[repo].Secrets[name] = config.Secret{Value: value}
+	h.d.mu.Unlock()
+}

@@ -216,3 +216,26 @@ func TestForkUnsafeJobsRefusesSymlink(t *testing.T) {
 		t.Fatal("followed a symlink out of the snapshot")
 	}
 }
+
+func TestForkUnsafeJobsFollowsLocalCallees(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, ".github/workflows/safe.yml", "on: workflow_call\njobs:\n  a: {runs-on: ubuntu-latest, steps: [{run: \"true\"}]}\n")
+	write(t, root, ".github/workflows/priv.yml", "on: workflow_call\njobs:\n  a: {runs-on: ubuntu-latest, container: {image: x, options: --privileged}, steps: [{run: \"true\"}]}\n")
+	write(t, root, ".github/workflows/nested.yml", "on: workflow_call\njobs:\n  n: {uses: ./.github/workflows/priv.yml}\n")
+	write(t, root, ".github/workflows/ci.yml", `on: pull_request
+jobs:
+  safe: {uses: ./.github/workflows/safe.yml}
+  priv: {uses: ./.github/workflows/priv.yml}
+  nested: {uses: ./.github/workflows/nested.yml}
+  remote: {uses: octo/repo/.github/workflows/w.yml@main}
+  missing: {uses: ./.github/workflows/nope.yml}
+  escape: {uses: ./../outside.yml}
+`)
+	got, err := ForkUnsafeJobs(root, ".github/workflows/ci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "priv,nested,remote,missing,escape"; strings.Join(got, ",") != want {
+		t.Fatalf("got %v, want %s", got, want)
+	}
+}

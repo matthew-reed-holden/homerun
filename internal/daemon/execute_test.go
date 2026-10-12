@@ -1,13 +1,18 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/matthew-reed-holden/homerun/internal/event"
+	"github.com/matthew-reed-holden/homerun/internal/mask"
+	"github.com/matthew-reed-holden/homerun/internal/store"
 )
 
 func TestPushRunsAndReportsSuccess(t *testing.T) {
@@ -347,5 +352,167 @@ func TestShutdownMidRunLeavesRunForRecovery(t *testing.T) {
 	runs, err := h.d.store.List()
 	if err != nil || len(runs) != 1 || runs[0].Status != "running" {
 		t.Fatalf("stored runs: %+v err=%v", runs, err)
+	}
+}
+
+func TestUnmappedFailureFailsOpenChecks(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": `name: CI
+on: push
+jobs:
+  deploy-prod: {runs-on: ubuntu-latest, steps: [{run: "true"}]}
+  after: {runs-on: ubuntu-latest, needs: deploy-prod, steps: [{run: "true"}]}
+`})
+	h.poll()
+	// Masking turns act's job ID into deploy-***, which matches no check.
+	h.setSecret("MYSEC", "prod")
+	h.output(`{"jobID":"deploy-prod","matrix":{},"msg":"x","step":"s","stepResult":"failure"}
+{"jobID":"deploy-prod","matrix":{},"jobResult":"failure","msg":"failed"}
+`)
+	sha := h.push(map[string]string{".github/homerun.yml": "secrets: [MYSEC]\n"})
+	h.poll()
+	for name, c := range h.waitDone(sha) {
+		if c.Conclusion != "failure" || !strings.HasPrefix(lastSummary(c), "homerun error:") {
+			t.Errorf("%s: %s %q", name, c.Conclusion, lastSummary(c))
+		}
+	}
+}
+
+func TestOutageDoesNotStallTheRun(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": `name: CI
+on: push
+jobs:
+  a: {runs-on: ubuntu-latest, steps: [{run: "true"}]}
+  b: {runs-on: ubuntu-latest, steps: [{run: "true"}]}
+  c: {runs-on: ubuntu-latest, steps: [{run: "true"}]}
+  d: {runs-on: ubuntu-latest, steps: [{run: "true"}]}
+  e: {runs-on: ubuntu-latest, steps: [{run: "true"}]}
+`})
+	h.poll()
+	var out strings.Builder
+	for _, j := range []string{"a", "b", "c", "d", "e"} {
+		out.WriteString(`{"jobID":"` + j + `","matrix":{},"jobResult":"success","msg":"ok"}` + "\n")
+	}
+	h.output(out.String())
+	// A full backoff, minus the sleeping, so attempts can be counted.
+	var mu sync.Mutex
+	attempts := 0
+	h.d.retry = func(ctx context.Context, fn func() error) error {
+		var err error
+		for range 8 {
+			mu.Lock()
+			attempts++
+			mu.Unlock()
+			if err = fn(); err == nil {
+				return nil
+			}
+		}
+		return err
+	}
+	h.rep.failUpdates(1 << 30)
+	sha := h.push(map[string]string{"a.txt": "a"})
+	h.poll()
+	run := h.waitRun(sha, "done")
+	mu.Lock()
+	n := attempts
+	mu.Unlock()
+	// 10 reports: the first gets the full backoff, the rest one attempt each.
+	if n > 8+9 {
+		t.Fatalf("%d attempts: reports kept backing off during the outage", n)
+	}
+	for _, c := range run.Checks {
+		if c.Pending == nil || c.Pending.Conclusion != "success" {
+			t.Errorf("%s not pending its result: %+v", c.Name, c.Pending)
+		}
+	}
+	h.rep.failUpdates(0)
+	h.poll()
+	for name, c := range h.waitDone(sha) {
+		if c.Conclusion != "success" {
+			t.Errorf("%s: %+v", name, c)
+		}
+	}
+}
+
+func TestForkLocalReusableWorkflows(t *testing.T) {
+	h := newHarness(t, map[string]string{
+		".github/workflows/ci.yml": `name: CI
+on: [push, pull_request]
+jobs:
+  safecall: {uses: ./.github/workflows/safe.yml}
+  privcall: {uses: ./.github/workflows/priv.yml}
+  remote: {uses: octo/repo/.github/workflows/w.yml@main}
+`,
+		".github/workflows/safe.yml": "on: workflow_call\njobs:\n  a: {runs-on: ubuntu-latest, steps: [{run: \"true\"}]}\n",
+		".github/workflows/priv.yml": "on: workflow_call\njobs:\n  a: {runs-on: ubuntu-latest, container: {image: x, options: --privileged}, steps: [{run: \"true\"}]}\n",
+	})
+	h.output(`{"jobID":"safecall","matrix":{},"jobResult":"success","msg":"ok"}` + "\n")
+	head := startFork(t, h, map[string]string{"f.txt": "f"})
+	cs := h.waitDone(head)
+	if c := cs["homerun / CI / safecall"]; c == nil || c.Conclusion != "success" {
+		t.Fatalf("safe local callee: %+v", c)
+	}
+	for _, job := range []string{"privcall", "remote"} {
+		if c := cs["homerun / CI / "+job]; c == nil || c.Conclusion != "neutral" || lastSummary(c) != "skipped: fork PR" {
+			t.Fatalf("%s: %+v", job, c)
+		}
+	}
+}
+
+func TestChecksCommandThatCannotStartIsHomerunError(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	sha := h.git("rev-parse", "HEAD")
+	ev := event.Event{Name: "push", Repo: repo, DefaultBranch: "main", SHA: sha, Ref: "refs/heads/main"}
+	id, err := h.fake.CreateCheck(t.Context(), repo, sha, "homerun / checks / lint", ev.Key())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &store.Check{Name: "homerun / checks / lint", ID: id, Status: "queued", Extra: "lint"}
+	run := &store.Run{ID: store.NewID(), Repo: repo, Event: ev, Status: "running", Checks: []*store.Check{c},
+		Worktree: filepath.Join(h.d.opts.StateDir, "work", "missing")}
+	ctx := context.Background()
+	h.d.runExtra(ctx, ctx, run, c, "true", nil, mask.New(nil), io.Discard)
+	fc := h.waitDone(sha)["homerun / checks / lint"]
+	u := fc.Updates[len(fc.Updates)-1]
+	if fc.Conclusion != "failure" || !strings.HasPrefix(u.Title, "homerun error:") || !strings.HasPrefix(u.Summary, "homerun error:") ||
+		strings.Contains(u.Title+u.Summary, h.d.opts.StateDir) || !strings.Contains(u.Summary, "```\ntrue\n```") {
+		t.Fatalf("%+v", u)
+	}
+}
+
+func TestLineWriterCapsLongLines(t *testing.T) {
+	var got []string
+	w := &lineWriter{fn: func(l string) { got = append(got, l) }}
+	w.Write(bytes.Repeat([]byte("x"), maxLine+10))
+	w.Write(bytes.Repeat([]byte("y"), maxLine))
+	w.Write([]byte("\nok\npart"))
+	w.flush()
+	if len(got) != 3 || got[0] != strings.Repeat("x", maxLine)+truncationMarker || got[1] != "ok" || got[2] != "part" {
+		t.Fatalf("got %d lines, first len %d: %q", len(got), len(got[0]), got[1:])
+	}
+}
+
+func TestMultiLineSecretMaskedInChecksOutput(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	h.setSecret("MYSEC", "-----BEGIN KEY-----\nAAAAfirstline\nBBBBsecondline\nAQAB==\n-----END KEY-----")
+	sha := h.push(map[string]string{".github/homerun.yml": "secrets: [MYSEC]\nchecks:\n  pem: 'echo \"$MYSEC\"'\n"})
+	h.poll()
+	c := h.waitDone(sha)["homerun / checks / pem"]
+	if c == nil || c.Conclusion != "success" {
+		t.Fatalf("pem: %+v", c)
+	}
+	run := h.waitRun(sha, "done")
+	logPath, _ := h.d.store.LogPath(run.ID)
+	logb, _ := os.ReadFile(logPath)
+	u := c.Updates[len(c.Updates)-1]
+	for _, s := range []string{string(logb), u.Title + u.Summary + u.Text} {
+		for _, line := range []string{"AAAAfirstline", "BBBBsecondline", "AQAB=="} {
+			if strings.Contains(s, line) {
+				t.Fatalf("secret line %q leaked:\n%s", line, s)
+			}
+		}
+	}
+	if !strings.Contains(string(logb), "[checks / pem] ***") || !strings.Contains(u.Text, "***") {
+		t.Fatalf("masked lines missing:\nlog=%s\ntext=%s", logb, u.Text)
 	}
 }

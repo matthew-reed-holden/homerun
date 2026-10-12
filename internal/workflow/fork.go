@@ -9,17 +9,26 @@ import (
 )
 
 // ForkUnsafeJobs lists the jobs a fork PR must not run, in file order: jobs
-// aimed at the host or at self-hosted runners, jobs whose container or
+// aimed at the host or at self-hosted runners, and jobs whose container or
 // services set options or volumes (act honours --privileged and -v /:/host
-// there), and reusable-workflow jobs, whose called jobs homerun cannot vet.
-// Anything it cannot read statically (an expression standing in for a whole
-// container or services value, a merge key) counts as unsafe.
+// there). Anything it cannot read statically (an expression standing in for a
+// whole container or services value, a merge key) counts as unsafe. A
+// reusable-workflow job is safe only if it calls a local workflow, read from
+// the same snapshot, none of whose jobs is unsafe; remote callees cannot be
+// vetted.
 func ForkUnsafeJobs(root, rel string) ([]string, error) {
 	r, err := os.OpenRoot(root)
 	if err != nil {
 		return nil, err
 	}
 	defer r.Close()
+	return unsafeJobs(r, rel, 0)
+}
+
+// maxCallDepth matches GitHub's limit on nested reusable workflows.
+const maxCallDepth = 4
+
+func unsafeJobs(r *os.Root, rel string, depth int) ([]string, error) {
 	b, err := readRegular(r, rel)
 	if err != nil {
 		return nil, err
@@ -47,11 +56,21 @@ func ForkUnsafeJobs(root, rel string) ([]string, error) {
 		if err := jobs.Content[i+1].Decode(&j); err != nil {
 			return nil, fmt.Errorf("%s: jobs.%s: %w", rel, id, err)
 		}
-		if j.Uses != "" || runsOnUnsafe(&j.RunsOn, &j.Strategy) || containerUnsafe(&j.Container) || servicesUnsafe(&j.Services) {
+		if (j.Uses != "" && !safeCallee(r, j.Uses, depth)) ||
+			runsOnUnsafe(&j.RunsOn, &j.Strategy) || containerUnsafe(&j.Container) || servicesUnsafe(&j.Services) {
 			out = append(out, id)
 		}
 	}
 	return out, nil
+}
+
+func safeCallee(r *os.Root, uses string, depth int) bool {
+	rel, local := strings.CutPrefix(uses, "./")
+	if !local || isExpr(uses) || depth+1 >= maxCallDepth {
+		return false
+	}
+	unsafe, err := unsafeJobs(r, rel, depth+1)
+	return err == nil && len(unsafe) == 0
 }
 
 func readRegular(r *os.Root, rel string) ([]byte, error) {
