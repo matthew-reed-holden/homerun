@@ -528,17 +528,17 @@ jobs:
 `})
 	argsFile := filepath.Join(h.tmp, "args")
 	t.Setenv("FAKE_ACT_ARGS", argsFile)
-	head := startFork(t, h, map[string]string{"f.txt": "f"})
+	// Loading the workflow refuses the merge key, so the run fails setup before any job is planned.
+	head := h.pr(7, "evil/r", map[string]string{"f.txt": "f"})
+	h.syncAct()
+	ev := event.ForPR(repo, "main", 7, "Feature", "feat", head, "evil/r", "main", h.git("rev-parse", "HEAD"))
+	if run, err := h.d.Start(context.Background(), ev); err == nil || run != nil {
+		t.Fatalf("start: run=%v err=%v", run, err)
+	}
 	cs := h.waitDone(head)
-	if len(cs) == 0 {
-		t.Fatal("no checks")
+	if c := cs["homerun"]; len(cs) != 1 || c == nil || c.Conclusion != "failure" || !strings.HasPrefix(lastSummary(c), "homerun error:") {
+		t.Fatalf("want one homerun setup failure, got %+v", cs)
 	}
-	for name, c := range cs {
-		if c.Conclusion != "failure" || !strings.HasPrefix(lastSummary(c), "homerun error:") {
-			t.Errorf("%s: %s %q", name, c.Conclusion, lastSummary(c))
-		}
-	}
-	h.waitRun(head, "done")
 	if _, err := os.Stat(argsFile); err == nil {
 		t.Fatal("act ran the fork workflow")
 	}
