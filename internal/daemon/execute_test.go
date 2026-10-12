@@ -564,3 +564,51 @@ jobs:
 		t.Fatal("act ran the fork workflow")
 	}
 }
+
+func TestUnmappedRunsOnLabelFails(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": `name: CI
+on: push
+jobs:
+  win: {runs-on: windows-latest, steps: [{run: "true"}]}
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy: {matrix: {os: [windows-latest, macos-latest]}}
+    steps: [{run: "true"}]
+`})
+	h.poll()
+	// What act 0.2.89 prints for a label with no -P mapping: no jobResult, exit 0.
+	h.output("{\"jobID\":\"win\",\"matrix\":{},\"msg\":\"\U0001F6A7  Skipping unsupported platform -- Try running with `-P windows-latest=...`\"}\n" +
+		"{\"jobID\":\"test\",\"matrix\":{\"os\":\"windows-latest\"},\"msg\":\"\U0001F6A7  Skipping unsupported platform -- Try running with `-P windows-latest=...`\"}\n" +
+		"{\"jobID\":\"test\",\"matrix\":{\"os\":\"macos-latest\"},\"msg\":\"\U0001F6A7  Skipping unsupported platform -- Try running with `-P macos-latest=...`\"}\n")
+	sha := h.push(nil)
+	h.poll()
+	cs := h.waitDone(sha)
+	want := map[string]string{
+		"homerun / CI / win":                   "runs-on label windows-latest is not mapped",
+		"homerun / CI / test (windows-latest)": "runs-on label windows-latest is not mapped",
+		"homerun / CI / test (macos-latest)":   "runs-on label macos-latest is not mapped",
+		"homerun / CI / test":                  "",
+	}
+	for name, sub := range want {
+		c := cs[name]
+		if c == nil || c.Conclusion != "failure" || !strings.Contains(lastSummary(c), sub) {
+			t.Errorf("%s: %+v summary %q", name, c, lastSummary(c))
+		}
+	}
+	if s := lastSummary(cs["homerun / CI / win"]); !strings.HasPrefix(s, "homerun error:") {
+		t.Errorf("summary %q", s)
+	}
+}
+
+func TestMatrixWithNoSuccessfulLegFails(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": matrixYML})
+	h.poll()
+	h.output(`{"jobID":"test","matrix":{"n":1},"jobResult":"skipped","msg":"skip"}
+{"jobID":"test","matrix":{"n":2},"jobResult":"skipped","msg":"skip"}
+`)
+	sha := h.push(nil)
+	h.poll()
+	if c := h.waitDone(sha)["homerun / CI / test"]; c == nil || c.Conclusion != "failure" {
+		t.Fatalf("parent %+v, want failure", c)
+	}
+}

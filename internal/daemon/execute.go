@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -113,7 +114,7 @@ func (d *Daemon) execute(ctx context.Context, run *store.Run, p *plan, slot int)
 			d.closeWhere(rctx, run, func(c *store.Check) bool { return c.Workflow == w.Path && c.JobID == id }, "neutral", forkSkipped, "")
 		}
 		t := &tracker{d: d, ctx: rctx, runCtx: ctx, run: run, wf: w, log: logf,
-			legs: map[string][]*store.Check{}, tails: map[string][]string{}, matrix: map[string][]*store.Check{}, lost: map[string]bool{}}
+			legs: map[string][]*store.Check{}, tails: map[string][]string{}, matrix: map[string][]*store.Check{}, lost: map[string]bool{}, labels: map[string]string{}}
 		err := d.runner.Run(ctx, runner.Spec{Dir: run.Worktree, Event: ev.Name, EventPath: evPath, Workflow: w.Path,
 			Secrets: secrets, Slot: slot, Mask: mk.Mask, Fork: ev.Fork}, t.handle)
 		t.finish(err)
@@ -194,6 +195,7 @@ type tracker struct {
 	tails  map[string][]string       // leg key -> last lines ("" = act's own output)
 	matrix map[string][]*store.Check // job id -> leg checks
 	lost   map[string]bool           // job id -> a leg's check could not be created
+	labels map[string]string         // leg key -> runs-on label act said it has no platform for
 	failed bool
 	// unmapped is set when a job with no check of its own failed (a job ID
 	// changed by masking, or a reusable workflow's inner job): homerun cannot
@@ -222,6 +224,9 @@ func (t *tracker) handle(e actlog.Event) {
 			tail = tail[len(tail)-tailLines:]
 		}
 		t.tails[e.Leg] = tail
+		if m := unsupportedPlatform.FindStringSubmatch(e.Text); m != nil && e.Leg != "" {
+			t.labels[e.Leg] = m[1]
+		}
 	case actlog.Started:
 		if t.runCtx.Err() == nil {
 			t.start(e)
@@ -321,6 +326,22 @@ func (t *tracker) finish(actErr error) {
 	case actErr != nil && !t.failed:
 		conclusion, summary = "failure", "homerun error: act exited without finishing this job: "+t.d.scrub(actErr.Error())
 	}
+	if conclusion == "skipped" {
+		// A job act started cannot have been skipped for a failed need. act
+		// starts and then silently drops a job whose runs-on label has no
+		// platform, sending no result and exiting 0.
+		for leg, cs := range t.legs {
+			for _, c := range cs {
+				if !t.d.completed(c) {
+					msg := "homerun error: act never finished this job; its runs-on label may not be mapped; add it under platforms: in your user config"
+					if l := t.labels[leg]; l != "" {
+						msg = "homerun error: runs-on label " + l + " is not mapped; add it under platforms: in your user config"
+					}
+					t.d.complete(t.ctx, t.run, c, "failure", head(msg, maxTitle), msg, codeBlock(t.tails[leg]))
+				}
+			}
+		}
+	}
 	isParent := func(c *store.Check) bool { return c.Leg == "" && (len(t.matrix[c.JobID]) > 0 || t.lost[c.JobID]) }
 	t.d.closeWhere(t.ctx, t.run, func(c *store.Check) bool { return c.Workflow == t.wf.Path && !isParent(c) },
 		conclusion, summary, codeBlock(t.tails[""]))
@@ -331,9 +352,11 @@ func (t *tracker) finish(actErr error) {
 	}
 	for jobID, legs := range t.matrix {
 		parent := t.d.findCheck(t.run, t.wf.Path, jobID)
-		worst, failed := "success", 0
+		worst, failed, succeeded := "success", 0, 0
 		for _, l := range legs {
 			switch t.d.conclusion(l) {
+			case "success":
+				succeeded++
 			case "failure", "timed_out":
 				worst = "failure"
 				failed++
@@ -344,6 +367,11 @@ func (t *tracker) finish(actErr error) {
 			}
 		}
 		title, summary := fmt.Sprintf("%d of %d legs failed", failed, len(legs)), "Each matrix leg reports as its own check."
+		if worst == "success" && succeeded == 0 {
+			// Every leg skipped or neutral: a skipped leg cannot be told apart
+			// from one act dropped, so fail closed.
+			worst, title = "failure", "No matrix leg succeeded"
+		}
 		if t.lost[jobID] {
 			worst = "failure"
 			title, summary = "homerun error: a matrix leg could not be reported", "homerun error: a matrix leg's check run could not be created, so its result is unknown."
@@ -351,6 +379,10 @@ func (t *tracker) finish(actErr error) {
 		t.d.complete(t.ctx, t.run, parent, worst, title, summary, "")
 	}
 }
+
+// unsupportedPlatform matches act's line for a runs-on label with no -P mapping:
+// "Skipping unsupported platform -- Try running with `-P windows-latest=...`".
+var unsupportedPlatform = regexp.MustCompile("Skipping unsupported platform.*-P ([^=`\\s]+)=")
 
 func (d *Daemon) runExtra(ctx, rctx context.Context, run *store.Run, c *store.Check, command string,
 	secrets map[string]string, mk *mask.Masker, log io.Writer) {
