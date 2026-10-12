@@ -1,6 +1,7 @@
 package actlog
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -107,4 +108,45 @@ func TestRawJSONMasked(t *testing.T) {
 			t.Errorf("%s -> %+v", l, evs)
 		}
 	}
+}
+
+func TestMaskingBypasses(t *testing.T) {
+	m := func(s string) string {
+		return strings.ReplaceAll(strings.ReplaceAll(s, `to"psecret`, "***"), "4242", "***")
+	}
+	t.Run("numeric secret in raw JSON", func(t *testing.T) {
+		evs := (&Parser{Mask: m}).Feed([]byte(`{"x":4242,"y":[true]}`))
+		if len(evs) != 1 || strings.Contains(evs[0].Text, "4242") {
+			t.Fatalf("%+v", evs)
+		}
+	})
+	t.Run("non-string msg goes raw path", func(t *testing.T) {
+		evs := (&Parser{Mask: m}).Feed([]byte(`{"jobID":"a","msg":{"k":"to\"psecret"},"step":7}`))
+		for _, e := range evs {
+			if strings.Contains(e.Text, "psecret") {
+				t.Fatalf("%+v", e)
+			}
+		}
+	})
+	t.Run("identity fields masked", func(t *testing.T) {
+		p := &Parser{Mask: m}
+		evs := p.Feed([]byte(`{"jobID":"to\"psecret","matrix":{"k":"to\"psecret","n":4242},"msg":"x","jobResult":"weird"}`))
+		for _, e := range evs {
+			b, _ := json.Marshal(e)
+			if strings.Contains(string(b), "psecret") || strings.Contains(string(b), "4242") || strings.Contains(e.Leg, "psecret") {
+				t.Fatalf("leak: %s", b)
+			}
+		}
+		if last := evs[len(evs)-1]; last.Conclusion != "failure" {
+			t.Fatalf("unknown conclusion passed through: %q", last.Conclusion)
+		}
+	})
+	t.Run("multi-line secret spanning msg lines", func(t *testing.T) {
+		p := &Parser{Mask: func(s string) string { return strings.ReplaceAll(s, "a\n}", "***") }}
+		for _, e := range p.Feed([]byte(`{"msg":"a\n}"}`)) {
+			if strings.Contains(e.Text, "a") {
+				t.Fatalf("%+v", e)
+			}
+		}
+	})
 }

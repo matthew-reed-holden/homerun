@@ -63,19 +63,23 @@ func (p *Parser) Feed(line []byte) []Event {
 		// Mask the decoded msg: a secret with a quote, backslash or newline is
 		// JSON-escaped in the raw line and would slip past the masker.
 		var out []Event
-		for _, l := range strings.Split(strings.TrimRight(*e.Msg, "\n"), "\n") {
-			out = append(out, Event{Kind: Line, Text: p.mask(l)})
+		for _, l := range strings.Split(p.mask(strings.TrimRight(*e.Msg, "\n")), "\n") {
+			out = append(out, Event{Kind: Line, Text: l})
 		}
 		return out
 	}
 	leg := LegKey(e.JobID, e.Matrix)
+	// Identity fields feed check names, so they are masked too; state above is
+	// keyed on the raw values.
+	outID, outMatrix := p.mask(e.JobID), p.maskMatrix(e.Matrix)
+	outLeg := p.mask(LegKey(outID, outMatrix))
 	var out []Event
 	if !p.started[leg] {
 		p.started[leg] = true
-		out = append(out, Event{Kind: Started, JobID: e.JobID, Matrix: e.Matrix, Leg: leg})
+		out = append(out, Event{Kind: Started, JobID: outID, Matrix: outMatrix, Leg: outLeg})
 	}
-	for _, l := range strings.Split(strings.TrimRight(deref(e.Msg), "\n"), "\n") {
-		out = append(out, Event{Kind: Line, JobID: e.JobID, Matrix: e.Matrix, Leg: leg, Text: p.mask(l)})
+	for _, l := range strings.Split(p.mask(strings.TrimRight(deref(e.Msg), "\n")), "\n") {
+		out = append(out, Event{Kind: Line, JobID: outID, Matrix: outMatrix, Leg: outLeg, Text: l})
 	}
 	if e.StepResult == "failure" && p.failed[leg] == "" {
 		p.failed[leg] = p.mask(e.Step)
@@ -89,7 +93,12 @@ func (p *Parser) Feed(line []byte) []Event {
 		if c == "failure" && len(e.Matrix) > 0 && p.failed[leg] == "" && p.jobFail[e.JobID] {
 			c = "success"
 		}
-		out = append(out, Event{Kind: Finished, JobID: e.JobID, Matrix: e.Matrix, Leg: leg, Conclusion: c, FailedStep: p.failed[leg]})
+		switch c {
+		case "success", "failure", "cancelled", "skipped":
+		default:
+			c = "failure" // fail closed; the value would otherwise be stored verbatim
+		}
+		out = append(out, Event{Kind: Finished, JobID: outID, Matrix: outMatrix, Leg: outLeg, Conclusion: c, FailedStep: p.failed[leg]})
 	}
 	return out
 }
@@ -99,16 +108,37 @@ func (p *Parser) Feed(line []byte) []Event {
 func (p *Parser) rawText(line []byte) string {
 	if json.Valid(line) {
 		var v any
-		if json.Unmarshal(line, &v) == nil {
+		dec := json.NewDecoder(bytes.NewReader(line))
+		dec.UseNumber() // keep literal digits so a numeric secret still matches below
+		if dec.Decode(&v) == nil {
 			var b bytes.Buffer
 			enc := json.NewEncoder(&b)
 			enc.SetEscapeHTML(false)
 			if enc.Encode(p.maskAny(v)) == nil {
-				return strings.TrimRight(b.String(), "\n")
+				// Masking the encoded text too catches secrets in numbers and literals.
+				return p.mask(strings.TrimRight(b.String(), "\n"))
 			}
 		}
 	}
 	return p.mask(strings.TrimRight(string(line), "\r\n"))
+}
+
+// maskMatrix returns a masked copy; values that only match once encoded
+// (numbers) are replaced wholesale.
+func (p *Parser) maskMatrix(m map[string]any) map[string]any {
+	if m == nil {
+		return nil
+	}
+	cp, _ := p.maskAny(m).(map[string]any)
+	b, err := json.Marshal(cp)
+	if err != nil || p.mask(string(b)) == string(b) {
+		return cp
+	}
+	var out map[string]any
+	if json.Unmarshal([]byte(p.mask(string(b))), &out) != nil {
+		return map[string]any{"***": "***"}
+	}
+	return out
 }
 
 func (p *Parser) maskAny(v any) any {
