@@ -26,14 +26,7 @@ func PrepareJobs(root, rel string, host, disable []string) error {
 		return err
 	}
 	defer r.Close()
-	fi, err := r.Lstat(rel)
-	if err != nil {
-		return err
-	}
-	if !fi.Mode().IsRegular() {
-		return fmt.Errorf("%s: not a regular file", rel)
-	}
-	b, err := r.ReadFile(rel)
+	b, err := readRegular(r, rel)
 	if err != nil {
 		return err
 	}

@@ -170,3 +170,49 @@ func TestPrepareJobsDuplicateKeysFailClosed(t *testing.T) {
 		t.Fatal("duplicate key in job: expected error")
 	}
 }
+
+func TestForkUnsafeJobs(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "w.yml", `name: CI
+on: pull_request
+x-svc: &svc {image: redis, volumes: ["/:/host"]}
+jobs:
+  plain: {runs-on: ubuntu-latest, container: node:20, services: {db: postgres}, steps: [{run: "true"}]}
+  host: {runs-on: homerun-host, steps: [{run: "true"}]}
+  selfhosted: {runs-on: [Self-Hosted, linux], steps: [{run: "true"}]}
+  group: {runs-on: {group: mine}, steps: [{run: "true"}]}
+  matrixhost:
+    runs-on: ${{ matrix.os }}
+    strategy: {matrix: {os: [ubuntu-latest, self-hosted]}}
+    steps: [{run: "true"}]
+  matrixok:
+    runs-on: ${{ matrix.os }}
+    strategy: {matrix: {os: [ubuntu-latest]}}
+    steps: [{run: "true"}]
+  priv: {runs-on: ubuntu-latest, container: {image: x, options: --privileged}, steps: [{run: "true"}]}
+  vol: {runs-on: ubuntu-latest, services: {db: {image: x, volumes: ["/:/host"]}}, steps: [{run: "true"}]}
+  aliased: {runs-on: ubuntu-latest, services: {db: *svc}, steps: [{run: "true"}]}
+  exprctr: {runs-on: ubuntu-latest, container: "${{ matrix.c }}", steps: [{run: "true"}]}
+  reusable: {uses: ./.github/workflows/other.yml}
+`)
+	got, err := ForkUnsafeJobs(root, "w.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"host", "selfhosted", "group", "matrixhost", "priv", "vol", "aliased", "exprctr", "reusable"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestForkUnsafeJobsRefusesSymlink(t *testing.T) {
+	root := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "w.yml")
+	os.WriteFile(outside, []byte("on: push\njobs: {a: {runs-on: x}}\n"), 0o644)
+	if err := os.Symlink(outside, filepath.Join(root, "w.yml")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ForkUnsafeJobs(root, "w.yml"); err == nil {
+		t.Fatal("followed a symlink out of the snapshot")
+	}
+}

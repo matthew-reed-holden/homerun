@@ -15,6 +15,7 @@ import (
 	"github.com/google/go-github/v92/github"
 	"github.com/matthew-reed-holden/homerun/internal/config"
 	"github.com/matthew-reed-holden/homerun/internal/gh"
+	"github.com/matthew-reed-holden/homerun/internal/store"
 )
 
 const repo = "o/r"
@@ -51,6 +52,18 @@ type reporter struct {
 	creates int
 	failOn  int               // fail this CreateCheck (1-based) with an error retries cannot fix
 	after   func(creates int) // runs after each successful CreateCheck
+	failUps int               // fail this many of the next UpdateChecks, as during an outage
+}
+
+func (r *reporter) failUpdates(n int) {
+	r.mu.Lock()
+	r.failUps = n
+	r.mu.Unlock()
+}
+
+// unprocessable is an error gh.Retry does not retry, so tests need not wait out its backoff.
+func unprocessable() error {
+	return &github.ErrorResponse{Response: &http.Response{StatusCode: http.StatusUnprocessableEntity}, Message: "boom"}
 }
 
 func (r *reporter) set(failOn int, after func(int)) {
@@ -68,7 +81,7 @@ func (r *reporter) CreateCheck(ctx context.Context, repo, sha, name, externalID 
 	n, fail, after := r.creates, r.creates == r.failOn, r.after
 	r.mu.Unlock()
 	if fail {
-		return 0, &github.ErrorResponse{Response: &http.Response{StatusCode: http.StatusUnprocessableEntity}, Message: "boom"}
+		return 0, unprocessable()
 	}
 	id, err := r.Fake.CreateCheck(ctx, repo, sha, name, externalID)
 	if err == nil && after != nil {
@@ -80,6 +93,15 @@ func (r *reporter) CreateCheck(ctx context.Context, repo, sha, name, externalID 
 func (r *reporter) UpdateCheck(ctx context.Context, repo string, id int64, u gh.Update) error {
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	r.mu.Lock()
+	fail := r.failUps > 0
+	if fail {
+		r.failUps--
+	}
+	r.mu.Unlock()
+	if fail {
+		return unprocessable()
 	}
 	return r.Fake.UpdateCheck(ctx, repo, id, u)
 }
@@ -264,4 +286,34 @@ func (h *harness) waitStatus(sha, name, status string) {
 		time.Sleep(50 * time.Millisecond)
 	}
 	h.t.Fatalf("timeout waiting for %s to be %s", name, status)
+}
+
+// waitRun waits until the stored run for sha has the given status and returns it.
+func (h *harness) waitRun(sha, status string) *store.Run {
+	h.t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		runs, _ := h.d.store.List()
+		for _, r := range runs {
+			if r.Event.SHA == sha && r.Status == status {
+				return r
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	h.t.Fatalf("timeout waiting for the run of %s to be %s", sha, status)
+	return nil
+}
+
+// waitGone waits until path no longer exists.
+func (h *harness) waitGone(path string) {
+	h.t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	h.t.Fatalf("%s was not removed", path)
 }

@@ -73,6 +73,10 @@ func (r *Runner) Run(ctx context.Context, s Spec, onEvent func(actlog.Event)) er
 	if s.Mask == nil {
 		s.Mask = func(v string) string { return v }
 	}
+	if s.Fork {
+		// Enforced here as well as by callers: a fork's code must never see a secret.
+		s.Secrets = nil
+	}
 	// act uppercases secret names and prompts/exits on missing or empty values.
 	secrets := make(map[string]string, len(s.Secrets)+1)
 	for n, v := range s.Secrets {

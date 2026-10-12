@@ -289,3 +289,24 @@ func TestRunExitError(t *testing.T) {
 		t.Fatal("want exit error")
 	}
 }
+
+func TestRunForkIgnoresSecrets(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("FAKE_ACT_ARGS", filepath.Join(tmp, "args"))
+	t.Setenv("FAKE_ACT_ENV", filepath.Join(tmp, "env"))
+	r := newRunner(t, Runner{CacheRoot: tmp})
+	err := r.Run(context.Background(), Spec{Dir: t.TempDir(), Event: "pull_request", EventPath: "/e", Workflow: "w", Fork: true,
+		Secrets: map[string]string{"MYSEC": "s3cr3t-value", "GITHUB_TOKEN": "real"}}, func(actlog.Event) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	env, _ := os.ReadFile(filepath.Join(tmp, "env"))
+	args, _ := os.ReadFile(filepath.Join(tmp, "args"))
+	if strings.Contains(string(env), "s3cr3t-value") || strings.Contains(string(env), "GITHUB_TOKEN=real") ||
+		strings.Contains(string(args), "-s\nMYSEC\n") {
+		t.Fatalf("fork run received secrets:\nenv=%s\nargs=%s", env, args)
+	}
+	if !strings.Contains(string(env), "GITHUB_TOKEN=homerun-no-token\n") {
+		t.Fatalf("fork run lost the placeholder token:\n%s", env)
+	}
+}

@@ -183,6 +183,7 @@ func TestPRRunIsSupersededAndReportedCancelled(t *testing.T) {
 			t.Errorf("first run %s: %s %q", name, c.Conclusion, lastSummary(c))
 		}
 	}
+	h.waitGone(h.waitRun(first, "cancelled").Worktree)
 	release()
 	for name, c := range h.waitDone(second) {
 		if lastSummary(c) == supersededSummary {

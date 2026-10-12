@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/matthew-reed-holden/homerun/internal/event"
+	"github.com/matthew-reed-holden/homerun/internal/gh"
 )
 
 type Check struct {
@@ -27,6 +28,8 @@ type Check struct {
 	JobID      string `json:"job_id,omitempty"`
 	Leg        string `json:"leg,omitempty"`
 	Extra      string `json:"extra,omitempty"`
+	// Pending is the last update GitHub did not accept; it is re-sent until it is.
+	Pending *gh.Update `json:"pending,omitempty"`
 }
 
 type Run struct {

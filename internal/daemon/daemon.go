@@ -52,6 +52,7 @@ type Daemon struct {
 	unhandled map[string][]string
 	mirrors   map[string]*git.Mirror
 	repoLocks map[string]*sync.Mutex
+	sendLocks map[string]*sync.Mutex // run id -> held while sending that run's check updates
 	lastPrune time.Time
 }
 
@@ -82,6 +83,7 @@ func New(o Options) (*Daemon, error) {
 		unhandled: map[string][]string{},
 		mirrors:   map[string]*git.Mirror{},
 		repoLocks: map[string]*sync.Mutex{},
+		sendLocks: map[string]*sync.Mutex{},
 	}, nil
 }
 
@@ -135,6 +137,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 }
 
 func (d *Daemon) PollAll(ctx context.Context) {
+	d.flushReports(ctx)
 	cfg := d.config()
 	names := make([]string, 0, len(cfg.Repos))
 	for n := range cfg.Repos {
@@ -514,6 +517,7 @@ func (d *Daemon) scrub(s string) string {
 func (d *Daemon) forget(run *store.Run) {
 	d.mu.Lock()
 	delete(d.runs, run.ID)
+	delete(d.sendLocks, run.ID)
 	d.mu.Unlock()
 	if dir, err := d.store.RunDir(run.ID); err == nil {
 		if err := os.RemoveAll(dir); err != nil {
@@ -537,6 +541,7 @@ func (d *Daemon) forgetOld(maxAge time.Duration) {
 	for id, r := range d.runs {
 		if time.Since(r.Created) > maxAge && (r.Status == "done" || r.Status == "cancelled") {
 			delete(d.runs, id)
+			delete(d.sendLocks, id)
 		}
 	}
 }
@@ -582,22 +587,118 @@ func (d *Daemon) findCheck(run *store.Run, wf, jobID string) *store.Check {
 	return nil
 }
 
-// report updates a check locally and on GitHub. A failed report is logged, not
-// fatal: the run continues and the next update carries the state forward.
+func (d *Daemon) completed(c *store.Check) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return c.Status == "completed"
+}
+
+func (d *Daemon) conclusion(c *store.Check) string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return c.Conclusion
+}
+
+func (d *Daemon) hasCheckNamed(run *store.Run, name string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, c := range run.Checks {
+		if c.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// sendLock serializes a run's check updates, so a flushed stale update can
+// never land after a newer one.
+func (d *Daemon) sendLock(runID string) *sync.Mutex {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	l := d.sendLocks[runID]
+	if l == nil {
+		l = &sync.Mutex{}
+		d.sendLocks[runID] = l
+	}
+	return l
+}
+
+// report updates a check locally and on GitHub. An update GitHub does not
+// accept is kept as Pending and re-sent by later polls, so execution carries
+// on through an outage and the results arrive when GitHub comes back.
 func (d *Daemon) report(ctx context.Context, run *store.Run, c *store.Check, u gh.Update) {
 	u.Name = c.Name
+	lock := d.sendLock(run.ID)
+	lock.Lock()
+	defer lock.Unlock()
 	d.mu.Lock()
 	c.Status = u.Status
 	if u.Conclusion != "" {
 		c.Status, c.Conclusion = "completed", u.Conclusion
 	}
+	c.Pending = nil
 	err := d.store.Save(run)
 	d.mu.Unlock()
 	if err != nil {
 		slog.Warn("save run", "run", run.ID, "err", err)
 	}
 	if err := gh.Retry(ctx, func() error { return d.opts.Reporter.UpdateCheck(ctx, run.Repo, c.ID, u) }); err != nil {
-		slog.Error("report check", "repo", run.Repo, "check", c.Name, "err", err)
+		slog.Error("report check; will retry on a later poll", "repo", run.Repo, "check", c.Name, "err", err)
+		d.mu.Lock()
+		c.Pending = &u
+		err := d.store.Save(run)
+		d.mu.Unlock()
+		if err != nil {
+			slog.Warn("save run", "run", run.ID, "err", err)
+		}
+	}
+}
+
+// flushReports re-sends pending updates once each; the next poll tries again.
+// A run whose updates are being sent right now is skipped: its sender holds
+// the newest state.
+func (d *Daemon) flushReports(ctx context.Context) {
+	d.mu.Lock()
+	var runs []*store.Run
+	for _, r := range d.runs {
+		for _, c := range r.Checks {
+			if c.Pending != nil {
+				runs = append(runs, r)
+				break
+			}
+		}
+	}
+	d.mu.Unlock()
+	for _, run := range runs {
+		lock := d.sendLock(run.ID)
+		if !lock.TryLock() {
+			continue
+		}
+		d.mu.Lock()
+		var pending []*store.Check
+		for _, c := range run.Checks {
+			if c.Pending != nil {
+				pending = append(pending, c)
+			}
+		}
+		d.mu.Unlock()
+		for _, c := range pending {
+			d.mu.Lock()
+			u := *c.Pending
+			d.mu.Unlock()
+			if err := d.opts.Reporter.UpdateCheck(ctx, run.Repo, c.ID, u); err != nil {
+				slog.Warn("flush check report", "repo", run.Repo, "check", c.Name, "err", err)
+				continue
+			}
+			d.mu.Lock()
+			c.Pending = nil
+			err := d.store.Save(run)
+			d.mu.Unlock()
+			if err != nil {
+				slog.Warn("save run", "run", run.ID, "err", err)
+			}
+		}
+		lock.Unlock()
 	}
 }
 
