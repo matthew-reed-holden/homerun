@@ -144,3 +144,17 @@ func TestLoadRepoRejectsSymlink(t *testing.T) {
 		t.Fatal("want error")
 	}
 }
+
+func TestLoadRepoRejectsDirSymlink(t *testing.T) {
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "homerun.yml"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(dir, ".github")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadRepo(dir); err == nil {
+		t.Fatal("want error")
+	}
+}

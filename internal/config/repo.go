@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"sort"
 
 	"gopkg.in/yaml.v3"
@@ -22,10 +21,16 @@ type Repo struct {
 	Checks      map[string]string `yaml:"checks"`
 }
 
-func LoadRepo(root string) (*Repo, error) {
-	p := filepath.Join(root, ".github", "homerun.yml")
-	// Read from an untrusted commit: refuse symlinks so host files cannot be read or leaked.
-	fi, err := os.Lstat(p)
+func LoadRepo(dir string) (*Repo, error) {
+	// Read from an untrusted commit: os.Root refuses symlinks that escape the
+	// snapshot, and the leaf must be a regular file.
+	const rel = ".github/homerun.yml"
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	fi, err := root.Lstat(rel)
 	if errors.Is(err, fs.ErrNotExist) {
 		return &Repo{}, nil
 	}
@@ -35,7 +40,7 @@ func LoadRepo(root string) (*Repo, error) {
 	if !fi.Mode().IsRegular() {
 		return nil, fmt.Errorf(".github/homerun.yml: not a regular file")
 	}
-	b, err := os.ReadFile(p)
+	b, err := root.ReadFile(rel)
 	if err != nil {
 		return nil, err
 	}

@@ -218,3 +218,27 @@ func TestLoadRejectsInvalidPatternAndSymlink(t *testing.T) {
 		t.Fatal("LoadDir should reject symlink")
 	}
 }
+
+func TestLoadDirRejectsDirSymlinks(t *testing.T) {
+	outside := t.TempDir()
+	write(t, outside, "workflows/x.yml", "on: push\njobs: {}\n")
+
+	a := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(a, ".github")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadDir(a); err == nil {
+		t.Error(".github symlink: want error")
+	}
+
+	b := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(b, ".github"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "workflows"), filepath.Join(b, ".github/workflows")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadDir(b); err == nil {
+		t.Error(".github/workflows symlink: want error")
+	}
+}

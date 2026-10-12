@@ -1,9 +1,10 @@
 package workflow
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -49,15 +50,27 @@ type Workflow struct {
 }
 
 func LoadDir(root string) ([]*Workflow, error) {
+	r, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	d, err := r.Open(".github/workflows")
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	ents, err := d.ReadDir(-1)
+	d.Close()
+	if err != nil {
+		return nil, err
+	}
 	var rels []string
-	for _, pat := range []string{"*.yml", "*.yaml"} {
-		m, err := filepath.Glob(filepath.Join(root, ".github", "workflows", pat))
-		if err != nil {
-			return nil, err
-		}
-		for _, p := range m {
-			rel, _ := filepath.Rel(root, p)
-			rels = append(rels, filepath.ToSlash(rel))
+	for _, e := range ents {
+		if n := e.Name(); strings.HasSuffix(n, ".yml") || strings.HasSuffix(n, ".yaml") {
+			rels = append(rels, ".github/workflows/"+n)
 		}
 	}
 	sort.Strings(rels)
@@ -73,15 +86,21 @@ func LoadDir(root string) ([]*Workflow, error) {
 }
 
 func Load(root, rel string) (*Workflow, error) {
-	// The file comes from an untrusted commit; a symlink could expose host files via error snippets.
-	fi, err := os.Lstat(filepath.Join(root, rel))
+	// The snapshot is an untrusted commit: os.Root refuses any symlink that
+	// escapes it, and the leaf must be a regular file so error snippets cannot leak host files.
+	r, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	fi, err := r.Lstat(rel)
 	if err != nil {
 		return nil, err
 	}
 	if !fi.Mode().IsRegular() {
 		return nil, fmt.Errorf("%s: not a regular file", rel)
 	}
-	b, err := os.ReadFile(filepath.Join(root, rel))
+	b, err := r.ReadFile(rel)
 	if err != nil {
 		return nil, err
 	}
