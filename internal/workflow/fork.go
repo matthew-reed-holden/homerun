@@ -182,10 +182,14 @@ func acyclic(n *yaml.Node, depth int, onPath, done map[*yaml.Node]bool) error {
 // anyScalar reports whether f holds for any scalar in n, keys included.
 // Past maxNesting it answers true, so a predicate meaning "unsafe" fails closed.
 func anyScalar(n *yaml.Node, f func(string) bool) bool {
-	return anyScalarDepth(n, f, 0)
+	return anyScalarDepth(n, f, 0, map[*yaml.Node]int{})
 }
 
-func anyScalarDepth(n *yaml.Node, f func(string) bool, depth int) bool {
+// clean maps a node to the deepest depth at which f held for none of its
+// scalars. Aliases share subtrees, so without it a few lines of anchors fan
+// out into billions of visits. A false found at depth d also holds at any
+// shallower depth, where more nesting budget remains.
+func anyScalarDepth(n *yaml.Node, f func(string) bool, depth int, clean map[*yaml.Node]int) bool {
 	if depth > maxNesting {
 		return true
 	}
@@ -193,14 +197,20 @@ func anyScalarDepth(n *yaml.Node, f func(string) bool, depth int) bool {
 	if n == nil {
 		return false
 	}
-	if n.Kind == yaml.ScalarNode {
-		return f(n.Value)
+	if d, ok := clean[n]; ok && depth <= d {
+		return false
 	}
-	for _, c := range n.Content {
-		if anyScalarDepth(c, f, depth+1) {
+	if n.Kind == yaml.ScalarNode {
+		if f(n.Value) {
 			return true
 		}
 	}
+	for _, c := range n.Content {
+		if anyScalarDepth(c, f, depth+1, clean) {
+			return true
+		}
+	}
+	clean[n] = depth
 	return false
 }
 

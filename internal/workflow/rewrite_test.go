@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestPrepareJobs(t *testing.T) {
@@ -338,5 +339,34 @@ func TestCyclicAnchorsDoNotCrash(t *testing.T) {
 	for _, args := range [][2][]string{{{"a"}, nil}, {nil, {"a"}}} {
 		write(t, root, "w.yml", cyclicYML)
 		PrepareJobs(root, "w.yml", args[0], args[1])
+	}
+}
+
+func TestForkCheckAliasFanOutIsFast(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("on: pull_request\nx:\n  l0: &l0 [a, a, a, a, a, a, a, a, a, a]\n")
+	for i := 1; i < 10; i++ {
+		p := "*l" + strconv.Itoa(i-1)
+		b.WriteString("  l" + strconv.Itoa(i) + ": &l" + strconv.Itoa(i) + " [" + strings.Repeat(p+", ", 9) + p + "]\n")
+	}
+	b.WriteString("jobs:\n  a:\n    runs-on: ${{ matrix.os }}\n    strategy: {matrix: {os: *l9}}\n    container: {image: *l9}\n    steps: [{run: \"true\"}]\n")
+	root := t.TempDir()
+	write(t, root, "w.yml", b.String())
+	done := make(chan struct{})
+	start := time.Now()
+	go func() {
+		defer close(done)
+		got, err := ForkUnsafeJobs(root, "w.yml")
+		if err == nil && len(got) != 0 {
+			t.Errorf("want no unsafe jobs or an error, got %v", got)
+		}
+	}()
+	select {
+	case <-done:
+		if d := time.Since(start); d > time.Second {
+			t.Fatalf("took %v", d)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("fork check did not return")
 	}
 }
