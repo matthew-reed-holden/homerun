@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+	"unicode"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -54,14 +55,14 @@ func Rows(r api.Repo) []Row {
 	var rows []Row
 	for i := range r.Items {
 		it := &r.Items[i]
-		rows = append(rows, Row{Text: fmt.Sprintf("%s %s  %s", Rollup(it.Checks), it.Label, short(it.SHA)), Item: it})
+		rows = append(rows, Row{Text: fmt.Sprintf("%s %s  %s", Rollup(it.Checks), clean(it.Label), clean(short(it.SHA))), Item: it})
 		for j := range it.Checks {
 			c := &it.Checks[j]
-			rows = append(rows, Row{Text: "    " + Icon(c.Status, c.Conclusion) + " " + c.Name, Item: it, Check: c})
+			rows = append(rows, Row{Text: "    " + Icon(c.Status, c.Conclusion) + " " + clean(c.Name), Item: it, Check: c})
 		}
 	}
 	if len(r.Unhandled) > 0 {
-		rows = append(rows, Row{Text: "not handled locally: " + strings.Join(r.Unhandled, ", ")})
+		rows = append(rows, Row{Text: "not handled locally: " + clean(strings.Join(r.Unhandled, ", "))})
 	}
 	return rows
 }
@@ -81,6 +82,23 @@ func window(n, sel, height int) (int, int) {
 	start := sel - height/2
 	start = max(0, min(start, n-height))
 	return start, start + height
+}
+
+// clean makes untrusted text safe for one terminal line. GitHub data and
+// daemon output can carry escapes (OSC 52 clipboard writes, cursor movement)
+// that would otherwise run on the user's terminal.
+func clean(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, ansi.Strip(s))
+}
+
+// cleanLog is clean for log output, where a tab is common and stays readable.
+func cleanLog(s string) string {
+	return clean(strings.ReplaceAll(s, "\t", "    "))
 }
 
 // truncate cuts by display width, since the status icons are multi-byte and
@@ -125,8 +143,11 @@ type (
 	errMsg    struct{ err error }
 	tickMsg   struct{}
 	statusMsg string
-	logMsg    struct{ run, line string }
-	logEndMsg struct{ run string }
+	logMsg    struct {
+		gen  int
+		line string
+	}
+	logEndMsg struct{ gen int }
 )
 
 type model struct {
@@ -137,6 +158,7 @@ type model struct {
 	row     int
 	focus   int // 0: repos, 1: rows
 	logRun  string
+	gen     int // identifies the current log stream so a stale one is ignored
 	logName string
 	log     []string
 	lines   chan string
@@ -196,16 +218,16 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		return m, tea.Batch(m.fetch(), tick())
 	case statusMsg:
-		m.status = string(msg)
+		m.status = clean(string(msg))
 	case logMsg:
-		if msg.run == m.logRun {
-			if m.log = append(m.log, msg.line); len(m.log) > 2000 {
+		if msg.gen == m.gen && m.logRun != "" {
+			if m.log = append(m.log, cleanLog(msg.line)); len(m.log) > 2000 {
 				m.log = m.log[len(m.log)-2000:]
 			}
 			return m, m.nextLine()
 		}
 	case logEndMsg:
-		if msg.run == m.logRun {
+		if msg.gen == m.gen && m.logRun != "" {
 			m.log = append(m.log, dim.Render("— end of log —"))
 		}
 	case tea.KeyMsg:
@@ -300,6 +322,7 @@ func (m *model) closeLog() {
 		m.stopLog()
 	}
 	m.stopLog, m.logRun, m.log = nil, "", nil
+	m.gen++
 }
 
 func (m *model) follow(c *api.Check) tea.Cmd {
@@ -312,7 +335,10 @@ func (m *model) follow(c *api.Check) tea.Cmd {
 		defer close(lines)
 		body, err := m.c.Log(ctx, c.RunID, true)
 		if err != nil {
-			lines <- "error: " + err.Error()
+			select {
+			case lines <- "error: " + err.Error():
+			case <-ctx.Done():
+			}
 			return
 		}
 		defer body.Close()
@@ -325,24 +351,30 @@ func (m *model) follow(c *api.Check) tea.Cmd {
 				return
 			}
 		}
+		if err := sc.Err(); err != nil && ctx.Err() == nil {
+			select {
+			case lines <- "error: reading log: " + err.Error():
+			case <-ctx.Done():
+			}
+		}
 	}()
 	return m.nextLine()
 }
 
 func (m *model) nextLine() tea.Cmd {
-	ch, run := m.lines, m.logRun
+	ch, gen := m.lines, m.gen
 	return func() tea.Msg {
 		l, ok := <-ch
 		if !ok {
-			return logEndMsg{run}
+			return logEndMsg{gen}
 		}
-		return logMsg{run, l}
+		return logMsg{gen, l}
 	}
 }
 
 func (m *model) View() string {
 	if m.err != nil && len(m.state.Repos) == 0 {
-		return "homerun: " + m.err.Error() + "\n\nStart the daemon with: homerun daemon   (q to quit)\n"
+		return "homerun: " + clean(m.err.Error()) + "\n\nStart the daemon with: homerun daemon   (q to quit)\n"
 	}
 	topH := m.h - 3
 	if m.logRun != "" {
@@ -350,28 +382,29 @@ func (m *model) View() string {
 	}
 	inner := max(1, topH-2)
 
+	const leftW = 30
 	var left []string
 	for i, r := range m.state.Repos {
 		var all []api.Check
 		for _, it := range r.Items {
 			all = append(all, it.Checks...)
 		}
-		line := Rollup(all) + " " + r.Name
+		line := Rollup(all) + " " + clean(r.Name)
 		if r.Error != "" {
-			line = "✘ " + r.Name + " (error)"
+			line = "✘ " + clean(r.Name) + " (error)"
 		}
+		line = truncate(line, leftW-1)
 		if i == m.repo && m.focus == 0 {
 			line = sel.Render(line)
 		}
 		left = append(left, colour(line))
 	}
-	leftW := 30
 	rightW := max(20, m.w-leftW-4)
 
 	rows := m.rows()
 	var right []string
 	if m.repo < len(m.state.Repos) && m.state.Repos[m.repo].Error != "" {
-		right = append(right, red.Render(m.state.Repos[m.repo].Error))
+		right = append(right, red.Render(truncate(clean(m.state.Repos[m.repo].Error), rightW-1)))
 	}
 	start, end := window(len(rows), m.row, inner-len(right))
 	for i := start; i < end; i++ {
@@ -389,16 +422,23 @@ func (m *model) View() string {
 	b.WriteString(top + "\n")
 	if m.logRun != "" {
 		logH := max(1, m.h-topH-4)
-		ls := m.log
+		ls := append([]string(nil), m.log...)
 		if len(ls) > logH {
 			ls = ls[len(ls)-logH:]
 		}
-		b.WriteString(dim.Render(m.logName+"  (esc to close)") + "\n" + strings.Join(ls, "\n") + "\n")
+		for i := range ls {
+			ls[i] = truncate(ls[i], m.w)
+		}
+		b.WriteString(dim.Render(truncate(clean(m.logName)+"  (esc to close)", m.w)) + "\n" + strings.Join(ls, "\n") + "\n")
 	}
 	help := "tab switch pane · j/k move · enter log · r rerun · c cancel · o open · q quit"
-	if m.status != "" {
-		help += "   " + m.status
+	if m.err != nil {
+		// First, so truncation to the width cannot cut the warning off.
+		help = "[stale: " + clean(m.err.Error()) + "] " + help
 	}
-	b.WriteString(dim.Render(help))
+	if m.status != "" {
+		help += "   " + clean(m.status)
+	}
+	b.WriteString(dim.Render(truncate(help, m.w)))
 	return b.String()
 }

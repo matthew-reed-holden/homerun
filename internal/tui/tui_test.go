@@ -113,3 +113,62 @@ func TestViewDoesNotBreakIconsInNarrowPane(t *testing.T) {
 }
 
 func utf8Valid(s string) bool { return strings.ToValidUTF8(s, "�") == s }
+
+func TestViewStripsTerminalEscapes(t *testing.T) {
+	m := &model{w: 80, h: 30, focus: 1, logRun: "r1", gen: 1,
+		state: api.State{Repos: []api.Repo{{Name: "o/r\x1b[2J", Error: "bad\x1b]52;c;aGk=\x07", Items: []api.Item{{
+			Label:  "PR #3 \x1b]52;c;aGk=\x07evil",
+			SHA:    "abc",
+			Checks: []api.Check{{Name: "build\x1b[2J\x1b[H", Status: "completed", Conclusion: "success"}},
+		}}}}}}
+	m.Update(logMsg{gen: 1, line: "hello\r\x1b[31mred\x1b[0m\tend"})
+	m.Update(statusMsg("st\x1b[2Jatus"))
+	v := m.View()
+	for _, bad := range []string{"\x1b", "\r", "\a"} {
+		if strings.Contains(v, bad) {
+			t.Fatalf("view contains %q:\n%q", bad, v)
+		}
+	}
+	if !strings.Contains(v, "hellored") || !strings.Contains(v, "evil") {
+		t.Errorf("legitimate text lost:\n%s", v)
+	}
+}
+
+func TestLongLinesDoNotWrap(t *testing.T) {
+	long := strings.Repeat("x", 500)
+	m := &model{w: 80, h: 30, logRun: "r1", gen: 1, err: errTest(long),
+		log:   []string{long},
+		state: api.State{Repos: []api.Repo{{Name: "o/r", Error: long}}}}
+	m.status = long
+	for i, l := range strings.Split(m.View(), "\n") {
+		if w := lipgloss.Width(l); w > m.w {
+			t.Errorf("line %d width %d > %d", i, w, m.w)
+		}
+	}
+}
+
+type errTest string
+
+func (e errTest) Error() string { return string(e) }
+
+func TestStaleLogMessagesIgnoredAfterRefollow(t *testing.T) {
+	m := &model{c: api.NewClient("/nonexistent.sock")}
+	m.follow(&api.Check{RunID: "r1", Name: "a"})
+	old := m.gen
+	m.closeLog()
+	m.follow(&api.Check{RunID: "r1", Name: "a"})
+	defer m.closeLog()
+	m.Update(logMsg{gen: old, line: "stale"})
+	m.Update(logEndMsg{gen: old})
+	if len(m.log) != 0 {
+		t.Errorf("stale messages applied: %v", m.log)
+	}
+}
+
+func TestPollErrorShownWhenReposLoaded(t *testing.T) {
+	m := &model{w: 120, h: 20, state: api.State{Repos: []api.Repo{{Name: "o/r"}}}}
+	m.Update(errMsg{errTest("connection refused")})
+	if v := m.View(); !strings.Contains(v, "connection refused") || !strings.Contains(v, "o/r") {
+		t.Errorf("stale data not flagged:\n%s", v)
+	}
+}
