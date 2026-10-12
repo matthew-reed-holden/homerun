@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"bufio"
 	"context"
 	"io"
 	"net"
@@ -139,5 +140,53 @@ func TestServeReplacesStaleSocketButNotLiveOne(t *testing.T) {
 	cancel()
 	if err := <-errc; err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestHTTPFollowLogAndCancel(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	t.Setenv("FAKE_ACT_SLEEP", "30")
+	h.output(`{"jobID":"build","matrix":{},"msg":"started"}` + "\n")
+	h.syncAct()
+	c, _ := serve(t, h)
+	ctx := context.Background()
+	resp, err := c.Start(ctx, api.StartRequest{Repo: repo})
+	if err != nil || resp.RunID == "" {
+		t.Fatalf("start: %+v %v", resp, err)
+	}
+	sha := h.git("rev-parse", "HEAD")
+	h.waitStatus(sha, "homerun / CI / build", "in_progress")
+	body, err := c.Log(ctx, resp.RunID, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer body.Close()
+	lines := bufio.NewScanner(body)
+	found := false
+	for !found && lines.Scan() {
+		found = strings.Contains(lines.Text(), "[build] started")
+	}
+	if !found || h.d.finished(resp.RunID) {
+		t.Fatalf("no live line before the run ended: err=%v", lines.Err())
+	}
+
+	if err := c.Cancel(ctx, resp.RunID); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	ended := make(chan error, 1)
+	go func() { _, err := io.ReadAll(body); ended <- err }()
+	select {
+	case err := <-ended:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("follow did not end when the run did")
+	}
+	for name, ch := range h.waitDone(sha) {
+		if ch.Conclusion != "cancelled" {
+			t.Errorf("%s: %s", name, ch.Conclusion)
+		}
 	}
 }

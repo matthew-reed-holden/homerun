@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/matthew-reed-holden/homerun/internal/api"
+	"github.com/matthew-reed-holden/homerun/internal/store"
 )
 
 // State is what the TUI shows: the last poll of GitHub, overlaid with local
@@ -19,11 +20,16 @@ func (d *Daemon) State() api.State {
 	}
 	sort.Strings(names)
 	// Newest first, so the latest run to claim a check name wins.
-	runs := make([]string, 0, len(d.runs))
-	for id := range d.runs {
-		runs = append(runs, id)
+	runs := make([]*store.Run, 0, len(d.runs))
+	for _, r := range d.runs {
+		runs = append(runs, r)
 	}
-	sort.Sort(sort.Reverse(sort.StringSlice(runs)))
+	sort.Slice(runs, func(i, j int) bool {
+		if !runs[i].Created.Equal(runs[j].Created) {
+			return runs[i].Created.After(runs[j].Created)
+		}
+		return runs[i].ID > runs[j].ID
+	})
 
 	var st api.State
 	for _, name := range names {
@@ -36,8 +42,7 @@ func (d *Daemon) State() api.State {
 					byName[c.Name] = c
 				}
 				overlaid := map[string]bool{}
-				for _, id := range runs {
-					run := d.runs[id]
+				for _, run := range runs {
 					if run.Repo != name || run.Event.SHA != it.SHA {
 						continue
 					}
@@ -68,5 +73,6 @@ func (d *Daemon) finished(id string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	r := d.runs[id]
-	return r == nil || r.Status == "done" || r.Status == "cancelled"
+	// A run awaiting requeue never writes to its log again.
+	return r == nil || r.Status == "done" || r.Status == "cancelled" || r.Status == "requeue"
 }

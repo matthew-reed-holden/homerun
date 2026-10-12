@@ -4,14 +4,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 type Check struct {
@@ -57,7 +60,39 @@ func SocketPath() string {
 	if d := os.Getenv("XDG_RUNTIME_DIR"); d != "" {
 		return filepath.Join(d, "homerun.sock")
 	}
-	return filepath.Join(os.TempDir(), fmt.Sprintf("homerun-%d.sock", os.Getuid()))
+	return filepath.Join(fallbackDir(), "homerun.sock")
+}
+
+// fallbackDir sits in the world-writable temp dir, so it is private to its
+// owner: nobody else can plant, replace or reach the socket inside it.
+func fallbackDir() string {
+	return filepath.Join(os.TempDir(), fmt.Sprintf("homerun-%d", os.Getuid()))
+}
+
+// PrepareSocketDir creates the fallback socket directory, refusing one that
+// another user could have made or can write to. Other directories, such as
+// $XDG_RUNTIME_DIR, are the system's to secure.
+func PrepareSocketDir(sock string) error {
+	dir := filepath.Dir(sock)
+	if dir != fallbackDir() {
+		return nil
+	}
+	if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, fs.ErrExist) {
+		return err
+	}
+	fi, err := os.Lstat(dir)
+	if err != nil {
+		return err
+	}
+	if !fi.IsDir() || !ownedByMe(fi) || fi.Mode().Perm() != 0o700 {
+		return fmt.Errorf("%s must be a directory owned by you with mode 0700; refusing to use it", dir)
+	}
+	return nil
+}
+
+func ownedByMe(fi fs.FileInfo) bool {
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	return ok && int(st.Uid) == os.Getuid()
 }
 
 type Client struct{ hc *http.Client }
@@ -65,6 +100,13 @@ type Client struct{ hc *http.Client }
 func NewClient(sock string) *Client {
 	return &Client{hc: &http.Client{Transport: &http.Transport{
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			// Another user's socket would receive our requests and could feed
+			// back a forged state, so only our own is dialled.
+			if fi, err := os.Lstat(sock); err == nil {
+				if fi.Mode().Type() != fs.ModeSocket || !ownedByMe(fi) {
+					return nil, fmt.Errorf("%s is not a socket owned by you; refusing to connect", sock)
+				}
+			}
 			var d net.Dialer
 			return d.DialContext(ctx, "unix", sock)
 		},

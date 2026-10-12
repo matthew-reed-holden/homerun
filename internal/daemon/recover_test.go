@@ -2,7 +2,9 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -10,6 +12,60 @@ import (
 	"github.com/matthew-reed-holden/homerun/internal/gh"
 	"github.com/matthew-reed-holden/homerun/internal/store"
 )
+
+func createCheck(t *testing.T, h *harness, sha, name, key string) int64 {
+	t.Helper()
+	id, err := h.fake.CreateCheck(context.Background(), repo, sha, name, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+// strandedRun saves a run as a daemon that died mid-run left it: build
+// claimed and in progress.
+func strandedRun(t *testing.T, h *harness, sha string) (*store.Run, int64) {
+	t.Helper()
+	ev := event.Event{Name: "push", Repo: repo, DefaultBranch: "main", SHA: sha, Ref: "refs/heads/main", Before: event.Zero}
+	id := createCheck(t, h, sha, "homerun / CI / build", ev.Key())
+	r := &store.Run{ID: "20260101T000000-dead00", Repo: repo, Event: ev, Status: "running", Created: time.Now(),
+		Checks: []*store.Check{{Name: "homerun / CI / build", ID: id, Status: "in_progress", Workflow: ".github/workflows/ci.yml", JobID: "build"}}}
+	if err := h.d.store.Save(r); err != nil {
+		t.Fatal(err)
+	}
+	return r, id
+}
+
+func storedStatuses(t *testing.T, h *harness) map[string]string {
+	t.Helper()
+	runs, err := h.d.store.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := map[string]string{}
+	for _, r := range runs {
+		out[r.ID] = r.Status
+	}
+	return out
+}
+
+// flakySource fails GitToken a set number of times, as when the network is
+// not up yet at startup.
+type flakySource struct {
+	*gh.Fake
+	mu    sync.Mutex
+	fails int
+}
+
+func (s *flakySource) GitToken(ctx context.Context, repo string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.fails > 0 {
+		s.fails--
+		return "", errors.New("network is down")
+	}
+	return s.Fake.GitToken(ctx, repo)
+}
 
 func countChecks(h *harness, sha, name string) int {
 	n := 0
@@ -49,15 +105,7 @@ func TestRecoverClosesStrandedChecksAndRequeues(t *testing.T) {
 	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
 	h.poll()
 	sha := h.push(map[string]string{"a.txt": "a"})
-	ev := event.Event{Name: "push", Repo: repo, DefaultBranch: "main", SHA: sha, Ref: "refs/heads/main", Before: event.Zero}
-	// Simulate a daemon that died mid-run: one check claimed and in progress, saved locally.
-	id, _ := h.fake.CreateCheck(context.Background(), repo, sha, "homerun / CI / build", ev.Key())
-	stale := &store.Run{ID: "20260101T000000-dead00", Repo: repo, Event: ev, Status: "running",
-		Worktree: h.tmp + "/gone", Created: time.Now(),
-		Checks: []*store.Check{{Name: "homerun / CI / build", ID: id, Status: "in_progress", Workflow: ".github/workflows/ci.yml", JobID: "build"}}}
-	if err := h.d.store.Save(stale); err != nil {
-		t.Fatal(err)
-	}
+	stale, id := strandedRun(t, h, sha)
 
 	h.d.recover(context.Background())
 
@@ -140,7 +188,7 @@ func TestRecoverSendsPendingReports(t *testing.T) {
 	h.poll()
 	sha := h.push(map[string]string{"a.txt": "a"})
 	ev := event.Event{Name: "push", Repo: repo, DefaultBranch: "main", SHA: sha, Ref: "refs/heads/main", Before: event.Zero}
-	id, _ := h.fake.CreateCheck(context.Background(), repo, sha, "homerun / CI / build", ev.Key())
+	id := createCheck(t, h, sha, "homerun / CI / build", ev.Key())
 	u := gh.Update{Name: "homerun / CI / build", Status: "completed", Conclusion: "success", Title: "Succeeded", Summary: "Ran locally by homerun."}
 	done := &store.Run{ID: "20260101T000000-0000aa", Repo: repo, Event: ev, Status: "done", Created: time.Now(),
 		Checks: []*store.Check{{Name: u.Name, ID: id, Status: "completed", Conclusion: "success", Pending: &u}}}
@@ -165,7 +213,9 @@ func TestRecoveredForkRunStaysFork(t *testing.T) {
 	head := h.pr(7, "evil/r", map[string]string{"x.txt": "1"})
 	h.syncAct()
 	ev := event.ForPR(repo, "main", 7, "Feature", "feat", head, "evil/r", "main", h.git("rev-parse", "HEAD"))
-	stale := &store.Run{ID: "20260101T000000-0000bb", Repo: repo, Event: ev, Status: "queued", Created: time.Now()}
+	// Crashed after saving the run, before claiming anything.
+	stale := &store.Run{ID: "20260101T000000-0000bb", Repo: repo, Event: ev, Status: "queued", Created: time.Now(),
+		Checks: []*store.Check{{Name: "homerun / CI / build", Workflow: ".github/workflows/ci.yml", JobID: "build"}}}
 	if err := h.d.store.Save(stale); err != nil {
 		t.Fatal(err)
 	}
@@ -187,4 +237,79 @@ func TestRecoveredForkRunStaysFork(t *testing.T) {
 	if requeued != 1 {
 		t.Fatalf("re-queued %d runs", requeued)
 	}
+}
+
+func TestFailedRequeueIsRetriedByThePoll(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	sha := h.push(map[string]string{"a.txt": "a"})
+	stale, id := strandedRun(t, h, sha)
+	h.d.opts.Source = &flakySource{Fake: h.fake, fails: 1}
+
+	h.d.recover(context.Background())
+
+	if st := storedStatuses(t, h); len(st) != 1 || st[stale.ID] != "requeue" {
+		t.Fatalf("after failed requeue: %v", st)
+	}
+	if cs := h.fake.Checks(repo, sha); len(cs) != 1 || cs[0].Conclusion != "cancelled" {
+		t.Fatalf("stranded check not closed: %+v", cs)
+	}
+	h.poll()
+	waitRestartedAndRerun(t, h, sha, id)
+	h.waitRun(sha, "done")
+	h.poll()
+	h.d.recover(context.Background())
+	if n := countChecks(h, sha, "homerun / CI / build"); n != 2 {
+		t.Errorf("build: want 2 checks (stranded + requeued), got %d", n)
+	}
+	if n := countChecks(h, sha, "homerun / CI / docker"); n != 1 {
+		t.Errorf("docker: want 1 check, got %d", n)
+	}
+	st := storedStatuses(t, h)
+	if len(st) != 2 || st[stale.ID] != "cancelled" {
+		t.Fatalf("runs: %v", st)
+	}
+	for id, s := range st {
+		if id != stale.ID && s != "done" {
+			t.Fatalf("requeued run %s: %s", id, s)
+		}
+	}
+}
+
+func TestRecoverDoesNotRerunAFinishedRun(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	sha := h.push(map[string]string{"a.txt": "a"})
+	stale, id := strandedRun(t, h, sha)
+	// Every result reached GitHub; the daemon died before saving "done".
+	if err := h.fake.UpdateCheck(context.Background(), repo, id, gh.Update{Name: "homerun / CI / build", Status: "completed", Conclusion: "success"}); err != nil {
+		t.Fatal(err)
+	}
+	stale.Checks[0].Status, stale.Checks[0].Conclusion = "completed", "success"
+	if err := h.d.store.Save(stale); err != nil {
+		t.Fatal(err)
+	}
+
+	h.d.recover(context.Background())
+
+	if st := storedStatuses(t, h); len(st) != 1 || st[stale.ID] != "done" {
+		t.Fatalf("runs: %v", st)
+	}
+	cs := h.fake.Checks(repo, sha)
+	if len(cs) != 1 || cs[0].Conclusion != "success" || len(cs[0].Updates) != 1 {
+		t.Fatalf("checks: %+v", cs)
+	}
+}
+
+func TestSecondDaemonIsRefused(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	if _, err := New(h.d.opts); err == nil || !strings.Contains(err.Error(), "another homerun daemon is running") {
+		t.Fatalf("err = %v", err)
+	}
+	h.d.close()
+	d, err := New(h.d.opts)
+	if err != nil {
+		t.Fatalf("after the first daemon stopped: %v", err)
+	}
+	d.close()
 }

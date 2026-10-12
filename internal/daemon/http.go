@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -17,6 +18,8 @@ import (
 	"github.com/matthew-reed-holden/homerun/internal/event"
 	"github.com/matthew-reed-holden/homerun/internal/store"
 )
+
+const maxRequest = 64 << 10
 
 func (d *Daemon) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -43,12 +46,14 @@ func (d *Daemon) Handler() http.Handler {
 
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		slog.Warn("writing response", "err", err)
+	}
 }
 
 func (d *Daemon) handleStart(w http.ResponseWriter, r *http.Request) {
 	var req api.StartRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxRequest)).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -149,6 +154,9 @@ func (d *Daemon) handleLog(w http.ResponseWriter, r *http.Request) {
 
 // Serve listens on a unix socket only the current user can open.
 func Serve(ctx context.Context, sock string, h http.Handler) error {
+	if err := api.PrepareSocketDir(sock); err != nil {
+		return err
+	}
 	if err := removeStale(sock); err != nil {
 		return err
 	}
@@ -160,7 +168,8 @@ func Serve(ctx context.Context, sock string, h http.Handler) error {
 		l.Close()
 		return err
 	}
-	srv := &http.Server{Handler: h}
+	// No WriteTimeout: following a log streams for as long as the run lasts.
+	srv := &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second}
 	defer context.AfterFunc(ctx, func() { srv.Close() })()
 	if err := srv.Serve(l); !errors.Is(err, http.ErrServerClosed) {
 		return err

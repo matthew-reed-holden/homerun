@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/matthew-reed-holden/homerun/internal/api"
@@ -41,6 +42,7 @@ type Daemon struct {
 	sched  *sched.Scheduler
 	base   context.Context // parent of every run; cancelled when Run returns
 	stop   context.CancelFunc
+	lock   *os.File                                  // flocked for the daemon's lifetime
 	wg     sync.WaitGroup                            // scheduled runs, so shutdown can wait for them
 	retry  func(context.Context, func() error) error // gh.Retry; tests replace its backoff
 
@@ -68,14 +70,19 @@ func New(o Options) (*Daemon, error) {
 	if o.GitURL == nil {
 		o.GitURL = func(r string) string { return "https://github.com/" + r + ".git" }
 	}
+	lock, err := lockState(o.StateDir)
+	if err != nil {
+		return nil, err
+	}
 	st := &store.Store{Dir: o.StateDir}
 	state, err := st.LoadState()
 	if err != nil {
+		lock.Close()
 		return nil, err
 	}
 	base, stop := context.WithCancel(context.Background())
 	return &Daemon{
-		opts: o, store: st, state: state, cfg: o.Config, base: base, stop: stop, retry: gh.Retry,
+		opts: o, store: st, state: state, cfg: o.Config, base: base, stop: stop, lock: lock, retry: gh.Retry,
 		runner:    &runner.Runner{Act: o.Act, Platforms: o.Config.Platforms, CacheRoot: filepath.Join(o.StateDir, "act-cache")},
 		sched:     sched.New(o.Config.MaxParallel),
 		seen:      map[string]string{},
@@ -86,6 +93,27 @@ func New(o Options) (*Daemon, error) {
 		repoLocks: map[string]*sync.Mutex{},
 		sendLocks: map[string]*sync.Mutex{},
 	}, nil
+}
+
+// lockState makes sure only one daemon uses a state directory: two would
+// claim and run the same commits, and race to replace each other's socket.
+func lockState(dir string) (*os.File, error) {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, err
+	}
+	path := filepath.Join(dir, "daemon.lock")
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, fmt.Errorf("another homerun daemon is running (it holds %s)", path)
+		}
+		return nil, fmt.Errorf("locking %s: %w", path, err)
+	}
+	return f, nil
 }
 
 func CheckName(workflow, job string) string { return "homerun / " + workflow + " / " + job }
@@ -120,6 +148,7 @@ func (d *Daemon) close() {
 	d.stop()
 	d.mu.Unlock()
 	d.wg.Wait()
+	d.lock.Close()
 }
 
 func (d *Daemon) Run(ctx context.Context) error {
@@ -139,6 +168,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 
 func (d *Daemon) PollAll(ctx context.Context) {
 	d.flushReports(ctx)
+	d.requeue(ctx)
 	cfg := d.config()
 	names := make([]string, 0, len(cfg.Repos))
 	for n := range cfg.Repos {
@@ -328,6 +358,16 @@ func (d *Daemon) repoLock(repo string) *sync.Mutex {
 // queues the run. It returns a nil run when nothing in the repo listens to ev.
 // Forks are not held here: callers decide whether a fork may run.
 func (d *Daemon) Start(ctx context.Context, ev event.Event) (*store.Run, error) {
+	return d.start(ctx, ev, nil)
+}
+
+// start is Start with a handover hook for re-queued runs: handover(true) runs
+// once the new run is saved and before it claims anything, and
+// handover(false) if that run is then dropped without a claim.
+func (d *Daemon) start(ctx context.Context, ev event.Event, handover func(tracked bool)) (*store.Run, error) {
+	if handover == nil {
+		handover = func(bool) {}
+	}
 	d.mu.Lock()
 	if err := d.base.Err(); err != nil {
 		d.mu.Unlock()
@@ -380,6 +420,7 @@ func (d *Daemon) Start(ctx context.Context, ev event.Event) (*store.Run, error) 
 	// Saved before any claim so that recovery after a crash mid-claim can
 	// close whatever was created.
 	d.track(run)
+	handover(true)
 	// A started claim always completes: a caller's cancellation (SIGTERM, a
 	// disconnected CLI) must not turn a half-made claim into a permanent failure.
 	cctx := context.WithoutCancel(ctx)
@@ -394,6 +435,7 @@ func (d *Daemon) Start(ctx context.Context, ev event.Event) (*store.Run, error) 
 			if i == 0 {
 				// Nothing was claimed, so the next poll retries; keep no trace.
 				d.forget(run)
+				handover(false)
 				return nil, err
 			}
 			// The created checks are the claim, so they must not wait forever;
@@ -478,12 +520,18 @@ func (d *Daemon) changedFiles(ctx context.Context, m *git.Mirror, ev event.Event
 	}
 }
 
+// setupReported is an error homerun reported on the commit, which claims it:
+// trying again would only report it again.
+type setupReported struct{ error }
+
+func (e setupReported) Unwrap() error { return e.error }
+
 // failSetup reports a problem that stopped homerun before any job could run.
 func (d *Daemon) failSetup(ctx context.Context, ev event.Event, cause error) error {
 	if err := d.singleCheck(ctx, ev, "failure", "homerun could not start this run", "homerun error: "+d.scrub(cause.Error())); err != nil {
 		return errors.Join(cause, fmt.Errorf("reporting the failure: %w", err))
 	}
-	return cause
+	return setupReported{cause}
 }
 
 // singleCheck claims ev's commit with one completed "homerun" check. Create and
@@ -769,16 +817,41 @@ func (d *Daemon) recover(ctx context.Context) {
 	// Results finished before the outage or crash go out first, so closing
 	// below never overwrites a real conclusion with "runner restarted".
 	d.flushReports(ctx)
-	rctx := context.WithoutCancel(ctx)
 	for _, r := range stranded {
-		d.closeOpen(rctx, r, "cancelled", restartedSummary)
-		// Marked before re-queueing: a crash in between loses the re-run but
-		// can never run the commit twice.
-		d.setStatus(r, "cancelled")
-		if _, ok := d.config().Repos[r.Repo]; !ok {
-			slog.Warn("not re-queueing a run for an unregistered repo", "run", r.ID, "repo", r.Repo)
+		d.mu.Lock()
+		unfinished := false
+		for _, c := range r.Checks {
+			unfinished = unfinished || c.ID == 0 || c.Status != "completed"
+		}
+		d.mu.Unlock()
+		if !unfinished {
+			// Every result reached GitHub; only the final save was lost.
+			d.setStatus(r, "done")
 			continue
 		}
+		// Marked first, so a crash while closing still leaves it to requeue,
+		// which closes what is left open.
+		d.setStatus(r, "requeue")
+	}
+	d.requeue(ctx)
+}
+
+// requeue starts runs again that recovery took over. It is retried on every
+// poll until it succeeds, since at startup GitHub may not be reachable yet.
+// The old run's checks claim the commit, so nothing else would run it.
+func (d *Daemon) requeue(ctx context.Context) {
+	d.mu.Lock()
+	var old []*store.Run
+	for _, r := range d.runs {
+		if r.Status == "requeue" {
+			old = append(old, r)
+		}
+	}
+	d.mu.Unlock()
+	sort.Slice(old, func(i, j int) bool { return old[i].ID < old[j].ID })
+	rctx := context.WithoutCancel(ctx)
+	for _, r := range old {
+		d.closeOpen(rctx, r, "cancelled", restartedSummary)
 		// Recomputed rather than read from meta.json, so a bad file cannot
 		// point the removal elsewhere.
 		wt := filepath.Join(d.opts.StateDir, "work", r.ID)
@@ -787,7 +860,25 @@ func (d *Daemon) recover(ctx context.Context) {
 				slog.Warn("remove worktree", "run", r.ID, "err", err)
 			}
 		}
-		if _, err := d.Start(ctx, r.Event); err != nil {
+		if _, ok := d.config().Repos[r.Repo]; !ok {
+			slog.Warn("not re-queueing a run for an unregistered repo", "run", r.ID, "repo", r.Repo)
+			d.setStatus(r, "cancelled")
+			continue
+		}
+		// The old run is retired when the new one is saved, before it claims
+		// anything, so at no point can both be recovered and run.
+		run, err := d.start(ctx, r.Event, func(tracked bool) {
+			if tracked {
+				d.setStatus(r, "cancelled")
+			} else {
+				d.setStatus(r, "requeue")
+			}
+		})
+		var reported setupReported
+		switch {
+		case err == nil && run == nil, errors.As(err, &reported):
+			d.setStatus(r, "cancelled")
+		case err != nil:
 			slog.Error("re-queueing run", "run", r.ID, "err", err)
 		}
 	}

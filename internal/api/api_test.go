@@ -6,7 +6,9 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -62,5 +64,57 @@ func TestClient(t *testing.T) {
 	}
 	if _, err := NewClient(filepath.Join(t.TempDir(), "none.sock")).State(ctx); err == nil || !strings.Contains(err.Error(), "daemon") {
 		t.Fatalf("want daemon-not-running error, got %v", err)
+	}
+}
+
+func TestSocketPath(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1")
+	if got := SocketPath(); got != "/run/user/1/homerun.sock" {
+		t.Fatalf("with XDG_RUNTIME_DIR: %s", got)
+	}
+	tmp := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", "")
+	t.Setenv("TMPDIR", tmp)
+	sock := SocketPath()
+	dir := filepath.Join(tmp, "homerun-"+strconv.Itoa(os.Getuid()))
+	if sock != filepath.Join(dir, "homerun.sock") {
+		t.Fatalf("fallback: %s", sock)
+	}
+	if err := PrepareSocketDir(sock); err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Lstat(dir); err != nil || !fi.IsDir() || fi.Mode().Perm() != 0o700 {
+		t.Fatalf("dir: %v %v", fi.Mode(), err)
+	}
+	if err := PrepareSocketDir(sock); err != nil {
+		t.Fatalf("existing private dir refused: %v", err)
+	}
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := PrepareSocketDir(sock); err == nil {
+		t.Fatal("dir with mode 0755 accepted")
+	}
+	os.Remove(dir)
+	if err := os.WriteFile(dir, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := PrepareSocketDir(sock); err == nil {
+		t.Fatal("file in place of the dir accepted")
+	}
+	// Other directories are not checked: $XDG_RUNTIME_DIR is the system's.
+	if err := PrepareSocketDir(filepath.Join(tmp, "elsewhere", "s.sock")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestClientRefusesNonSocket(t *testing.T) {
+	sock := filepath.Join(t.TempDir(), "s.sock")
+	if err := os.WriteFile(sock, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := NewClient(sock).State(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "not a socket owned by you") {
+		t.Fatalf("err = %v", err)
 	}
 }
