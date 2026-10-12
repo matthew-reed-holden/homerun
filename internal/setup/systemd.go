@@ -23,13 +23,13 @@ After=network-online.target docker.service
 
 [Service]
 ExecStart="%s" daemon --config "%s"
-Environment=PATH=%s
+Environment="PATH=%s"
 Restart=on-failure
 RestartSec=10
 
 [Install]
 WantedBy=default.target
-`, unitEscape(exe), unitEscape(cfgPath), strings.ReplaceAll(path, "%", "%%"))
+`, unitEscape(exe), unitEscape(cfgPath), unitEscape(path))
 }
 
 func InstallSystemd(cfgPath string, out io.Writer) error {
@@ -42,6 +42,10 @@ func InstallSystemd(cfgPath string, out io.Writer) error {
 		return err
 	}
 	p := filepath.Join(dir, "systemd", "user", "homerun.service")
+	cfgPath, err = filepath.Abs(cfgPath)
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}

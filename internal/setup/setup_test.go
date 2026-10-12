@@ -23,11 +23,17 @@ func TestManifest(t *testing.T) {
 	b, _ := json.Marshal(manifest("homerun-box-ab12", "http://127.0.0.1:1/callback", false))
 	json.Unmarshal(b, &m)
 	perms := m["default_permissions"].(map[string]any)
-	if perms["checks"] != "write" || perms["contents"] != "read" || perms["pull_requests"] != "read" || m["public"] != false {
+	if perms["checks"] != "write" || perms["contents"] != "read" || perms["pull_requests"] != "read" || perms["metadata"] != "read" || m["public"] != false {
 		t.Fatalf("manifest: %s", b)
 	}
 	if _, ok := m["hook_attributes"]; ok {
 		t.Fatal("v1 needs no webhook")
+	}
+	if n := appName("a---"); strings.Contains(n, "--") {
+		t.Fatalf("app name %q", n)
+	}
+	if n := appName(""); strings.Contains(n, "--") || !strings.HasPrefix(n, "homerun-") {
+		t.Fatalf("empty host app name %q", n)
 	}
 	if n := appName("My.Very_Long-Hostname.example.com"); len(n) > 34 || !strings.HasPrefix(n, "homerun-my-very-long-ho") {
 		t.Fatalf("app name %q", n)
@@ -54,7 +60,7 @@ func TestManifestHandler(t *testing.T) {
 func TestUnit(t *testing.T) {
 	u := Unit("/usr/bin/homerun", "/home/me/.config/homerun/config.yml", "/usr/bin:/bin")
 	for _, want := range []string{`ExecStart="/usr/bin/homerun" daemon --config "/home/me/.config/homerun/config.yml"`,
-		"Environment=PATH=/usr/bin:/bin", "Restart=on-failure", "WantedBy=default.target"} {
+		`Environment="PATH=/usr/bin:/bin"`, "Restart=on-failure", "WantedBy=default.target"} {
 		if !strings.Contains(u, want) {
 			t.Errorf("unit missing %q:\n%s", want, u)
 		}
@@ -101,6 +107,7 @@ func TestSaveAppPrintsKeyAndWritesNoFile(t *testing.T) {
 
 func TestSaveAppKeyFile(t *testing.T) {
 	dir := t.TempDir()
+	t.Chdir(dir)
 	cfg := filepath.Join(dir, "config.yml")
 	// The quote and parent directory exercise both the shell escaping and the 0700 mkdir.
 	keyFile := filepath.Join(dir, "keys d", "it's $(touch pwned).pem")
@@ -188,7 +195,7 @@ func TestCreateAppFlow(t *testing.T) {
 
 func TestUnitEscapesSpecials(t *testing.T) {
 	u := Unit("/opt/my 100%/homerun", "/c/$HOME/c.yml", "/a%b")
-	for _, want := range []string{`ExecStart="/opt/my 100%%/homerun"`, `"/c/$$HOME/c.yml"`, "Environment=PATH=/a%%b"} {
+	for _, want := range []string{`ExecStart="/opt/my 100%%/homerun"`, `"/c/$$HOME/c.yml"`, `Environment="PATH=/a%%b"`} {
 		if !strings.Contains(u, want) {
 			t.Errorf("unit missing %q:\n%s", want, u)
 		}
@@ -242,5 +249,85 @@ func TestDoctorUnresolvableKey(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "!") {
 		t.Errorf("matching act version should not warn:\n%s", out.String())
+	}
+}
+
+func TestSaveAppPrintsKeyWhenFileWriteFails(t *testing.T) {
+	dir := t.TempDir()
+	link := filepath.Join(dir, "k.pem")
+	os.Symlink(filepath.Join(dir, "elsewhere"), link)
+	var out bytes.Buffer
+	if err := saveApp(filepath.Join(dir, "config.yml"), link, 1, "s", "u", testPEM, &out); err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(out.String(), "BEGIN HOMERUN APP KEY OUTPUT-----\n"+testPEM) {
+		t.Fatalf("key lost on write failure:\n%s", out.String())
+	}
+}
+
+func TestCreateAppRejectsBadKeyFileBeforeExchange(t *testing.T) {
+	dir := t.TempDir()
+	link := filepath.Join(dir, "k.pem")
+	os.Symlink(filepath.Join(dir, "elsewhere"), link)
+	for _, p := range []string{link, dir} {
+		exchanged := false
+		err := createApp(context.Background(), "", false, filepath.Join(dir, "c.yml"), p,
+			func(string) error { t.Error("browser opened"); return nil }, io.Discard,
+			func(context.Context, string) (*github.AppConfig, error) { exchanged = true; return nil, nil })
+		if err == nil || exchanged {
+			t.Errorf("%s: err=%v exchanged=%v", p, err, exchanged)
+		}
+	}
+}
+
+func TestHandlerHostAndSingleUse(t *testing.T) {
+	codes := make(chan string, 2)
+	srv := httptest.NewUnstartedServer(nil)
+	srv.Config.Handler = onlyHost(srv.Listener.Addr().String(), handler("https://x", "{}", "s1", codes))
+	srv.Start()
+	defer srv.Close()
+	get := func(host, path string) int {
+		req, _ := http.NewRequest("GET", srv.URL+path, nil)
+		if host != "" {
+			req.Host = host
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if c := get("evil.example:80", "/"); c != 400 {
+		t.Fatalf("rebinding host served: %d", c)
+	}
+	if c := get("", "/"); c != 200 {
+		t.Fatalf("own host rejected: %d", c)
+	}
+	if c := get("", "/callback?state=s1&code=a"); c != 200 {
+		t.Fatalf("first callback: %d", c)
+	}
+	if c := get("", "/callback?state=s1&code=b"); c != 400 {
+		t.Fatalf("replayed callback accepted: %d", c)
+	}
+	if got := <-codes; got != "a" || len(codes) != 0 {
+		t.Fatalf("codes: %q, %d left", got, len(codes))
+	}
+}
+
+func TestUnitQuotesPathWithSpace(t *testing.T) {
+	u := Unit("/x", "/c", `/my bin:/a"b`)
+	if !strings.Contains(u, `Environment="PATH=/my bin:/a\"b"`) {
+		t.Fatalf("PATH not quoted:\n%s", u)
+	}
+}
+
+func TestDoctorHidesConfigParseError(t *testing.T) {
+	fakeTools(t, "0.2.89")
+	cfg := filepath.Join(t.TempDir(), "config.yml")
+	os.WriteFile(cfg, []byte("app: [LEAKYVALUE\n"), 0o600)
+	var out bytes.Buffer
+	if err := Doctor(context.Background(), cfg, &out); err == nil || strings.Contains(out.String(), "LEAKYVALUE") || !strings.Contains(out.String(), "cannot parse") {
+		t.Fatalf("err=%v\n%s", err, out.String())
 	}
 }

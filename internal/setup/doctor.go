@@ -5,10 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/matthew-reed-holden/homerun/internal/config"
 	"github.com/matthew-reed-holden/homerun/internal/gh"
@@ -35,7 +38,10 @@ func Doctor(ctx context.Context, cfgPath string, out io.Writer) error {
 		}
 		switch bin {
 		case "docker":
-			check("docker daemon reachable", exec.CommandContext(ctx, "docker", "info", "--format", "{{.ServerVersion}}").Run())
+			// A wedged docker socket would otherwise hang doctor forever.
+			dctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			check("docker daemon reachable", exec.CommandContext(dctx, "docker", "info", "--format", "{{.ServerVersion}}").Run())
+			cancel()
 		case "act":
 			// Another version may work but was not verified, so it is a warning, not a failure.
 			if v, err := actVersion(ctx); err != nil {
@@ -46,7 +52,7 @@ func Doctor(ctx context.Context, cfgPath string, out io.Writer) error {
 		}
 	}
 	cfg, warns, err := config.LoadUser(cfgPath)
-	check("config "+cfgPath, err)
+	check("config "+cfgPath, safeConfigErr(cfgPath, err))
 	for _, w := range warns {
 		fmt.Fprintf(out, "! %s\n", w)
 	}
@@ -57,6 +63,20 @@ func Doctor(ctx context.Context, cfgPath string, out io.Writer) error {
 		return errors.New("some checks failed")
 	}
 	return nil
+}
+
+var yamlLine = regexp.MustCompile(`line (\d+)`)
+
+// safeConfigErr drops parser text because a YAML error can quote a literal secret value.
+func safeConfigErr(path string, err error) error {
+	var pe *fs.PathError
+	if err == nil || errors.As(err, &pe) {
+		return err
+	}
+	if m := yamlLine.FindStringSubmatch(err.Error()); m != nil {
+		return fmt.Errorf("cannot parse %s at line %s (run a YAML linter)", path, m[1])
+	}
+	return fmt.Errorf("cannot parse %s (run a YAML linter)", path)
 }
 
 func checkConfig(ctx context.Context, cfgPath string, cfg *config.User, check func(string, error)) {

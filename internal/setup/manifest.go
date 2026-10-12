@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/go-github/v92/github"
@@ -42,7 +43,10 @@ var nonName = regexp.MustCompile(`[^a-z0-9-]+`)
 func appName(host string) string {
 	h := strings.Trim(nonName.ReplaceAllString(strings.ToLower(host), "-"), "-")
 	if len(h) > 20 {
-		h = h[:20]
+		h = strings.TrimRight(h[:20], "-")
+	}
+	if h == "" {
+		return "homerun-" + randHex(2)
 	}
 	return "homerun-" + h + "-" + randHex(2)
 }
@@ -59,6 +63,7 @@ var page = template.Must(template.New("p").Parse(`<!doctype html><meta charset="
 <script>document.getElementById("f").submit()</script>`))
 
 func handler(action, manifestJSON, state string, codes chan<- string) http.Handler {
+	var used atomic.Bool
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		page.Execute(w, map[string]any{"Action": template.URL(action), "Manifest": manifestJSON})
@@ -69,13 +74,27 @@ func handler(action, manifestJSON, state string, codes chan<- string) http.Handl
 			http.Error(w, "unexpected callback: state mismatch or missing code", http.StatusBadRequest)
 			return
 		}
-		select {
-		case codes <- q.Get("code"):
-		default:
+		// A replayed callback must not queue a second code for the same App.
+		if !used.CompareAndSwap(false, true) {
+			http.Error(w, "this callback was already used", http.StatusBadRequest)
+			return
 		}
+		codes <- q.Get("code")
 		io.WriteString(w, "GitHub App created. You can close this tab and return to your terminal.")
 	})
 	return mux
+}
+
+// onlyHost rejects any request whose Host is not the listener's own address.
+// Otherwise a DNS-rebinding page could read "/", which embeds the state.
+func onlyHost(host string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Host != host {
+			http.Error(w, "unexpected host", http.StatusBadRequest)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // CreateApp runs GitHub's App manifest flow: a local page posts the manifest to
@@ -96,6 +115,17 @@ func CreateApp(ctx context.Context, org string, public bool, cfgPath, keyFile st
 // createApp takes the code exchange as a parameter so tests need no network.
 func createApp(ctx context.Context, org string, public bool, cfgPath, keyFile string, open func(string) error, out io.Writer,
 	exchange func(ctx context.Context, code string) (*github.AppConfig, error)) error {
+	if keyFile != "" {
+		// Checked before the App exists: a failure afterwards can only be rescued by printing the key.
+		abs, err := filepath.Abs(keyFile)
+		if err != nil {
+			return err
+		}
+		keyFile = abs
+		if err := checkKeyPath(keyFile); err != nil {
+			return err
+		}
+	}
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return err
@@ -113,7 +143,7 @@ func createApp(ctx context.Context, org string, public bool, cfgPath, keyFile st
 	}
 	codes := make(chan string, 1)
 	// Without a header timeout a local client holding a connection open could pin the server.
-	srv := &http.Server{Handler: handler(action, string(m), state, codes), ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Handler: onlyHost(l.Addr().String(), handler(action, string(m), state, codes)), ReadHeaderTimeout: 10 * time.Second}
 	go srv.Serve(l)
 	defer srv.Close()
 
@@ -139,8 +169,7 @@ func createApp(ctx context.Context, org string, public bool, cfgPath, keyFile st
 func saveApp(cfgPath, keyFile string, id int64, slug, htmlURL, pem string, out io.Writer) error {
 	if keyFile == "" {
 		// Printed before the config write so a config failure cannot lose the only copy.
-		fmt.Fprintf(out, "Private key for GitHub App %s (id %d), shown once:\n-----BEGIN HOMERUN APP KEY OUTPUT-----\n%s\n-----END HOMERUN APP KEY OUTPUT-----\n",
-			slug, id, strings.TrimRight(pem, "\n"))
+		printKey(out, slug, id, pem)
 		if err := config.SetApp(cfgPath, id, ""); err != nil {
 			return err
 		}
@@ -152,9 +181,12 @@ func saveApp(cfgPath, keyFile string, id int64, slug, htmlURL, pem string, out i
 			return err
 		}
 		if err := writeKeyFile(abs, []byte(pem)); err != nil {
+			// The App already exists and this is the only copy of its key.
+			printKey(out, slug, id, pem)
 			return err
 		}
 		if err := config.SetApp(cfgPath, id, "cat "+shellQuote(abs)); err != nil {
+			fmt.Fprintf(out, "The key was written to %s but the config update failed.\n", abs)
 			return err
 		}
 		fmt.Fprintf(out, "Created GitHub App %s (id %d). Its private key is in %s (mode 600).\n", slug, id, abs)
@@ -168,6 +200,24 @@ Next:
 	return nil
 }
 
+func printKey(out io.Writer, slug string, id int64, pem string) {
+	fmt.Fprintf(out, "Private key for GitHub App %s (id %d), shown once:\n-----BEGIN HOMERUN APP KEY OUTPUT-----\n%s\n-----END HOMERUN APP KEY OUTPUT-----\n",
+		slug, id, strings.TrimRight(pem, "\n"))
+}
+
+// checkKeyPath rejects what writeKeyFile would later refuse, while the user can still fix it.
+func checkKeyPath(path string) error {
+	if fi, err := os.Lstat(path); err == nil {
+		if fi.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("%s is a symlink; refusing to overwrite it", path)
+		}
+		if fi.IsDir() {
+			return fmt.Errorf("%s is a directory", path)
+		}
+	}
+	return os.MkdirAll(filepath.Dir(path), 0o700)
+}
+
 // shellQuote closes, escapes and reopens the quoting around an embedded quote
 // so a path cannot break out of the command that config runs through sh -c.
 func shellQuote(s string) string {
@@ -177,8 +227,8 @@ func shellQuote(s string) string {
 func writeKeyFile(path string, data []byte) error {
 	// Rename would replace the link rather than follow it; refusing avoids silently
 	// swapping something the user placed there.
-	if fi, err := os.Lstat(path); err == nil && fi.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("%s is a symlink; refusing to overwrite it", path)
+	if err := checkKeyPath(path); err != nil {
+		return err
 	}
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
