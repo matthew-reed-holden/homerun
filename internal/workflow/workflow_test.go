@@ -242,3 +242,22 @@ func TestLoadDirRejectsDirSymlinks(t *testing.T) {
 		t.Error(".github/workflows symlink: want error")
 	}
 }
+
+func TestLoadJobsAliasesAndKeys(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "a.yml", "on: push\nx: &j {build: {name: Build, runs-on: y}}\njobs: *j\n")
+	w, err := Load(root, "a.yml")
+	if err != nil || len(w.Jobs) != 1 || w.Jobs[0].ID != "build" || w.Jobs[0].Name != "Build" {
+		t.Fatalf("aliased jobs: %+v %v", w, err)
+	}
+	for _, body := range []string{
+		"on: push\nx: &all {build: {runs-on: y}}\njobs: {<<: *all}\n",
+		"on: push\njobs:\n  a: {runs-on: y}\n  a: {runs-on: z}\n",
+		"on: push\njobs: [a]\n",
+	} {
+		write(t, root, "b.yml", body)
+		if w, err := Load(root, "b.yml"); err == nil {
+			t.Errorf("accepted %q: %+v", body, w.Jobs)
+		}
+	}
+}

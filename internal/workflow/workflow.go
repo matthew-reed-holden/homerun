@@ -143,12 +143,24 @@ func Load(root, rel string) (*Workflow, error) {
 	default:
 		return nil, fmt.Errorf("%s: missing 'on'", rel)
 	}
-	for i := 0; i+1 < len(doc.Jobs.Content); i += 2 {
-		id := doc.Jobs.Content[i].Value
+	// act decodes jobs into a map, so an alias, merge key or duplicate key
+	// would make it see different jobs than a walk over the raw nodes.
+	jobs := resolve(&doc.Jobs)
+	switch {
+	case jobs == nil || jobs.Kind == 0:
+	case jobs.Kind != yaml.MappingNode:
+		return nil, fmt.Errorf("%s: jobs is not a mapping", rel)
+	default:
+		if err := checkKeys(jobs); err != nil {
+			return nil, fmt.Errorf("%s: jobs: %w", rel, err)
+		}
+	}
+	for i := 0; jobs != nil && i+1 < len(jobs.Content); i += 2 {
+		id := jobs.Content[i].Value
 		var j struct {
 			Name string `yaml:"name"`
 		}
-		if err := doc.Jobs.Content[i+1].Decode(&j); err != nil {
+		if err := jobs.Content[i+1].Decode(&j); err != nil {
 			return nil, fmt.Errorf("%s: jobs.%s: %w", rel, id, err)
 		}
 		name := j.Name
