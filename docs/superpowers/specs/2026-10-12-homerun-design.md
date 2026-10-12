@@ -68,12 +68,13 @@ The GitHub boundary sits behind two small interfaces (`Source` for reads and
    - On `repo add`, existing branch heads are recorded as a baseline and not run. Open PRs without homerun checks are run.
 3. **Claim.** Create one `queued` check run per job the event would trigger.
    - The job list comes from `act <event> --list` against the snapshot, using the event payload.
-   - Matrix legs aren't known until runtime, so each leg gets its own check run when it starts. The job's queued check run is then closed as `skipped`.
+   - Matrix legs aren't known until runtime, so each leg gets its own check run when it starts. The job's own check run stays open until the legs finish, then concludes with the worst leg result. It isn't closed as `skipped`, because GitHub treats `skipped` as passing for a required check.
 4. **Schedule.** Wait for a slot under `max_parallel`, both global and per repo.
    - A newer head on the same PR cancels the older run, and its check runs are marked `cancelled`.
 5. **Execute.**
    - Update the bare mirror and fetch `refs/pull/N/head` for PRs. Snapshot the sha into a detached worktree.
-   - Write the event JSON with realistic fields (base and head SHAs, refs, PR number, repository), so `github.event.*`, `paths` and `branches` filters behave as they do on GitHub.
+   - Write the event JSON with realistic fields (base and head SHAs, refs, PR number, repository), so `github.event.*` expressions behave as they do on GitHub.
+   - act ignores workflow-level `branches`, `tags` and `paths` filters, so homerun evaluates them itself (step 3) and passes act one matched workflow at a time with `-W`.
    - Resolve secrets and pass them to act through its environment (`-s NAME`). Never write them to disk.
    - Map `host_jobs` to act's `-self-hosted` platform.
    - Give each concurrency slot its own `--action-cache-path`, so parallel runs never share act's cache.
@@ -137,6 +138,16 @@ default settings and no secrets.
 - Pull requests from forks never receive secrets.
 - `checks:` and `host_jobs` from a fork PR are not run on the host. They report `neutral` with the message "skipped: fork PR".
 
+## Findings from the act spike (act 0.2.89)
+
+- **Unmasked secrets.** act masks secrets in `msg`, but its JSON `step` field carries the raw `run:` text. If a secret is interpolated there, it appears unmasked. homerun masks every secret value (and each line of a multi-line secret) in everything it stores or uploads.
+- **Matrix results.** act puts the whole matrix job's result in every leg's `jobResult`. A matrix leg's conclusion therefore comes from that leg's own step results.
+- **Host jobs.** `-P` maps `runs-on` labels, not jobs. homerun rewrites a host job's `runs-on` to `homerun-host` in the snapshot and passes `-P homerun-host=-self-hosted`.
+- **Trigger filters.** act runs a workflow even when its `branches` or `paths` filter shouldn't match, so homerun filters workflows itself.
+- **Per-directory config.** act reads `.actrc`, `.secrets`, `.env`, `.vars` and `.input` from the working directory, and in a snapshot those come from the commit under test. homerun deletes `.actrc` from the snapshot and passes `/dev/null` for the other four.
+- **Interactive prompt.** act prompts for a default image on first use. homerun always passes `-P` for `ubuntu-latest`, `ubuntu-24.04` and `ubuntu-22.04` (default `catthehacker/ubuntu:act-latest`), overridable with `platforms:` in the user config.
+- **PR commit.** PR runs test the PR's head commit, not GitHub's `refs/pull/N/merge` merge commit. The result is deterministic and always exists, even when the PR has conflicts.
+
 ## Error handling
 
 | Case | Behavior |
@@ -165,6 +176,7 @@ default settings and no secrets.
   - It exchanges the code for the App's ID and private key, and writes the App ID to the user config.
   - It asks where to keep the key: print it for a secret manager, or write it to a mode-600 file.
   - The App's permissions: checks (write), contents (read), pull requests (read), metadata (read).
+  - A private App can only be installed on the account that owns it. `--org ORG` creates it under an organization. `--public` lets one App be installed across several owners; only the key holder can act through it.
 - `homerun repo add owner/name` checks that the App is installed on the repo, creates the bare mirror, and records branch baselines.
 - `homerun daemon --install` writes and enables a systemd user unit.
 - Releases are built with goreleaser (linux amd64 and arm64), plus `go install`.
