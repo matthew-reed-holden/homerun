@@ -73,6 +73,14 @@ func LoadDir(root string) ([]*Workflow, error) {
 }
 
 func Load(root, rel string) (*Workflow, error) {
+	// The file comes from an untrusted commit; a symlink could expose host files via error snippets.
+	fi, err := os.Lstat(filepath.Join(root, rel))
+	if err != nil {
+		return nil, err
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s: not a regular file", rel)
+	}
 	b, err := os.ReadFile(filepath.Join(root, rel))
 	if err != nil {
 		return nil, err
@@ -103,6 +111,11 @@ func Load(root, rel string) (*Workflow, error) {
 			if val.Kind == yaml.MappingNode {
 				f = &Filter{}
 				if err := val.Decode(f); err != nil {
+					return nil, fmt.Errorf("%s: on.%s: %w", rel, ev, err)
+				}
+			}
+			if f != nil {
+				if err := f.validate(); err != nil {
 					return nil, fmt.Errorf("%s: on.%s: %w", rel, ev, err)
 				}
 			}
@@ -142,4 +155,15 @@ func (w *Workflow) Job(id string) (Job, bool) {
 		}
 	}
 	return Job{}, false
+}
+
+func (f *Filter) validate() error {
+	for _, l := range []StringList{f.Branches, f.BranchesIgnore, f.Tags, f.TagsIgnore, f.Paths, f.PathsIgnore} {
+		for _, p := range l {
+			if _, err := compileGlob(strings.TrimPrefix(p, "!")); err != nil {
+				return fmt.Errorf("invalid pattern %q", p)
+			}
+		}
+	}
+	return nil
 }

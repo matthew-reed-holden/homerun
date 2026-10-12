@@ -127,3 +127,20 @@ checks:
 		t.Fatal("want error for unknown key")
 	}
 }
+
+func TestLoadRepoRejectsSymlink(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".github"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(dir, "target.yml")
+	if err := os.WriteFile(target, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(dir, ".github", "homerun.yml")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadRepo(dir); err == nil {
+		t.Fatal("want error")
+	}
+}

@@ -6,16 +6,28 @@ import (
 	"strings"
 )
 
+var defaultPRTypes = []string{"opened", "synchronize", "reopened"}
+
 func (w *Workflow) Matches(event, ref, action string, changed []string) bool {
 	f, ok := w.On[event]
 	if !ok {
 		return false
 	}
 	if f == nil {
-		return true
+		f = &Filter{}
 	}
-	if event == "pull_request" && len(f.Types) > 0 && !slices.Contains(f.Types, action) {
-		return false
+	if event == "pull_request" {
+		types := f.Types
+		if len(types) == 0 {
+			types = defaultPRTypes
+		}
+		if !slices.Contains(types, action) {
+			return false
+		}
+	}
+	// GitHub does not evaluate path filters for tag pushes.
+	if strings.HasPrefix(ref, "refs/tags/") {
+		return refOK(event, ref, f)
 	}
 	return refOK(event, ref, f) && pathsOK(f, changed)
 }
@@ -88,6 +100,11 @@ func matchList(name string, patterns []string) bool {
 // any depth (unlike shell globs) and ? and + quantify the preceding character.
 // ponytail: compiles per call; cache compiled patterns if polling many repos shows it in a profile.
 func matchGlob(pattern, name string) bool {
+	re, err := compileGlob(pattern)
+	return err == nil && re.MatchString(name)
+}
+
+func compileGlob(pattern string) (*regexp.Regexp, error) {
 	var b strings.Builder
 	b.WriteString("^")
 	for i := 0; i < len(pattern); i++ {
@@ -122,6 +139,5 @@ func matchGlob(pattern, name string) bool {
 		}
 	}
 	b.WriteString("$")
-	re, err := regexp.Compile(b.String())
-	return err == nil && re.MatchString(name)
+	return regexp.Compile(b.String())
 }

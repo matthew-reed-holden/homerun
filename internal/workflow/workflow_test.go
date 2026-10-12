@@ -152,3 +152,69 @@ func TestLoadRejectsMissingOn(t *testing.T) {
 		t.Fatal("want error")
 	}
 }
+
+func TestPRDefaultTypes(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "w.yml", "on: pull_request\njobs: {j: {runs-on: x, steps: [{run: \"true\"}]}}\n")
+	w, err := Load(root, "w.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !w.Matches("pull_request", "main", "synchronize", nil) {
+		t.Error("synchronize should match")
+	}
+	if w.Matches("pull_request", "main", "closed", nil) {
+		t.Error("closed should not match by default")
+	}
+}
+
+func TestTagFilters(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "tags.yml", "on: {push: {tags: ['v*'], paths: ['src/**']}}\njobs: {}\n")
+	write(t, root, "ign.yml", "on: {push: {tags-ignore: ['v*']}}\njobs: {}\n")
+	write(t, root, "both.yml", "on: {push: {branches: [main], tags: ['v*']}}\njobs: {}\n")
+	load := func(n string) *Workflow {
+		w, err := Load(root, n)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return w
+	}
+	tags, ign, both := load("tags.yml"), load("ign.yml"), load("both.yml")
+	if !tags.Matches("push", "refs/tags/v1", "", []string{"docs/a.md"}) {
+		t.Error("tag push must ignore paths")
+	}
+	if tags.Matches("push", "refs/tags/x1", "", nil) {
+		t.Error("non-matching tag matched")
+	}
+	if tags.Matches("push", "refs/heads/main", "", nil) {
+		t.Error("branch push matched tags-only filter")
+	}
+	if ign.Matches("push", "refs/tags/v1", "", nil) || !ign.Matches("push", "refs/tags/x1", "", nil) {
+		t.Error("tags-ignore wrong")
+	}
+	if !both.Matches("push", "refs/tags/v2", "", nil) || !both.Matches("push", "refs/heads/main", "", nil) || both.Matches("push", "refs/heads/dev", "", nil) {
+		t.Error("branches+tags wrong")
+	}
+}
+
+func TestLoadRejectsInvalidPatternAndSymlink(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "bad.yml", "on: {push: {branches: ['feature/*+']}}\njobs: {}\n")
+	if _, err := Load(root, "bad.yml"); err == nil {
+		t.Fatal("want pattern error")
+	}
+	write(t, root, "real.yml", "on: push\njobs: {}\n")
+	if err := os.MkdirAll(filepath.Join(root, ".github/workflows"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(root, "real.yml"), filepath.Join(root, ".github/workflows/x.yml")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(root, ".github/workflows/x.yml"); err == nil {
+		t.Fatal("want symlink error")
+	}
+	if _, err := LoadDir(root); err == nil {
+		t.Fatal("LoadDir should reject symlink")
+	}
+}

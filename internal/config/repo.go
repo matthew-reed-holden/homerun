@@ -24,10 +24,18 @@ type Repo struct {
 
 func LoadRepo(root string) (*Repo, error) {
 	p := filepath.Join(root, ".github", "homerun.yml")
-	b, err := os.ReadFile(p)
+	// Read from an untrusted commit: refuse symlinks so host files cannot be read or leaked.
+	fi, err := os.Lstat(p)
 	if errors.Is(err, fs.ErrNotExist) {
 		return &Repo{}, nil
 	}
+	if err != nil {
+		return nil, err
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, fmt.Errorf(".github/homerun.yml: not a regular file")
+	}
+	b, err := os.ReadFile(p)
 	if err != nil {
 		return nil, err
 	}
