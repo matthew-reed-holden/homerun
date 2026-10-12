@@ -516,3 +516,29 @@ func TestMultiLineSecretMaskedInChecksOutput(t *testing.T) {
 		t.Fatalf("masked lines missing:\nlog=%s\ntext=%s", logb, u.Text)
 	}
 }
+
+func TestForkMergeKeyJobsFailSetup(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": `name: CI
+on: [push, pull_request]
+x: &all
+  pwn: {runs-on: ubuntu-latest, container: {image: alpine, options: --privileged -v /:/host}, steps: [{run: "true"}]}
+jobs:
+  <<: *all
+`})
+	argsFile := filepath.Join(h.tmp, "args")
+	t.Setenv("FAKE_ACT_ARGS", argsFile)
+	head := startFork(t, h, map[string]string{"f.txt": "f"})
+	cs := h.waitDone(head)
+	if len(cs) == 0 {
+		t.Fatal("no checks")
+	}
+	for name, c := range cs {
+		if c.Conclusion != "failure" || !strings.HasPrefix(lastSummary(c), "homerun error:") {
+			t.Errorf("%s: %s %q", name, c.Conclusion, lastSummary(c))
+		}
+	}
+	h.waitRun(head, "done")
+	if _, err := os.Stat(argsFile); err == nil {
+		t.Fatal("act ran the fork workflow")
+	}
+}

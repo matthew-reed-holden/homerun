@@ -3,6 +3,7 @@ package workflow
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -237,5 +238,72 @@ jobs:
 	}
 	if want := "priv,nested,remote,missing,escape"; strings.Join(got, ",") != want {
 		t.Fatalf("got %v, want %s", got, want)
+	}
+}
+
+func TestForkUnsafeJobsRefusesMergeAndDuplicateKeys(t *testing.T) {
+	for name, body := range map[string]string{
+		"merged jobs": `on: pull_request
+x: &all
+  pwn: {runs-on: ubuntu-latest, container: {image: alpine, options: --privileged -v /:/host}, steps: [{run: "true"}]}
+jobs:
+  <<: *all
+`,
+		"merged job body": `on: pull_request
+x: &base {runs-on: ubuntu-latest, container: {image: alpine, options: --privileged}}
+jobs:
+  a:
+    <<: *base
+    steps: [{run: "true"}]
+`,
+		"duplicate jobs": `on: pull_request
+jobs:
+  a: {runs-on: ubuntu-latest, steps: [{run: "true"}]}
+  a: {runs-on: ubuntu-latest, container: {image: x, options: --privileged}, steps: [{run: "true"}]}
+`,
+		"aliased non-mapping job": `on: pull_request
+x: &s [1]
+jobs:
+  a: *s
+`,
+		"merge in callee": `on: pull_request
+jobs:
+  call: {uses: ./callee.yml}
+`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			write(t, root, "w.yml", body)
+			write(t, root, "callee.yml", "on: workflow_call\nx: &all\n  pwn: {runs-on: ubuntu-latest}\njobs:\n  <<: *all\n")
+			got, err := ForkUnsafeJobs(root, "w.yml")
+			if err == nil {
+				t.Fatalf("accepted, unsafe jobs %v", got)
+			}
+		})
+	}
+}
+
+func TestForkUnsafeJobsReadsEachCalleeOnce(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "callee.yml", "on: workflow_call\njobs:\n  a: {runs-on: ubuntu-latest, steps: [{run: \"true\"}]}\n  self: {uses: ./callee.yml}\n")
+	var sb strings.Builder
+	sb.WriteString("on: pull_request\njobs:\n")
+	for i := range 50 {
+		sb.WriteString("  j" + strconv.Itoa(i) + ": {uses: ./callee.yml}\n")
+	}
+	write(t, root, "w.yml", sb.String())
+	r, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	fc := &forkChecker{r: r, callees: map[string]bool{}}
+	got, err := fc.unsafeJobs("w.yml", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The callee calls itself, so it is unsafe and every caller is skipped.
+	if len(got) != 50 || fc.reads != 2 {
+		t.Fatalf("%d unsafe, %d reads; want 50 and 2", len(got), fc.reads)
 	}
 }
