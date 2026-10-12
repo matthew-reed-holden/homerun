@@ -113,6 +113,18 @@ func NewClient(sock string) *Client {
 	}}}
 }
 
+// ErrUnreachable marks a failure to reach the daemon at all, as opposed to the
+// daemon answering with an error.
+var ErrUnreachable = errors.New("homerun daemon not reachable")
+
+// StatusError is an error response from the daemon.
+type StatusError struct {
+	Code int
+	Msg  string
+}
+
+func (e *StatusError) Error() string { return e.Msg }
+
 func (c *Client) req(ctx context.Context, method, path string, body any) (*http.Response, error) {
 	var r io.Reader
 	if body != nil {
@@ -128,12 +140,12 @@ func (c *Client) req(ctx context.Context, method, path string, body any) (*http.
 	}
 	resp, err := c.hc.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("homerun daemon not reachable (is it running? start it with: homerun daemon): %w", err)
+		return nil, fmt.Errorf("%w (is it running? start it with: homerun daemon): %w", ErrUnreachable, err)
 	}
 	if resp.StatusCode >= 300 {
 		msg, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, fmt.Errorf("%s", strings.TrimSpace(string(msg)))
+		return nil, &StatusError{Code: resp.StatusCode, Msg: strings.TrimSpace(string(msg))}
 	}
 	return resp, nil
 }

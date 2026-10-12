@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -148,10 +149,11 @@ func cmdSetup(args []string) error {
 func cmdRepoAdd(args []string) error {
 	fs, cfgPath := flags("repo add")
 	fs.Parse(args)
-	name := fs.Arg(0)
-	if !config.ValidRepo(name) {
-		return errors.New("usage: homerun repo add OWNER/NAME")
+	// The flag package stops at the first positional, so a trailing flag lands here.
+	if fs.NArg() != 1 || !config.ValidRepo(fs.Arg(0)) {
+		return errors.New("usage: homerun repo add [--config F] OWNER/NAME (flags go before the repo)")
 	}
+	name := fs.Arg(0)
 	ctx := context.Background()
 	_, client, err := loadClient(ctx, *cfgPath)
 	if err != nil {
@@ -164,24 +166,29 @@ func cmdRepoAdd(args []string) error {
 		return err
 	}
 	fmt.Printf("Added %s.\n", name)
-	if err := api.NewClient(api.SocketPath()).Reload(ctx); err != nil {
-		fmt.Println("The daemon is not running; it will pick the repo up when it starts.")
-	} else {
+	switch err := api.NewClient(api.SocketPath()).Reload(ctx); {
+	case err == nil:
 		fmt.Println("The daemon reloaded its config.")
+	case errors.Is(err, api.ErrUnreachable):
+		fmt.Println("The daemon is not running; it will pick the repo up when it starts.")
+	default:
+		fmt.Println("The daemon did not reload its config:", err)
 	}
 	fmt.Printf("Then: require homerun's checks in %s's branch protection, and stop hosted Actions running on push and pull_request.\n", name)
 	return nil
 }
 
 func cmdRun(args []string) error {
-	fs, _ := flags("run")
+	fs := flag.NewFlagSet("run", flag.ExitOnError)
+	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 	pr := fs.Int("pr", 0, "pull request number")
 	fs.Parse(args)
-	if !config.ValidRepo(fs.Arg(0)) {
-		return errors.New("usage: homerun run [--pr N] OWNER/NAME [BRANCH]")
+	if fs.NArg() < 1 || fs.NArg() > 2 || !config.ValidRepo(fs.Arg(0)) {
+		return errors.New("usage: homerun run [--pr N] OWNER/NAME [BRANCH] (flags go before the repo)")
 	}
+	ctx := context.Background()
 	c := api.NewClient(api.SocketPath())
-	resp, err := c.Start(context.Background(), api.StartRequest{Repo: fs.Arg(0), Ref: fs.Arg(1), PR: *pr})
+	resp, err := c.Start(ctx, api.StartRequest{Repo: fs.Arg(0), Ref: fs.Arg(1), PR: *pr})
 	if err != nil {
 		return err
 	}
@@ -190,14 +197,54 @@ func cmdRun(args []string) error {
 		return nil
 	}
 	fmt.Printf("Queued run %s.\n", resp.RunID)
-	body, err := c.Log(context.Background(), resp.RunID, true)
-	if err != nil {
+	body, err := c.Log(ctx, resp.RunID, true)
+	var se *api.StatusError
+	if errors.As(err, &se) && se.Code == http.StatusNotFound {
 		fmt.Println("Follow it in the dashboard: homerun")
 		return nil
 	}
-	defer body.Close()
+	if err != nil {
+		return err
+	}
 	_, err = io.Copy(os.Stdout, body)
-	return err
+	body.Close()
+	if err != nil {
+		return err
+	}
+	return runOutcome(ctx, c, resp.RunID)
+}
+
+// runOutcome reads the finished run's checks back from the daemon so the exit
+// status can tell scripts whether it passed.
+func runOutcome(ctx context.Context, c *api.Client, id string) error {
+	st, err := c.State(ctx)
+	if err != nil {
+		return err
+	}
+	var passed, failed int
+	for _, r := range st.Repos {
+		for _, it := range r.Items {
+			for _, ck := range it.Checks {
+				if ck.RunID != id {
+					continue
+				}
+				switch ck.Conclusion {
+				case "success", "skipped", "neutral":
+					passed++
+				default:
+					failed++
+				}
+			}
+		}
+	}
+	if passed+failed == 0 {
+		return fmt.Errorf("run %s: no results found", id)
+	}
+	fmt.Printf("run %s: %d passed, %d failed\n", id, passed, failed)
+	if failed > 0 {
+		return fmt.Errorf("run %s did not pass", id)
+	}
+	return nil
 }
 
 func cmdDoctor(args []string) error {

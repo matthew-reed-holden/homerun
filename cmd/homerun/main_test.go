@@ -36,3 +36,24 @@ func TestRepoAddRejectsBadNameBeforeConfigOrNetwork(t *testing.T) {
 		t.Fatalf("want a usage error, got %v:\n%s", err, out)
 	}
 }
+
+func TestStrictArgs(t *testing.T) {
+	bin := build(t)
+	for _, args := range [][]string{
+		{"repo", "add", "o/r", "--config", "x"},
+		{"run", "o/r", "main", "--pr", "3"},
+		{"run", "o/r", "a", "b"},
+	} {
+		out, err := exec.Command(bin, args...).CombinedOutput()
+		if err == nil || !strings.Contains(string(out), "usage: homerun") {
+			t.Errorf("%v: want usage error, got %v:\n%s", args, err, out)
+		}
+	}
+}
+
+func TestRunHasNoConfigFlag(t *testing.T) {
+	out, err := exec.Command(build(t), "run", "--config", "x", "o/r").CombinedOutput()
+	if err == nil || !strings.Contains(string(out), "flag provided but not defined") {
+		t.Fatalf("got %v:\n%s", err, out)
+	}
+}
