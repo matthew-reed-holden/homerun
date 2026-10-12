@@ -7,11 +7,14 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 	"unicode/utf8"
 
+	"github.com/bradleyfalzon/ghinstallation/v2"
 	"github.com/google/go-github/v92/github"
 )
 
@@ -132,5 +135,100 @@ func TestUpdateCheckTruncatesOutput(t *testing.T) {
 	}
 	if len(body.Output.Title) > titleLimit || !strings.HasSuffix(body.Output.Title, "TITLE-END") {
 		t.Errorf("title not bounded: %d bytes", len(body.Output.Title))
+	}
+}
+
+func stubSleep(t *testing.T) *[]time.Duration {
+	var got []time.Duration
+	old := sleep
+	sleep = func(ctx context.Context, d time.Duration) error { got = append(got, d); return ctx.Err() }
+	t.Cleanup(func() { sleep = old })
+	return &got
+}
+
+func TestRetryHonoursRetryAfter(t *testing.T) {
+	waits := stubSleep(t)
+	after := 60 * time.Second
+	n := 0
+	err := Retry(context.Background(), func() error {
+		n++
+		if n == 1 {
+			return &github.AbuseRateLimitError{RetryAfter: &after}
+		}
+		return nil
+	})
+	if err != nil || len(*waits) != 1 || (*waits)[0] < after {
+		t.Fatalf("err=%v waits=%v", err, *waits)
+	}
+}
+
+func TestRetryRateLimitBeyondBudgetReturnsAtOnce(t *testing.T) {
+	waits := stubSleep(t)
+	n := 0
+	rl := &github.RateLimitError{Rate: github.Rate{Reset: github.Timestamp{Time: time.Now().Add(time.Hour)}}}
+	err := Retry(context.Background(), func() error { n++; return rl })
+	if err != rl || n != 1 || len(*waits) != 0 {
+		t.Fatalf("err=%v n=%d waits=%v", err, n, *waits)
+	}
+}
+
+func TestRetryRateLimitWaitsForReset(t *testing.T) {
+	waits := stubSleep(t)
+	n := 0
+	rl := &github.RateLimitError{Rate: github.Rate{Reset: github.Timestamp{Time: time.Now().Add(30 * time.Second)}}}
+	err := Retry(context.Background(), func() error {
+		n++
+		if n == 1 {
+			return rl
+		}
+		return nil
+	})
+	if err != nil || len(*waits) != 1 || (*waits)[0] < 25*time.Second {
+		t.Fatalf("err=%v waits=%v", err, *waits)
+	}
+}
+
+func TestTokenErrorsNotRetried(t *testing.T) {
+	for _, code := range []int{401, 404} {
+		herr := &ghinstallation.HTTPError{Message: "tok", Response: &http.Response{StatusCode: code}}
+		err := &url.Error{Op: "Post", URL: "x", Err: herr}
+		if retryable(err) {
+			t.Errorf("%d must not be retryable", code)
+		}
+	}
+	herr := &ghinstallation.HTTPError{Message: "tok", Response: &http.Response{StatusCode: 502}}
+	if !retryable(&url.Error{Op: "Post", URL: "x", Err: herr}) {
+		t.Error("502 stays retryable")
+	}
+}
+
+func TestTruncateTinyLimit(t *testing.T) {
+	for _, n := range []int{-1, 0, 1, 2, 3} {
+		if got := Truncate("héllo wörld", n); len(got) > max(n, 0) || !utf8.ValidString(got) {
+			t.Errorf("n=%d got %q", n, got)
+		}
+	}
+}
+
+func TestFakeMatchesGitHub(t *testing.T) {
+	f := NewFake(1)
+	ctx := context.Background()
+	id, _ := f.CreateCheck(ctx, "o/r", "s", "a", "e")
+	if f.UpdateCheck(ctx, "o/r", id, Update{Status: "completed"}) == nil {
+		t.Error("empty name must fail")
+	}
+	if f.UpdateCheck(ctx, "o/r", id, Update{Name: "a"}) == nil {
+		t.Error("no status or conclusion must fail")
+	}
+	if err := f.UpdateCheck(ctx, "o/r", id, Update{Name: "renamed", Status: "in_progress"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.Checks("o/r", "s")[0].Name; got != "renamed" {
+		t.Errorf("name not applied: %q", got)
+	}
+	f.CreateCheck(ctx, "o/r", "s", "renamed", "e2")
+	runs, _ := f.CheckRuns(ctx, "o/r", "s")
+	if len(runs) != 1 || runs[0].ExternalID != "e2" {
+		t.Errorf("want only latest run per name: %+v", runs)
 	}
 }

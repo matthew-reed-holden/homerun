@@ -78,8 +78,15 @@ func (f *Fake) Branches(ctx context.Context, repo string) ([]Head, error) {
 func (f *Fake) CheckRuns(ctx context.Context, repo, sha string) ([]Check, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	// Latest run per name, like the Client's filter=latest.
 	var out []Check
+	idx := map[string]int{}
 	for _, c := range f.checks[repo+"@"+sha] {
+		if i, ok := idx[c.Name]; ok {
+			out[i] = c.Check
+			continue
+		}
+		idx[c.Name] = len(out)
 		out = append(out, c.Check)
 	}
 	return out, nil
@@ -106,11 +113,18 @@ func (f *Fake) UpdateCheck(ctx context.Context, repo string, id int64, u Update)
 	if f.Fail != nil {
 		return f.Fail
 	}
+	// GitHub answers 422 to these.
+	if u.Name == "" || (u.Status == "" && u.Conclusion == "") {
+		return fmt.Errorf("fake: 422 update needs a name and a status or conclusion: %+v", u)
+	}
 	for key, cs := range f.checks {
 		for _, c := range cs {
 			if c.ID == id && len(key) > len(repo) && key[:len(repo)+1] == repo+"@" {
 				c.Updates = append(c.Updates, u)
-				c.Status = u.Status
+				c.Name = u.Name
+				if u.Status != "" {
+					c.Status = u.Status
+				}
 				if u.Conclusion != "" {
 					c.Status, c.Conclusion = "completed", u.Conclusion
 				}
