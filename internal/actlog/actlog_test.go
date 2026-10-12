@@ -38,6 +38,9 @@ func TestParser(t *testing.T) {
 		t.Fatalf("want 3 legs started (a, b n=2, b n=1), got %d", len(started))
 	}
 	want := map[string]string{"a": "success", `b {"n":2}`: "failure", `b {"n":1}`: "success"}
+	if len(finished) != 3 {
+		t.Fatalf("want 3 finished, got %d", len(finished))
+	}
 	for _, f := range finished {
 		if want[f.Leg] != f.Conclusion {
 			t.Errorf("leg %q: conclusion %q want %q", f.Leg, f.Conclusion, want[f.Leg])
@@ -72,6 +75,36 @@ func TestNoJobIDMsgDecodedBeforeMasking(t *testing.T) {
 	for _, e := range evs {
 		if strings.Contains(e.Text, "psecret") {
 			t.Fatalf("secret leaked: %q", e.Text)
+		}
+	}
+}
+
+func TestFailedStepMasked(t *testing.T) {
+	p := &Parser{Mask: func(s string) string { return strings.ReplaceAll(s, "topsecret", "***") }}
+	var evs []Event
+	evs = append(evs, p.Feed([]byte(`{"jobID":"a","matrix":{},"msg":"x","step":"echo topsecret","stepResult":"failure"}`))...)
+	evs = append(evs, p.Feed([]byte(`{"jobID":"a","matrix":{},"msg":"failed","jobResult":"failure"}`))...)
+	f := evs[len(evs)-1]
+	if f.Kind != Finished || f.Conclusion != "failure" || f.FailedStep != "echo ***" {
+		t.Fatalf("got %+v", f)
+	}
+}
+
+func TestMatrixLegFailsOutsideStep(t *testing.T) {
+	p := &Parser{}
+	evs := p.Feed([]byte(`{"jobID":"b","matrix":{"n":1},"msg":"pull failed","jobResult":"failure"}`))
+	f := evs[len(evs)-1]
+	if f.Kind != Finished || f.Conclusion != "failure" {
+		t.Fatalf("got %+v", f)
+	}
+}
+
+func TestRawJSONMasked(t *testing.T) {
+	p := &Parser{Mask: func(s string) string { return strings.ReplaceAll(s, `to"psecret`, "***") }}
+	for _, l := range []string{`{"level":"info","other":"to\"psecret"}`, `"to\"psecret"`, `{"a":["to\"psecret"]}`} {
+		evs := p.Feed([]byte(l))
+		if len(evs) != 1 || strings.Contains(evs[0].Text, "psecret") || !strings.Contains(evs[0].Text, "***") {
+			t.Errorf("%s -> %+v", l, evs)
 		}
 	}
 }
