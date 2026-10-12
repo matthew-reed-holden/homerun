@@ -56,13 +56,21 @@ func (e Event) Payload() ([]byte, error) {
 	repo := map[string]any{
 		"full_name": e.Repo, "name": name, "owner": map[string]any{"login": owner},
 		"default_branch": e.DefaultBranch, "html_url": "https://github.com/" + e.Repo,
+		"fork": false,
 	}
 	if e.Name == "pull_request" {
+		// Workflows gate on head.repo.fork, so a missing field would read as
+		// "not a fork" under `!fork` guards. A deleted fork's head.repo is null
+		// on GitHub, so it is emitted as null rather than an empty object.
+		var headRepo any
+		if e.HeadRepo != "" {
+			headRepo = map[string]any{"full_name": e.HeadRepo, "fork": e.Fork}
+		}
 		return json.Marshal(map[string]any{
 			"action": PRAction, "number": e.PR, "repository": repo,
 			"pull_request": map[string]any{
 				"number": e.PR, "title": e.Title,
-				"head": map[string]any{"sha": e.SHA, "ref": e.HeadRef, "repo": map[string]any{"full_name": e.HeadRepo}},
+				"head": map[string]any{"sha": e.SHA, "ref": e.HeadRef, "repo": headRepo},
 				"base": map[string]any{"sha": e.BaseSHA, "ref": e.BaseRef, "repo": repo},
 			},
 		})
