@@ -1,7 +1,7 @@
 # homerun: design
 
 Date: 2026-10-12
-Status: approved in brainstorming, pending written-spec review
+Status: approved; amended 2026-10-12 with decisions from plan review (fork approval, child environment, fallback, claim unit)
 
 ## Purpose
 
@@ -25,7 +25,7 @@ repo, and the core knows nothing about any particular repo's stack.
 |---|---|
 | Engine | act, invoked as a subprocess. |
 | Reporting | GitHub Checks API, through a GitHub App the user creates (`homerun setup`). |
-| Relationship to hosted Actions | homerun is primary. Repos turn off hosted runs and require homerun's checks. When the machine is off, re-enable Actions. |
+| Relationship to hosted Actions | homerun is primary. Repos turn off hosted runs and require homerun's checks. When the machine is off, re-enable Actions and also swap the required checks in branch protection (or remove them temporarily), because hosted Actions never produce the `homerun / …` check names. The README documents this. |
 | Source of truth | The repo's workflow YAML. Per-repo config only adds overrides and extra checks. |
 | Coordination | GitHub check runs are the dedupe and claim record, so several machines sharing work (v2) needs no new design. |
 | Language | Go, one static binary. Bubble Tea for the TUI. |
@@ -46,8 +46,8 @@ Units inside the daemon:
 | Unit | Responsibility | Depends on |
 |---|---|---|
 | poller | Lists each repo's open PRs and branch heads, using ETags (a 304 costs no rate limit). Emits `(repo, sha, event)` for new heads. | GitHub REST |
-| claimer | Skips a sha that already has a homerun check suite; otherwise creates `queued` check runs. | reporter |
-| scheduler | FIFO queue with a global cap and a per-repo cap. Cancels superseded PR runs. | |
+| claimer | Skips a `(sha, event)` that already has a homerun check run on that sha whose `external_id` is the event key (`push:refs/heads/<branch>` or `pull_request:<N>`); otherwise creates `queued` check runs. | reporter |
+| scheduler | FIFO queue with a global cap and a per-repo cap. Cancels superseded PR runs only. A newer push to a branch does not cancel the older branch run. | |
 | executor | Snapshots the sha with `git worktree add --detach` from a per-repo bare mirror. Writes the event payload, resolves secrets, and runs `act <event> --json` per workflow. Parses act's JSON log into per-job events. Runs `checks:` entries on the host. | act, git |
 | reporter | Authenticates as the App (JWT, then installation token). Moves each job's check run through queued, in_progress and completed, with a conclusion and summary. | GitHub Checks API |
 | store | `~/.local/state/homerun/runs/<id>/{meta.json,log}` plus a small state file holding the branch-head baselines. No database: GitHub keeps the durable history. | filesystem |
@@ -63,14 +63,16 @@ The GitHub boundary sits behind two small interfaces (`Source` for reads and
 
 1. **Poll.** Every `poll_interval` (default 30s) per repo: list open PRs and branches.
 2. **Detect.**
-   - A PR head that is new, or that has no homerun check suite, becomes a `pull_request` event.
+   - A PR head with no homerun check run for `(sha, event)` becomes a `pull_request` event. The check run is one on that sha whose `external_id` is `pull_request:<N>`.
+   - Branch pushes are keyed the same way, by a check run whose `external_id` is `push:refs/heads/<branch>`.
    - A branch head that moved becomes a `push` event.
    - On `repo add`, existing branch heads are recorded as a baseline and not run. Open PRs without homerun checks are run.
 3. **Claim.** Create one `queued` check run per job the event would trigger.
    - The job list comes from `act <event> --list` against the snapshot, using the event payload.
    - Matrix legs aren't known until runtime, so each leg gets its own check run when it starts. The job's own check run stays open until the legs finish, then concludes with the worst leg result. It isn't closed as `skipped`, because GitHub treats `skipped` as passing for a required check.
 4. **Schedule.** Wait for a slot under `max_parallel`, both global and per repo.
-   - A newer head on the same PR cancels the older run, and its check runs are marked `cancelled`.
+   - Only PR runs are superseded: a newer head on the same PR cancels the older run, and its check runs are marked `cancelled`.
+   - Branch pushes are not cancelled by a newer push. Each one runs.
 5. **Execute.**
    - Update the bare mirror and fetch `refs/pull/N/head` for PRs. Snapshot the sha into a detached worktree.
    - Write the event JSON with realistic fields (base and head SHAs, refs, PR number, repository), so `github.event.*` expressions behave as they do on GitHub.
@@ -137,6 +139,12 @@ default settings and no secrets.
 - The repo config can only *name* secrets. A commit can't make homerun run a command to fetch one.
 - Pull requests from forks never receive secrets.
 - `checks:` and `host_jobs` from a fork PR are not run on the host. They report `neutral` with the message "skipped: fork PR".
+- A pull request from a fork (including one whose head repo was deleted) does not run automatically, because contributors from forks can run the workflow on their own machines.
+  - homerun claims it with one check named `homerun`, conclusion `neutral`, summary "fork PR: awaiting approval — run `homerun run --pr N OWNER/NAME`".
+  - The owner approves by running that command.
+  - An approved fork run still gets no secrets. Its `host_jobs` and `checks:` report neutral "skipped: fork PR".
+  - act runs with `--container-daemon-socket -` and with no host mapping, because act otherwise bind-mounts the Docker socket into job containers, which is root-equivalent.
+- homerun builds each child process's environment explicitly (act and `checks:` commands): a small allowlist from the daemon's environment (PATH, HOME, USER, LANG, DOCKER_HOST, XDG_RUNTIME_DIR) plus only the secrets the repo names. Child processes never inherit the daemon's full environment.
 
 ## Findings from the act spike (act 0.2.89)
 
@@ -156,7 +164,7 @@ default settings and no secrets.
 | homerun fails (Docker down, act missing, invalid config, a secret command exits non-zero) | `failure`, with a summary that starts `homerun error:`. Secret values are never logged; only the secret's name and the command's exit code are. |
 | The daemon restarts mid-run | On startup, homerun's own check runs left `queued` or `in_progress` with no live process are closed as `cancelled` ("runner restarted"), then re-queued. |
 | GitHub is unreachable or rate-limited | Retry with exponential backoff. Execution continues, and reports flush when GitHub comes back. |
-| The machine is off | Required checks stay pending. The README tells users to re-enable hosted Actions. |
+| The machine is off | Required checks stay pending. The README tells users to re-enable hosted Actions. They must also swap the required checks in branch protection (or remove them temporarily), because hosted Actions never produce the `homerun / …` check names. |
 
 ## TUI
 
