@@ -50,10 +50,20 @@ func PrepareJobs(root, rel string, host, disable []string) error {
 	}
 	for i := 0; i+1 < len(jobs.Content); i += 2 {
 		id, job := jobs.Content[i].Value, jobs.Content[i+1]
+		isDisable, isHost := slices.Contains(disable, id), slices.Contains(host, id)
+		if !isDisable && !isHost {
+			continue
+		}
+		// An alias or null job would be skipped silently, leaving a fork-disabled job running.
+		if job.Kind != yaml.MappingNode {
+			return fmt.Errorf("%s: jobs.%s: not a mapping; cannot rewrite", rel, id)
+		}
 		switch {
-		case slices.Contains(disable, id):
+		case isDisable:
 			mapSet(job, "if", "false")
-		case slices.Contains(host, id):
+		case mapGet(job, "uses") != nil:
+			return fmt.Errorf("%s: jobs.%s: reusable workflow jobs cannot run on the host", rel, id)
+		default:
 			mapSet(job, "runs-on", HostLabel)
 		}
 	}

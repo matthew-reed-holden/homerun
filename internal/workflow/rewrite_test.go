@@ -91,3 +91,50 @@ func TestPrepareJobsRejectsSymlinkedDir(t *testing.T) {
 		t.Fatalf("outside file changed: %q", b)
 	}
 }
+
+func prepare(t *testing.T, body string, host, disable []string) (string, error) {
+	t.Helper()
+	root := t.TempDir()
+	write(t, root, "w.yml", body)
+	err := PrepareJobs(root, "w.yml", host, disable)
+	b, _ := os.ReadFile(filepath.Join(root, "w.yml"))
+	return string(b), err
+}
+
+const aliasWF = "on: push\njobs:\n  d: &d\n    runs-on: ubuntu-latest\n  c: *d\n"
+
+func TestPrepareJobsAliasJobFailsClosed(t *testing.T) {
+	if _, err := prepare(t, aliasWF, nil, []string{"c"}); err == nil || !strings.Contains(err.Error(), "c") {
+		t.Fatalf("disable alias: err = %v", err)
+	}
+	if _, err := prepare(t, aliasWF, []string{"c"}, nil); err == nil {
+		t.Fatal("host alias: expected error")
+	}
+}
+
+func TestPrepareJobsReusableWorkflow(t *testing.T) {
+	const wf = "on: push\njobs:\n  r:\n    uses: ./.github/workflows/x.yml\n"
+	if _, err := prepare(t, wf, []string{"r"}, nil); err == nil {
+		t.Fatal("host uses job: expected error")
+	}
+	out, err := prepare(t, wf, nil, []string{"r"})
+	if err != nil || !strings.Contains(out, "if: false") {
+		t.Fatalf("disable uses job: err=%v\n%s", err, out)
+	}
+}
+
+func TestPrepareJobsRunsOnForms(t *testing.T) {
+	for name, ro := range map[string]string{
+		"scalar":  "ubuntu-latest",
+		"list":    "[self-hosted, linux]",
+		"mapping": "{group: g, labels: [a, b]}",
+		"matrix":  "${{ matrix.os }}",
+	} {
+		t.Run(name, func(t *testing.T) {
+			out, err := prepare(t, "on: push\njobs:\n  a:\n    runs-on: "+ro+"\n", []string{"a"}, nil)
+			if err != nil || !strings.Contains(out, "runs-on: homerun-host") {
+				t.Fatalf("err=%v\n%s", err, out)
+			}
+		})
+	}
+}
