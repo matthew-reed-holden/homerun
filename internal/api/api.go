@@ -31,6 +31,7 @@ type Item struct {
 	Ref    string  `json:"ref,omitempty"`
 	SHA    string  `json:"sha"`
 	URL    string  `json:"url,omitempty"`
+	Fork   bool    `json:"fork,omitempty"`
 	Checks []Check `json:"checks"`
 }
 

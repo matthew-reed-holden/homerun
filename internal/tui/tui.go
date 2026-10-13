@@ -55,7 +55,11 @@ func Rows(r api.Repo) []Row {
 	var rows []Row
 	for i := range r.Items {
 		it := &r.Items[i]
-		rows = append(rows, Row{Text: fmt.Sprintf("%s %s  %s", Rollup(it.Checks), termsafe.Line(it.Label), termsafe.Line(short(it.SHA))), Item: it})
+		tag := ""
+		if it.Fork {
+			tag = " [fork]"
+		}
+		rows = append(rows, Row{Text: fmt.Sprintf("%s %s%s  %s", Rollup(it.Checks), termsafe.Line(it.Label), tag, termsafe.Line(short(it.SHA))), Item: it})
 		for j := range it.Checks {
 			c := &it.Checks[j]
 			rows = append(rows, Row{Text: "    " + Icon(c.Status, c.Conclusion) + " " + termsafe.Line(c.Name), Item: it, Check: c})
@@ -147,6 +151,7 @@ type model struct {
 	lines   chan string
 	stopLog context.CancelFunc
 	status  string
+	confirm *api.StartRequest // a fork PR waiting for the owner's y
 	w, h    int
 }
 
@@ -220,6 +225,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) key(k string) tea.Cmd {
+	if req := m.confirm; req != nil {
+		// Any key ends the prompt, so q cancels it rather than quitting.
+		m.confirm, m.status = nil, ""
+		if k == "y" {
+			return m.start(*req)
+		}
+		return nil
+	}
 	switch k {
 	case "q", "ctrl+c":
 		m.closeLog()
@@ -243,16 +256,12 @@ func (m *model) key(k string) tea.Cmd {
 			if r.Item.PR == 0 {
 				req.Ref = r.Item.Ref
 			}
-			return func() tea.Msg {
-				resp, err := m.c.Start(context.Background(), req)
-				if err != nil {
-					return statusMsg("rerun failed: " + err.Error())
-				}
-				if resp.RunID == "" {
-					return statusMsg(resp.Message)
-				}
-				return statusMsg("queued run " + resp.RunID)
+			if r.Item.Fork {
+				m.confirm = &req
+				m.status = fmt.Sprintf("run fork PR #%d? untrusted code — y to confirm, any other key cancels", r.Item.PR)
+				return nil
 			}
+			return m.start(req)
 		}
 	case "c":
 		if r := m.selected(); r != nil && r.Check != nil && r.Check.RunID != "" {
@@ -289,6 +298,19 @@ func (m *model) key(k string) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+func (m *model) start(req api.StartRequest) tea.Cmd {
+	return func() tea.Msg {
+		resp, err := m.c.Start(context.Background(), req)
+		if err != nil {
+			return statusMsg("rerun failed: " + err.Error())
+		}
+		if resp.RunID == "" {
+			return statusMsg(resp.Message)
+		}
+		return statusMsg("queued run " + resp.RunID)
+	}
 }
 
 func (m *model) move(d int) {

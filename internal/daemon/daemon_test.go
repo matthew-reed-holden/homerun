@@ -102,6 +102,28 @@ func TestPRClaimUsesPRKey(t *testing.T) {
 	h.waitDone(head)
 }
 
+func TestStateMarksForkPRs(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	base := h.git("rev-parse", "HEAD")
+	fork := h.pr(7, "evil/r", map[string]string{"fork.txt": "f"})
+	same := h.pr(8, repo, map[string]string{"same.txt": "s"})
+	// SetPRs replaces the list, so set both PRs at once.
+	h.fake.SetPRs(repo,
+		gh.Head{PR: 7, Title: "Feature", Ref: "feat", SHA: fork, HeadRepo: "evil/r", BaseRef: "main", BaseSHA: base},
+		gh.Head{PR: 8, Title: "Feature", Ref: "feat", SHA: same, HeadRepo: repo, BaseRef: "main", BaseSHA: base})
+	h.poll()
+	got := map[int]bool{}
+	for _, it := range h.d.State().Repos[0].Items {
+		if it.PR != 0 {
+			got[it.PR] = it.Fork
+		}
+	}
+	if len(got) != 2 || !got[7] || got[8] {
+		t.Fatalf("fork flags by PR: %v", got)
+	}
+}
+
 func TestForkPRIsHeldUntilApproved(t *testing.T) {
 	for name, headRepo := range map[string]string{"fork": "evil/r", "deleted head repo": ""} {
 		t.Run(name, func(t *testing.T) {

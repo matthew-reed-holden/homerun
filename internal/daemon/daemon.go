@@ -281,7 +281,7 @@ func (d *Daemon) pollRepo(ctx context.Context, repo string) error {
 			return err
 		}
 		view.Items = append(view.Items, api.Item{Label: fmt.Sprintf("PR #%d %s", p.PR, p.Title), PR: p.PR, Ref: p.Ref,
-			SHA: p.SHA, URL: p.URL, Checks: apiChecks(checks)})
+			SHA: p.SHA, URL: p.URL, Fork: ev.Fork, Checks: apiChecks(checks)})
 		if err := d.handle(ctx, ev, checks); err != nil {
 			slog.Error("could not start run", "repo", repo, "event", ev.Key(), "sha", ev.SHA, "err", err)
 		}

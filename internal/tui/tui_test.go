@@ -1,6 +1,11 @@
 package tui
 
 import (
+	"encoding/json"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -170,5 +175,88 @@ func TestPollErrorShownWhenReposLoaded(t *testing.T) {
 	m.Update(errMsg{errTest("connection refused")})
 	if v := m.View(); !strings.Contains(v, "connection refused") || !strings.Contains(v, "o/r") {
 		t.Errorf("stale data not flagged:\n%s", v)
+	}
+}
+
+type startRec struct{ reqs []api.StartRequest }
+
+func startModel(t *testing.T, fork bool) (*model, *startRec) {
+	t.Helper()
+	rec := &startRec{}
+	// A short path: unix socket paths are length-limited.
+	dir, err := os.MkdirTemp("", "hr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	sock := filepath.Join(dir, "s")
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req api.StartRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		rec.reqs = append(rec.reqs, req)
+		_ = json.NewEncoder(w).Encode(api.StartResponse{RunID: "r1"})
+	})}
+	go srv.Serve(ln)
+	t.Cleanup(func() { srv.Close() })
+	m := &model{c: api.NewClient(sock), focus: 1, state: api.State{Repos: []api.Repo{{Name: "o/r",
+		Items: []api.Item{{Label: "PR #7 t", PR: 7, SHA: "abc", Fork: fork}}}}}}
+	return m, rec
+}
+
+func TestRunForkPRNeedsConfirmation(t *testing.T) {
+	m, rec := startModel(t, true)
+	if cmd := m.key("r"); cmd != nil {
+		t.Fatal("r on a fork PR returned a command")
+	}
+	if !strings.Contains(m.status, "run fork PR #7? untrusted code — y to confirm, any other key cancels") || len(rec.reqs) != 0 {
+		t.Fatalf("status %q, starts %d", m.status, len(rec.reqs))
+	}
+	cmd := m.key("y")
+	if cmd == nil {
+		t.Fatal("y did not start the run")
+	}
+	cmd()
+	if len(rec.reqs) != 1 || rec.reqs[0].PR != 7 || rec.reqs[0].Repo != "o/r" {
+		t.Fatalf("starts: %+v", rec.reqs)
+	}
+	if m.key("y") != nil {
+		t.Error("confirmation was not cleared after y")
+	}
+}
+
+func TestForkPRPromptCancelledByAnyOtherKey(t *testing.T) {
+	m, rec := startModel(t, true)
+	m.key("r")
+	if cmd := m.key("q"); cmd != nil {
+		t.Fatal("q quit instead of cancelling the prompt")
+	}
+	if m.status != "" || len(rec.reqs) != 0 {
+		t.Fatalf("status %q, starts %d", m.status, len(rec.reqs))
+	}
+	if m.key("y") != nil {
+		t.Error("y after cancel started a run")
+	}
+}
+
+func TestRunNonForkPRStartsImmediately(t *testing.T) {
+	m, rec := startModel(t, false)
+	cmd := m.key("r")
+	if cmd == nil {
+		t.Fatal("no command")
+	}
+	cmd()
+	if len(rec.reqs) != 1 || rec.reqs[0].PR != 7 || strings.Contains(m.status, "fork") {
+		t.Fatalf("starts %+v, status %q", rec.reqs, m.status)
+	}
+}
+
+func TestForkRowIsTagged(t *testing.T) {
+	rows := Rows(api.Repo{Items: []api.Item{{Label: "PR #7 t", PR: 7, SHA: "abc", Fork: true}}})
+	if !strings.Contains(rows[0].Text, "[fork]") {
+		t.Errorf("row %q", rows[0].Text)
 	}
 }
