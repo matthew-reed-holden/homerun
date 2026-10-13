@@ -206,6 +206,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		return m, tea.Batch(m.fetch(), tick())
 	case statusMsg:
+		// The prompt is replaced, so a later y must not approve what is no longer shown.
+		m.confirm = nil
 		m.status = termsafe.Line(string(msg))
 	case logMsg:
 		if msg.gen == m.gen && m.logRun != "" {

@@ -260,3 +260,12 @@ func TestForkRowIsTagged(t *testing.T) {
 		t.Errorf("row %q", rows[0].Text)
 	}
 }
+
+func TestStatusMsgDropsPendingForkConfirmation(t *testing.T) {
+	m, rec := startModel(t, true)
+	m.key("r")
+	m.Update(statusMsg("queued run 9"))
+	if cmd := m.key("y"); cmd != nil || len(rec.reqs) != 0 {
+		t.Fatalf("y approved a fork PR after its prompt was replaced: starts %d", len(rec.reqs))
+	}
+}
