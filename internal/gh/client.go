@@ -31,7 +31,7 @@ type installation struct {
 }
 
 func New(appID int64, privateKey []byte) (*Client, error) {
-	apps, err := ghinstallation.NewAppsTransport(&etagTransport{next: http.DefaultTransport}, appID, privateKey)
+	apps, err := ghinstallation.NewAppsTransport(&etagTransport{next: &timeoutTransport{next: http.DefaultTransport}}, appID, privateKey)
 	if err != nil {
 		return nil, fmt.Errorf("github app key: %w", err)
 	}

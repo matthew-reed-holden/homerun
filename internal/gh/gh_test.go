@@ -232,3 +232,43 @@ func TestFakeMatchesGitHub(t *testing.T) {
 		t.Errorf("want only latest run per name: %+v", runs)
 	}
 }
+
+func TestTimeoutTransportBoundsStalledRequest(t *testing.T) {
+	old := callTimeout
+	callTimeout = 50 * time.Millisecond
+	defer func() { callTimeout = old }()
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { <-release }))
+	defer srv.Close()
+	defer close(release)
+	c := &http.Client{Transport: &timeoutTransport{next: http.DefaultTransport}}
+	start := time.Now()
+	_, err := c.Get(srv.URL)
+	if err == nil {
+		t.Fatal("stalled request returned no error")
+	}
+	if d := time.Since(start); d > 5*time.Second {
+		t.Fatalf("took %v, want about %v", d, callTimeout)
+	}
+	if !retryable(err) {
+		t.Errorf("timeout error %v is not retryable", err)
+	}
+}
+
+func TestTimeoutTransportBodyReadableAfterRoundTrip(t *testing.T) {
+	want := strings.Repeat("x", 1<<20)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, want)
+	}))
+	defer srv.Close()
+	c := &http.Client{Transport: &timeoutTransport{next: http.DefaultTransport}}
+	resp, err := c.Get(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil || string(b) != want {
+		t.Fatalf("read %d bytes, err %v; want %d", len(b), err, len(want))
+	}
+}
