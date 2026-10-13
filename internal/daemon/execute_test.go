@@ -565,6 +565,29 @@ jobs:
 	}
 }
 
+func TestUnmappedLabelInReusableWorkflowFails(t *testing.T) {
+	h := newHarness(t, map[string]string{
+		".github/workflows/ci.yml": `name: CI
+on: push
+jobs:
+  call: {uses: ./.github/workflows/inner.yml}
+`,
+		".github/workflows/inner.yml": `name: Inner
+on: workflow_call
+jobs:
+  in: {runs-on: windows-latest, steps: [{run: "true"}]}
+`})
+	h.poll()
+	// act names the inner job, which has no check, and exits 0 with no jobResult.
+	h.output("{\"job\":\"call/Inner/in\",\"jobID\":\"in\",\"matrix\":{},\"msg\":\"\U0001F6A7  Skipping unsupported platform -- Try running with `-P windows-latest=...`\"}\n")
+	sha := h.push(nil)
+	h.poll()
+	cs := h.waitDone(sha)
+	if c := cs["homerun / CI / call"]; c == nil || c.Conclusion != "failure" {
+		t.Fatalf("call: %+v", c)
+	}
+}
+
 func TestUnmappedRunsOnLabelFails(t *testing.T) {
 	h := newHarness(t, map[string]string{".github/workflows/ci.yml": `name: CI
 on: push

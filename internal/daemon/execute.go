@@ -200,9 +200,9 @@ type tracker struct {
 	lost   map[string]bool           // job id -> a leg's check could not be created
 	labels map[string]string         // leg key -> runs-on label act said it has no platform for
 	failed bool
-	// unmapped is set when a job with no check of its own failed (a job ID
-	// changed by masking, or a reusable workflow's inner job): homerun cannot
-	// tell which open checks that failure explains.
+	// unmapped is set when a job with no check of its own failed or had an
+	// unmapped runs-on label (a job ID changed by masking, or a reusable
+	// workflow's inner job): homerun cannot tell which open checks it explains.
 	unmapped bool
 }
 
@@ -229,6 +229,11 @@ func (t *tracker) handle(e actlog.Event) {
 		t.tails[e.Leg] = tail
 		if m := unsupportedPlatform.FindStringSubmatch(e.Text); m != nil && e.Leg != "" {
 			t.labels[e.Leg] = m[1]
+			// A reusable workflow's inner job has no check, and act exits 0
+			// after skipping it, so nothing else would fail the caller.
+			if t.d.findCheck(t.run, t.wf.Path, e.JobID) == nil {
+				t.unmapped = true
+			}
 		}
 	case actlog.Started:
 		if t.runCtx.Err() == nil {
@@ -325,7 +330,7 @@ func (t *tracker) finish(actErr error) {
 		conclusion, summary = "cancelled", supersededSummary
 	case t.unmapped:
 		// Never "skipped" here: GitHub counts skipped as passing, and the failure may be these jobs'.
-		conclusion, summary = "failure", "homerun error: a job homerun could not map to a check failed, so this job's result is unknown."
+		conclusion, summary = "failure", "homerun error: a job homerun could not map to a check failed or has an unmapped runs-on label, so this job's result is unknown."
 	case actErr != nil && !t.failed:
 		conclusion, summary = "failure", "homerun error: act exited without finishing this job: "+t.d.scrub(actErr.Error())
 	}
