@@ -23,11 +23,11 @@ decode are ignored (they expire under `retain` anyway). No migration code.
 
 ## Stack
 
-Bubble Tea v2, lipgloss v2, bubbles v2:
+Bubble Tea v2, lipgloss v2, bubbles v2 (key, help, textinput):
 
 - `charm.land/bubbletea/v2` v2.1.0
 - `charm.land/lipgloss/v2` v2.0.6
-- `charm.land/bubbles/v2` v2.2.1 (viewport, key, help, textinput)
+- `charm.land/bubbles/v2` v2.2.1
 
 These replace `github.com/charmbracelet/bubbletea` v1 and `lipgloss` v1.
 `github.com/charmbracelet/x/ansi` stays if still needed for width-safe truncation.
@@ -42,7 +42,7 @@ These replace `github.com/charmbracelet/bubbletea` v1 and `lipgloss` v1.
 ╭2 Branches & PRs────────────╮│  ✘ echo bad; exit 1       0s                 │
 │✔ main          fd387ab 2m  ││⟳ matrix (1)               12s…               │
 │✘ #1 e2e PR  @matt      5m  ││○ host                     queued             │
-│⏸ #2 typo fix @bob  awaiting││✔ checks / shellcheck      1s                 │
+│◇ #2 typo fix @bob  awaiting││✔ checks / shellcheck      1s                 │
 ╰────────────────────────────╯│                                              │
 ╭3 Runs──────────────────────╮│                                              │
 │⟳ e2e #1         1m12s      ││                                              │
@@ -58,7 +58,7 @@ These replace `github.com/charmbracelet/bubbletea` v1 and `lipgloss` v1.
   2. **Branches & PRs** for the selected repo: default branch first, then
      PRs newest first. Row: rollup, label, then for a PR its title, `@author`
      and age; for a branch its short SHA and age. A held fork PR
-     shows `⏸ … awaiting`. Workflows not handled locally are listed dimmed at
+     shows `◇ … awaiting` (not `⏸`, which many terminals draw two columns wide). Workflows not handled locally are listed dimmed at
      the bottom.
   3. **Runs** across all repos: running (elapsed), then queued, then the 20
      most recent finished (duration, age).
@@ -136,7 +136,7 @@ Types are reshaped freely. One `Check` type is shared by items and runs:
   `completed`, `steps[]`, `log_prefix` — the `[name]` tag that check's lines
   carry in the run log (one run log interleaves every job).
 - `Item`: `label`, `pr`, `ref`, `sha`, `url`, `fork`, `title`, `author`,
-  `updated`, `checks[]`. `event.Event` gains `Author` and `Updated`, filled
+  `updated`, `checks[]`. `gh.Head` gains `Author` and `Updated`, filled
   from the PR list the poll already fetches (`user.login`, `updated_at`);
   no new GitHub calls. Branch items have no title or author.
 - `State`: `repos[]` plus `runs[]` — running, then queued, then the 20 most
@@ -153,7 +153,7 @@ Types are reshaped freely. One `Check` type is shared by items and runs:
 | `app.go` | Root model: focus, layout maths, message routing, polling, stale banner, status messages |
 | `panels.go` | One reusable list component for the three left panels: rows, cursor, scrolling, numbered title, focus styling |
 | `tree.go` | Main-pane job/step tree: fold state, auto-expand failed/running job |
-| `logview.go` | Log pane on a bubbles `viewport`: per-check filter by `log_prefix`, follow, search, jump to step, next failure |
+| `logview.go` | Log pane with its own offset scroller (restyles only visible lines): per-check filter by `log_prefix`, follow, search, jump to step, next failure |
 | `dialog.go` | Modal confirmation (fork run, cancel) and the help popup |
 | `keys.go` | All key bindings, grouped by context |
 | `styles.go` | Colours, borders, icons, duration and age formatting |
