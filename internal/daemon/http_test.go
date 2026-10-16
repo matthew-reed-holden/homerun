@@ -267,3 +267,74 @@ func TestHTTPRunStatus(t *testing.T) {
 		t.Errorf("bad id: %v", err)
 	}
 }
+
+func countRuns(t *testing.T, h *harness, sha string) int {
+	t.Helper()
+	runs, err := h.d.store.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, r := range runs {
+		if r.Event.SHA == sha {
+			n++
+		}
+	}
+	return n
+}
+
+func TestManualRunJoinsPolledRun(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	c, _ := serve(t, h)
+	release := h.occupySlots()
+	sha := h.push(map[string]string{"a.txt": "a"})
+	h.poll()
+	queued := h.waitRun(sha, "queued")
+	resp, err := c.Start(context.Background(), api.StartRequest{Repo: repo, Ref: "main"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.RunID != queued.ID || !strings.Contains(resp.Message, "already running as run "+queued.ID) {
+		t.Errorf("response %+v, want the existing run %s", resp, queued.ID)
+	}
+	if n := countRuns(t, h, sha); n != 1 {
+		t.Errorf("%d runs for %s, want 1", n, sha)
+	}
+	release()
+	h.waitDone(sha)
+}
+
+func TestPollSkipsCommitWithManualRun(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	c, _ := serve(t, h)
+	release := h.occupySlots()
+	sha := h.push(map[string]string{"a.txt": "a"})
+	resp, err := c.Start(context.Background(), api.StartRequest{Repo: repo, Ref: "main"})
+	if err != nil || resp.RunID == "" {
+		t.Fatalf("start: %+v %v", resp, err)
+	}
+	h.poll()
+	if n := countRuns(t, h, sha); n != 1 {
+		t.Errorf("%d runs for %s, want 1", n, sha)
+	}
+	release()
+	h.waitDone(sha)
+}
+
+func TestManualRerunOfFinishedCommitStarts(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	c, _ := serve(t, h)
+	sha := h.push(map[string]string{"a.txt": "a"})
+	h.poll()
+	first := h.waitRun(sha, "done")
+	resp, err := c.Start(context.Background(), api.StartRequest{Repo: repo, Ref: "main"})
+	if err != nil || resp.RunID == "" || resp.RunID == first.ID || resp.Message != "" {
+		t.Fatalf("rerun: %+v %v (first %s)", resp, err, first.ID)
+	}
+	if n := countRuns(t, h, sha); n != 2 {
+		t.Errorf("%d runs for %s, want 2", n, sha)
+	}
+}

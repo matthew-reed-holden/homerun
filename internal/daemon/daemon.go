@@ -322,7 +322,10 @@ func (d *Daemon) handle(ctx context.Context, ev event.Event, checks []gh.Check) 
 				return err
 			}
 		} else if _, err := d.Start(ctx, ev); err != nil {
-			return err
+			var active *activeError
+			if !errors.As(err, &active) {
+				return err
+			}
 		}
 	}
 	d.mu.Lock()
@@ -344,6 +347,22 @@ func (d *Daemon) awaitingRequeue(ev event.Event) bool {
 		}
 	}
 	return false
+}
+
+// activeError reports that ev's commit already has a queued or running run.
+type activeError struct{ RunID string }
+
+func (e *activeError) Error() string { return "already running as run " + e.RunID }
+
+func (d *Daemon) activeRun(ev event.Event) string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, r := range d.runs {
+		if (r.Status == "queued" || r.Status == "running") && r.Repo == ev.Repo && r.Event.SHA == ev.SHA && r.Event.Key() == ev.Key() {
+			return r.ID
+		}
+	}
+	return ""
 }
 
 func claimed(checks []gh.Check, appID int64, key string) bool {
@@ -407,6 +426,11 @@ func (d *Daemon) start(ctx context.Context, ev event.Event, handover func(tracke
 	lock := d.repoLock(ev.Repo)
 	lock.Lock()
 	defer lock.Unlock()
+	// Under the repo lock so that two starts of one commit cannot both pass:
+	// a manual run and a poll do not share the poll's claimed-checks list.
+	if id := d.activeRun(ev); id != "" {
+		return nil, &activeError{RunID: id}
+	}
 	m := d.mirror(ev.Repo)
 	token, err := d.opts.Source.GitToken(ctx, ev.Repo)
 	if err != nil {
@@ -950,7 +974,11 @@ func (d *Daemon) requeue(ctx context.Context) {
 			}
 		})
 		var reported setupReported
+		var active *activeError
 		switch {
+		case errors.As(err, &active):
+			// Another run already covers this commit.
+			d.setStatus(r, "cancelled")
 		case err == nil && run == nil, errors.As(err, &reported):
 			d.setStatus(r, "cancelled")
 		case err != nil:

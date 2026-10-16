@@ -65,6 +65,11 @@ func (d *Daemon) handleStart(w http.ResponseWriter, r *http.Request) {
 	}
 	// A client that disconnects mid-claim must not abort the claim.
 	run, err := d.Start(context.WithoutCancel(r.Context()), ev)
+	var active *activeError
+	if errors.As(err, &active) {
+		writeJSON(w, api.StartResponse{RunID: active.RunID, Message: active.Error()})
+		return
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
