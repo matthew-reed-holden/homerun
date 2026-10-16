@@ -408,3 +408,136 @@ func TestDialogBlocksWheelAndRightClick(t *testing.T) {
 		t.Fatal("right click acted")
 	}
 }
+
+func TestForkRunNeedsYFromItems(t *testing.T) {
+	m, f := newTestModel(t)
+	keysIn(m, "j", "j") // #2, a fork
+	if cmd := keysIn(m, "r"); cmd != nil || m.dlg == nil {
+		t.Fatal("r on a fork must open a dialog, not start")
+	}
+	if cmd := keysIn(m, "q"); cmd != nil || m.dlg != nil {
+		t.Fatal("q must only close the dialog")
+	}
+	keysIn(m, "r")
+	cmd := keysIn(m, "y")
+	if cmd == nil {
+		t.Fatal("y did not confirm")
+	}
+	m.Update(cmd())
+	if len(f.starts) != 1 || f.starts[0] != (api.StartRequest{Repo: "o/e2e", PR: 2}) {
+		t.Fatalf("starts: %+v", f.starts)
+	}
+}
+
+func TestForkRunNeedsYFromRuns(t *testing.T) {
+	m, f := newTestModel(t)
+	keysIn(m, "3", "j") // r3, a fork run
+	if cmd := keysIn(m, "r"); cmd != nil || m.dlg == nil {
+		t.Fatal("rerun of a fork run must ask")
+	}
+	m.Update(statusMsg("queued run r8")) // a late status covers the prompt
+	if m.dlg != nil {
+		t.Fatal("covered confirmation stayed armed")
+	}
+	keysIn(m, "y") // now just "copy sha"
+	if len(f.starts) != 0 || m.dlg != nil {
+		t.Fatal("y after the prompt was replaced started a run")
+	}
+}
+
+func TestRerunAndCancel(t *testing.T) {
+	m, f := newTestModel(t)
+	cmd := keysIn(m, "r") // main branch, not a fork: starts directly
+	if cmd == nil || m.dlg != nil {
+		t.Fatal("rerun")
+	}
+	m.Update(cmd())
+	if len(f.starts) != 1 || f.starts[0] != (api.StartRequest{Repo: "o/e2e", Ref: "main"}) || !strings.Contains(m.status, "queued run r9") {
+		t.Fatalf("starts %+v status %q", f.starts, m.status)
+	}
+	keysIn(m, "3") // r2 running
+	keysIn(m, "c")
+	if m.dlg == nil || !strings.Contains(ansi.Strip(m.render()), "Cancel run r2") {
+		t.Fatal("cancel dialog")
+	}
+	cmd = keysIn(m, "y")
+	m.Update(cmd())
+	if len(f.cancels) != 1 || f.cancels[0] != "r2" {
+		t.Fatalf("cancels %+v", f.cancels)
+	}
+}
+
+func TestOpenCopyReload(t *testing.T) {
+	m, f := newTestModel(t)
+	var opened []string
+	old := openURL
+	openURL = func(u string) error { opened = append(opened, u); return nil }
+	t.Cleanup(func() { openURL = old })
+	cmd := keysIn(m, "j", "o") // #1 item URL
+	m.Update(cmd())
+	keysIn(m, "l")
+	cmd = keysIn(m, "o") // tree: pass check URL
+	m.Update(cmd())
+	if len(opened) != 2 || opened[0] != "https://github.com/o/e2e/pull/1" || opened[1] != "https://github.com/o/e2e/runs/1" {
+		t.Fatalf("opened %v", opened)
+	}
+	if cmd := keysIn(m, "y"); cmd == nil || !strings.Contains(m.status, "d954af8") {
+		t.Fatal("copy")
+	}
+	cmd = keysIn(m, "R")
+	m.Update(cmd())
+	if f.reloads != 1 {
+		t.Fatal("reload")
+	}
+}
+
+func TestOpenRefusesNonHTTP(t *testing.T) {
+	m, _ := newTestModel(t)
+	m.state.Repos[0].Items[0].URL = "file:///etc/passwd"
+	m.refresh()
+	old := openURL
+	openURL = func(u string) error { t.Fatalf("opened %q", u); return nil }
+	t.Cleanup(func() { openURL = old })
+	if cmd := keysIn(m, "o"); cmd != nil {
+		m.Update(cmd())
+	}
+}
+
+func TestActionErrorShowsStatus(t *testing.T) {
+	m, _ := newTestModel(t)
+	m.c = api.NewClient(filepath.Join(t.TempDir(), "gone.sock"))
+	cmd := keysIn(m, "r")
+	m.Update(cmd())
+	if !strings.Contains(m.status, "rerun failed") {
+		t.Fatalf("status %q", m.status)
+	}
+}
+
+func TestMouseSelects(t *testing.T) {
+	m, _ := newTestModel(t)
+	// 120×40: repos panel is rows 0-3 (2 repos + borders), items start at row 4; row 6 is the second item.
+	m.Update(tea.MouseClickMsg{X: 3, Y: 6, Button: tea.MouseLeft})
+	if m.focus != paneItems || m.items.cur != 1 {
+		t.Fatalf("click: focus %d cur %d", m.focus, m.items.cur)
+	}
+	m.Update(tea.MouseWheelMsg{X: 3, Y: 6, Button: tea.MouseWheelDown})
+	if m.items.cur != 2 {
+		t.Fatalf("wheel: cur %d", m.items.cur)
+	}
+	m.Update(tea.MouseClickMsg{X: 60, Y: 2, Button: tea.MouseLeft})
+	if m.focus != paneMain {
+		t.Fatal("click into main")
+	}
+}
+
+func TestHelpPopup(t *testing.T) {
+	m, _ := newTestModel(t)
+	keysIn(m, "?")
+	if !strings.Contains(ansi.Strip(m.render()), "next failure") {
+		t.Fatal("help lists log keys")
+	}
+	keysIn(m, "x")
+	if m.dlg != nil {
+		t.Fatal("any key closes help")
+	}
+}

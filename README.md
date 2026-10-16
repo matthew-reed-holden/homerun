@@ -31,6 +31,21 @@ Or download a release tarball (linux amd64 or arm64) and put `homerun` on your `
 
 To run a commit by hand: `homerun run [--pr N] OWNER/NAME [BRANCH]`. It exits non-zero if the run fails.
 
+### TUI
+
+`homerun` opens a lazygit-style view: **1** repos, **2** branches and PRs, **3** recent runs, and a main pane that follows the selection.
+
+| Keys | |
+|---|---|
+| `1` `2` `3`, `tab`/`shift+tab` | focus a panel / cycle panes |
+| `j`/`k`, `g`/`G`, mouse | move, top/bottom, click and scroll |
+| `l`/`enter`, `h` | into the main pane / back to the panels |
+| `space` | fold or unfold a job |
+| `enter` on a job or step | open its log at that step |
+| in a log: `/` `n` `N` `e` `f` `+` `esc` | search, next/prev match, next failure, follow, zoom, back |
+| `r` `c` `o` `y` `R` | rerun (forks ask first), cancel, open on GitHub, copy SHA, reload config |
+| `?` `q` | help, quit |
+
 ## When this machine is off
 
 Required checks stay pending while the daemon is down. Re-enabling hosted Actions is not enough: hosted Actions never produce the `homerun / ...` check names, so those required checks would still never complete. Also swap the required checks in branch protection for the hosted ones, or remove the `homerun / ...` ones temporarily. Restore them when the machine is back.

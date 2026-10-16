@@ -168,6 +168,8 @@ default settings and no secrets.
 
 ## TUI
 
+> Superseded by `2026-10-14-tui-redesign-design.md`.
+
 - **Layout.** The left pane lists registered repos with a status rollup. The right pane shows the selected repo's open PRs and branches, each expanding to its check runs. Those include homerun's checks, plus GitHub's own checks when present.
 - **Actions.**
   - `enter`: tail the selected local run's log live.

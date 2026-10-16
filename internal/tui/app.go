@@ -282,6 +282,16 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 		m.cycle(1)
 	case key.Matches(k, keys.Prev):
 		m.cycle(-1)
+	case key.Matches(k, keys.Reload):
+		return m.reload()
+	case key.Matches(k, keys.Rerun):
+		return m.rerun()
+	case key.Matches(k, keys.Cancel):
+		m.cancel()
+	case key.Matches(k, keys.Open):
+		return m.open()
+	case key.Matches(k, keys.Copy):
+		return m.copySHA()
 	case m.focus == paneMain:
 		return m.mainKey(k)
 	default:
@@ -596,4 +606,141 @@ func (m *model) wheel(mo tea.Mouse) {
 		return
 	}
 	m.tree.move(d)
+}
+
+// target is what r reruns: the selected run, or the selected (or first) item.
+func (m *model) target() (req api.StartRequest, fork bool, author string, ok bool) {
+	if m.left == paneRuns {
+		r := m.run()
+		if r == nil {
+			return req, false, "", false
+		}
+		req = api.StartRequest{Repo: r.Repo, PR: r.PR}
+		if r.PR == 0 {
+			req.Ref = r.Label
+		}
+		return req, r.Fork, "", true
+	}
+	repo := m.repo()
+	it := m.item()
+	if m.left == paneRepos {
+		it = nil
+		if len(repo.Items) > 0 {
+			it = &repo.Items[0]
+		}
+	}
+	if it == nil {
+		return req, false, "", false
+	}
+	req = api.StartRequest{Repo: repo.Name, PR: it.PR}
+	if it.PR == 0 {
+		req.Ref = it.Ref
+	}
+	return req, it.Fork, it.Author, true
+}
+
+func (m *model) start(req api.StartRequest) tea.Cmd {
+	c := m.c
+	return func() tea.Msg {
+		resp, err := c.Start(context.Background(), req)
+		switch {
+		case err != nil:
+			return statusMsg("rerun failed: " + err.Error())
+		case resp.RunID == "":
+			return statusMsg(resp.Message)
+		}
+		return statusMsg("queued run " + resp.RunID)
+	}
+}
+
+func (m *model) rerun() tea.Cmd {
+	req, fork, author, ok := m.target()
+	if !ok {
+		m.say("nothing to run here")
+		return nil
+	}
+	if fork {
+		m.dlg = forkDialog(req, author, m.start)
+		return nil
+	}
+	return m.start(req)
+}
+
+func (m *model) cancelRun(id string) tea.Cmd {
+	c := m.c
+	return func() tea.Msg {
+		if err := c.Cancel(context.Background(), id); err != nil {
+			return statusMsg("cancel failed: " + err.Error())
+		}
+		return statusMsg("cancelled run " + id)
+	}
+}
+
+func (m *model) cancel() {
+	id, label := "", ""
+	if m.left == paneRuns && m.focus != paneMain {
+		if r := m.run(); r != nil {
+			id, label = r.ID, r.Label
+		}
+	} else if c, _, ok := m.tree.selected(); ok && m.focus == paneMain {
+		id, label = c.RunID, displayName(c.Name)
+	} else if m.left == paneRuns {
+		if r := m.run(); r != nil {
+			id, label = r.ID, r.Label
+		}
+	}
+	if id == "" {
+		m.say("nothing to cancel here")
+		return
+	}
+	m.dlg = cancelDialog(id, label, m.cancelRun)
+}
+
+func (m *model) open() tea.Cmd {
+	u := ""
+	if c, _, ok := m.tree.selected(); ok && m.focus == paneMain {
+		u = c.URL
+	}
+	if u == "" && m.left != paneRuns {
+		if it := m.item(); it != nil {
+			u = it.URL
+		}
+	}
+	if !httpURL(u) {
+		m.say("nothing to open on github.com here")
+		return nil
+	}
+	return func() tea.Msg {
+		if err := openURL(u); err != nil {
+			return statusMsg("open: " + err.Error())
+		}
+		return statusMsg("opened " + u)
+	}
+}
+
+func (m *model) copySHA() tea.Cmd {
+	sha := ""
+	if m.left == paneRuns {
+		if r := m.run(); r != nil {
+			sha = r.SHA
+		}
+	} else if it := m.item(); it != nil {
+		sha = it.SHA
+	}
+	if sha == "" {
+		m.say("nothing to copy here")
+		return nil
+	}
+	m.say("copied " + short(sha))
+	return tea.SetClipboard(sha)
+}
+
+func (m *model) reload() tea.Cmd {
+	c := m.c
+	return func() tea.Msg {
+		if err := c.Reload(context.Background()); err != nil {
+			return statusMsg("reload: " + err.Error())
+		}
+		return statusMsg("config reloaded")
+	}
 }
