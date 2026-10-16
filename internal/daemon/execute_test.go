@@ -823,3 +823,38 @@ func TestWorkflowCollidingWithExtraCheckIsRenamed(t *testing.T) {
 		}
 	}
 }
+
+func TestMatrixLegsOfCollidingWorkflowsUseFilePaths(t *testing.T) {
+	h := newHarness(t, map[string]string{
+		".github/workflows/ci.yml":  matrixYML,
+		".github/workflows/ci2.yml": matrixYML,
+	})
+	h.poll()
+	h.output(`{"jobID":"test","matrix":{"n":1},"msg":"leg line"}
+{"jobID":"test","matrix":{"n":1},"jobResult":"success","msg":"done"}
+`)
+	sha := h.push(nil)
+	h.poll()
+	run := h.waitRun(sha, "done")
+	logPath, _ := h.d.store.LogPath(run.ID)
+	logb, _ := os.ReadFile(logPath)
+	prefixes := map[string]bool{}
+	for _, name := range []string{"homerun / .github/workflows/ci.yml / test (1)", "homerun / .github/workflows/ci2.yml / test (1)"} {
+		var c *store.Check
+		for _, x := range run.Checks {
+			if x.Name == name && x.Leg != "" {
+				c = x
+			}
+		}
+		if c == nil {
+			t.Fatalf("no leg %s in %+v", name, run.Checks)
+		}
+		prefixes[c.LogPrefix] = true
+		if !strings.Contains(string(logb), "["+c.LogPrefix+"] ") {
+			t.Errorf("no [%s] line in log:\n%s", c.LogPrefix, logb)
+		}
+	}
+	if len(prefixes) != 2 {
+		t.Errorf("prefixes not distinct: %v", prefixes)
+	}
+}

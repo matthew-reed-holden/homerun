@@ -215,6 +215,18 @@ func (t *tracker) legName(e actlog.Event) string {
 	return actlog.LegName(name, e.Matrix)
 }
 
+// checkName names e's check after its parent's workflow segment, which plan()
+// swaps for the file path when workflow names collide.
+func (t *tracker) checkName(e actlog.Event) string {
+	seg := t.wf.Name
+	if p := t.d.findCheck(t.run, t.wf.Path, e.JobID); p != nil {
+		if j, ok := t.wf.Job(e.JobID); ok {
+			seg = strings.TrimSuffix(strings.TrimPrefix(p.Name, "homerun / "), " / "+j.Name)
+		}
+	}
+	return CheckName(seg, t.legName(e))
+}
+
 // tag is what a leg's lines are prefixed with in the run log, which every
 // workflow of the run shares: its check name without "homerun / ", so a job
 // name used by two workflows, or a deduplicated leg name, stays apart.
@@ -222,7 +234,7 @@ func (t *tracker) tag(e actlog.Event) string {
 	if s, ok := t.tags[e.Leg]; ok {
 		return s
 	}
-	return strings.TrimPrefix(CheckName(t.wf.Name, t.legName(e)), "homerun / ")
+	return strings.TrimPrefix(t.checkName(e), "homerun / ")
 }
 
 // tagFor fixes leg's tag to c's name the first time a check starts under it;
@@ -336,7 +348,7 @@ func (t *tracker) start(e actlog.Event) {
 	}
 	// GitHub shows only the latest check per name, so a duplicate name could
 	// hide a failed leg behind a passing one.
-	base := CheckName(t.wf.Name, t.legName(e))
+	base := t.checkName(e)
 	name := base
 	for n := 2; t.d.hasCheckNamed(t.run, name); n++ {
 		name = fmt.Sprintf("%s #%d", base, n)
