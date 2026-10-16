@@ -4,14 +4,11 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"net/url"
-	"os/exec"
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/matthew-reed-holden/homerun/internal/api"
 	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 )
@@ -20,35 +17,6 @@ type Row struct {
 	Text  string
 	Item  *api.Item
 	Check *api.Check
-}
-
-func Icon(status, conclusion string) string {
-	switch {
-	case status != "completed":
-		return "⟳"
-	case conclusion == "success":
-		return "✔"
-	case conclusion == "failure", conclusion == "timed_out", conclusion == "action_required":
-		return "✘"
-	default:
-		return "○"
-	}
-}
-
-func Rollup(cs []api.Check) string {
-	if len(cs) == 0 {
-		return "·"
-	}
-	out := "✔"
-	for _, c := range cs {
-		switch Icon(c.Status, c.Conclusion) {
-		case "✘":
-			return "✘"
-		case "⟳":
-			out = "⟳"
-		}
-	}
-	return out
 }
 
 func Rows(r api.Repo) []Row {
@@ -71,13 +39,6 @@ func Rows(r api.Repo) []Row {
 	return rows
 }
 
-func short(sha string) string {
-	if len(sha) > 7 {
-		return sha[:7]
-	}
-	return sha
-}
-
 // window returns the slice [start, end) of n rows that keeps sel visible in height rows.
 func window(n, sel, height int) (int, int) {
 	if n <= height {
@@ -88,36 +49,7 @@ func window(n, sel, height int) (int, int) {
 	return start, start + height
 }
 
-// truncate cuts by display width, since the status icons are multi-byte and
-// a byte slice could split one.
-func truncate(s string, w int) string {
-	if lipgloss.Width(s) <= w {
-		return s
-	}
-	return ansi.Truncate(s, w, "…")
-}
-
-// openURL is a variable so tests can observe it without launching a browser.
-var openURL = func(u string) error {
-	// The URL is one argument to xdg-open, never a shell string.
-	return exec.Command("xdg-open", u).Start()
-}
-
-// httpURL accepts only absolute http(s) URLs, because the string comes from
-// GitHub data and xdg-open would act on any scheme or option-like value.
-func httpURL(s string) bool {
-	u, err := url.Parse(s)
-	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
-}
-
-var (
-	green  = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	red    = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	yellow = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	dim    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	sel    = lipgloss.NewStyle().Reverse(true)
-	box    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder())
-)
+var box = lipgloss.NewStyle().Border(lipgloss.RoundedBorder())
 
 // colour paints the status icons in a line.
 func colour(s string) string {
@@ -157,7 +89,7 @@ type model struct {
 
 func Run(c *api.Client) error {
 	m := &model{c: c, w: 100, h: 30}
-	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
+	_, err := tea.NewProgram(m).Run()
 	if m.stopLog != nil {
 		m.stopLog()
 	}
@@ -220,7 +152,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.gen == m.gen && m.logRun != "" {
 			m.log = append(m.log, dim.Render("— end of log —"))
 		}
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return m, m.key(msg.String())
 	}
 	return m, nil
@@ -379,7 +311,13 @@ func (m *model) nextLine() tea.Cmd {
 	}
 }
 
-func (m *model) View() string {
+func (m *model) View() tea.View {
+	v := tea.NewView(m.render())
+	v.AltScreen = true
+	return v
+}
+
+func (m *model) render() string {
 	if m.err != nil && len(m.state.Repos) == 0 {
 		return "homerun: " + termsafe.Line(m.err.Error()) + "\n\nStart the daemon with: homerun daemon   (q to quit)\n"
 	}
@@ -422,8 +360,8 @@ func (m *model) View() string {
 		right = append(right, colour(line))
 	}
 	top := lipgloss.JoinHorizontal(lipgloss.Top,
-		box.Width(leftW).Height(inner).Render(strings.Join(left, "\n")),
-		box.Width(rightW).Height(inner).Render(strings.Join(right, "\n")))
+		box.Width(leftW+2).Height(inner+2).Render(strings.Join(left, "\n")),
+		box.Width(rightW+2).Height(inner+2).Render(strings.Join(right, "\n")))
 
 	var b strings.Builder
 	b.WriteString(top + "\n")

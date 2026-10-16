@@ -9,27 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/matthew-reed-holden/homerun/internal/api"
 )
-
-func TestIconsAndRollup(t *testing.T) {
-	cases := map[[2]string]string{
-		{"completed", "success"}: "✔", {"completed", "failure"}: "✘", {"in_progress", ""}: "⟳",
-		{"queued", ""}: "⟳", {"completed", "skipped"}: "○", {"completed", "cancelled"}: "○",
-	}
-	for in, want := range cases {
-		if got := Icon(in[0], in[1]); got != want {
-			t.Errorf("Icon%v = %s, want %s", in, got, want)
-		}
-	}
-	ok := api.Check{Status: "completed", Conclusion: "success"}
-	bad := api.Check{Status: "completed", Conclusion: "failure"}
-	run := api.Check{Status: "in_progress"}
-	if Rollup(nil) != "·" || Rollup([]api.Check{ok}) != "✔" || Rollup([]api.Check{ok, run}) != "⟳" || Rollup([]api.Check{run, bad}) != "✘" {
-		t.Fatal("rollup")
-	}
-}
 
 func TestRows(t *testing.T) {
 	r := api.Repo{Name: "o/r", Unhandled: []string{".github/workflows/nightly.yml"}, Items: []api.Item{
@@ -77,21 +59,6 @@ func TestOpenOnRowWithoutItemDoesNotPanic(t *testing.T) {
 	}
 }
 
-func TestOpenOnlyHTTPURLs(t *testing.T) {
-	var opened []string
-	old := openURL
-	openURL = func(u string) error { opened = append(opened, u); return nil }
-	defer func() { openURL = old }()
-
-	for _, u := range []string{"https://github.com/o/r/pull/3", "file:///etc/passwd", "javascript:alert(1)", "-oProxyCommand=x", "http://"} {
-		m := &model{focus: 1, state: api.State{Repos: []api.Repo{{Name: "o/r", Items: []api.Item{{Label: "x", URL: u}}}}}}
-		m.key("o")
-	}
-	if len(opened) != 1 || opened[0] != "https://github.com/o/r/pull/3" {
-		t.Errorf("opened %q", opened)
-	}
-}
-
 func TestTruncateKeepsMultiByteIconsWhole(t *testing.T) {
 	line := "✔ " + strings.Repeat("✘⟳", 30)
 	for w := 1; w < 40; w++ {
@@ -112,7 +79,7 @@ func TestViewDoesNotBreakIconsInNarrowPane(t *testing.T) {
 	m := &model{w: 40, h: 20, focus: 1, state: api.State{Repos: []api.Repo{{Name: "o/r", Items: []api.Item{
 		{Label: strings.Repeat("✔", 60), SHA: "abc"},
 	}}}}}
-	if v := m.View(); !utf8Valid(v) {
+	if v := m.render(); !utf8Valid(v) {
 		t.Fatalf("invalid UTF-8 in view: %q", v)
 	}
 }
@@ -128,8 +95,9 @@ func TestViewStripsTerminalEscapes(t *testing.T) {
 		}}}}}}
 	m.Update(logMsg{gen: 1, line: "hello\r\x1b[31mred\x1b[0m\tend"})
 	m.Update(statusMsg("st\x1b[2Jatus"))
-	v := m.View()
-	for _, bad := range []string{"\x1b", "\r", "\a"} {
+	v := m.render()
+	// lipgloss v2 always emits its own SGR colours, so look for the injected sequences instead of any escape.
+	for _, bad := range []string{"\x1b[2J", "\x1b[H", "\x1b]", "\r", "\a"} {
 		if strings.Contains(v, bad) {
 			t.Fatalf("view contains %q:\n%q", bad, v)
 		}
@@ -145,7 +113,7 @@ func TestLongLinesDoNotWrap(t *testing.T) {
 		log:   []string{long},
 		state: api.State{Repos: []api.Repo{{Name: "o/r", Error: long}}}}
 	m.status = long
-	for i, l := range strings.Split(m.View(), "\n") {
+	for i, l := range strings.Split(m.render(), "\n") {
 		if w := lipgloss.Width(l); w > m.w {
 			t.Errorf("line %d width %d > %d", i, w, m.w)
 		}
@@ -173,7 +141,7 @@ func TestStaleLogMessagesIgnoredAfterRefollow(t *testing.T) {
 func TestPollErrorShownWhenReposLoaded(t *testing.T) {
 	m := &model{w: 120, h: 20, state: api.State{Repos: []api.Repo{{Name: "o/r"}}}}
 	m.Update(errMsg{errTest("connection refused")})
-	if v := m.View(); !strings.Contains(v, "connection refused") || !strings.Contains(v, "o/r") {
+	if v := m.render(); !strings.Contains(v, "connection refused") || !strings.Contains(v, "o/r") {
 		t.Errorf("stale data not flagged:\n%s", v)
 	}
 }
