@@ -368,15 +368,25 @@ func TestRepoNoOpKeepsItemsAndLog(t *testing.T) {
 
 func TestClickBounds(t *testing.T) {
 	m, _ := newTestModel(t)
+	st := fixture()
+	var items []api.Item
+	var checks []api.Check
+	for i := 0; i < 40; i++ {
+		checks = append(checks, api.Check{Name: "c", Status: "completed", Conclusion: "success", RunID: "r1", LogPrefix: "c"})
+		items = append(items, api.Item{Label: "b", Ref: "b", SHA: "abc1234567", Checks: checks})
+	}
+	st.Repos[0].Items = items
+	m.Update(stateMsg{&st})
 	lay := m.layout()
 	m.click(tea.Mouse{X: 5, Y: lay.heights[0] + lay.heights[1] - 1, Button: tea.MouseLeft}) // items bottom border
 	if m.items.cur != 0 {
 		t.Fatalf("border click selected %d", m.items.cur)
 	}
-	m.focus = paneItems
-	m.click(tea.Mouse{X: 50, Y: lay.bodyH, Button: tea.MouseLeft}) // key bar
-	if m.tree.cur != 0 {
-		t.Fatal("bar click reached tree")
+	for _, y := range []int{lay.bodyH - 1, lay.bodyH} { // main bottom border, key bar
+		m.click(tea.Mouse{X: 50, Y: y, Button: tea.MouseLeft})
+		if m.tree.cur != 0 {
+			t.Fatalf("click at y=%d moved tree to %d", y, m.tree.cur)
+		}
 	}
 }
 
