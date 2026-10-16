@@ -2,6 +2,7 @@ package actlog
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -149,4 +150,45 @@ func TestMaskingBypasses(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestParserSteps(t *testing.T) {
+	p := &Parser{Mask: func(s string) string { return strings.ReplaceAll(s, "topsecret", "***") }}
+	var got []string
+	for _, l := range strings.Split(fixture, "\n") {
+		for _, e := range p.Feed([]byte(l)) {
+			id := e.JobID
+			if n, ok := e.Matrix["n"]; ok {
+				id += fmt.Sprint(n)
+			}
+			switch e.Kind {
+			case StepStarted:
+				got = append(got, "start "+id+"|"+e.Stage+"|"+e.Step)
+			case StepFinished:
+				got = append(got, "end "+id+"|"+e.Stage+"|"+e.Step+"|"+e.Conclusion)
+			}
+		}
+	}
+	want := []string{
+		"start a||Set up job",
+		`start a|Main|echo "secret=***"`,
+		`end a|Main|echo "secret=***"|success`,
+		"start b2|Main|echo leg-2; test 2 = 1",
+		"end b2|Main|echo leg-2; test 2 = 1|failure",
+		"start b1|Main|echo leg-1; test 1 = 1",
+		"end b1|Main|echo leg-1; test 1 = 1|success",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("steps:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+func TestStepConclusionFailsClosed(t *testing.T) {
+	p := &Parser{}
+	evs := p.Feed([]byte(`{"jobID":"a","matrix":{},"msg":"x","stage":"Main","step":"s","stepID":["0"],"stepResult":"weird"}`))
+	for _, e := range evs {
+		if e.Kind == StepFinished && e.Conclusion != "failure" {
+			t.Fatalf("conclusion %q", e.Conclusion)
+		}
+	}
 }

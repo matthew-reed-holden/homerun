@@ -14,6 +14,8 @@ const (
 	Line Kind = iota
 	Started
 	Finished
+	StepStarted
+	StepFinished
 )
 
 type Event struct {
@@ -24,13 +26,17 @@ type Event struct {
 	Text       string // Line only
 	Conclusion string // Finished only
 	FailedStep string // Finished only
+	Step       string // StepStarted/StepFinished: masked step name
+	Stage      string // StepStarted/StepFinished: Pre, Main, Post, or empty
 }
 
 type entry struct {
 	JobID      string         `json:"jobID"`
 	Matrix     map[string]any `json:"matrix"`
 	Msg        *string        `json:"msg"`
+	Stage      string         `json:"stage"`
 	Step       string         `json:"step"`
+	StepID     []string       `json:"stepID"`
 	StepResult string         `json:"stepResult"`
 	JobResult  string         `json:"jobResult"`
 }
@@ -42,6 +48,7 @@ type Parser struct {
 	started map[string]bool
 	failed  map[string]string
 	jobFail map[string]bool
+	step    map[string]string // leg -> key of its current step
 }
 
 func (p *Parser) mask(s string) string {
@@ -53,7 +60,7 @@ func (p *Parser) mask(s string) string {
 
 func (p *Parser) Feed(line []byte) []Event {
 	if p.started == nil {
-		p.started, p.failed, p.jobFail = map[string]bool{}, map[string]string{}, map[string]bool{}
+		p.started, p.failed, p.jobFail, p.step = map[string]bool{}, map[string]string{}, map[string]bool{}, map[string]string{}
 	}
 	var e entry
 	if json.Unmarshal(line, &e) != nil || (e.JobID == "" && e.Msg == nil) {
@@ -78,8 +85,21 @@ func (p *Parser) Feed(line []byte) []Event {
 		p.started[leg] = true
 		out = append(out, Event{Kind: Started, JobID: outID, Matrix: outMatrix, Leg: outLeg})
 	}
+	key := ""
+	if e.Step != "" {
+		key = e.Stage + "\x00" + strings.Join(e.StepID, ",") + "\x00" + e.Step
+	}
+	if key != "" && p.step[leg] != key {
+		p.step[leg] = key
+		out = append(out, Event{Kind: StepStarted, JobID: outID, Matrix: outMatrix, Leg: outLeg, Step: p.mask(e.Step), Stage: e.Stage})
+	}
 	for _, l := range strings.Split(p.mask(strings.TrimRight(deref(e.Msg), "\n")), "\n") {
 		out = append(out, Event{Kind: Line, JobID: outID, Matrix: outMatrix, Leg: outLeg, Text: l})
+	}
+	if key != "" && e.StepResult != "" {
+		p.step[leg] = ""
+		out = append(out, Event{Kind: StepFinished, JobID: outID, Matrix: outMatrix, Leg: outLeg,
+			Step: p.mask(e.Step), Stage: e.Stage, Conclusion: stepConclusion(e.StepResult)})
 	}
 	if e.StepResult == "failure" && p.failed[leg] == "" {
 		p.failed[leg] = p.mask(e.Step)
@@ -187,6 +207,15 @@ func LegName(jobName string, matrix map[string]any) string {
 		vals[i] = fmt.Sprint(matrix[k])
 	}
 	return jobName + " (" + strings.Join(vals, ", ") + ")"
+}
+
+// stepConclusion fails closed: an unknown value would otherwise show as passed.
+func stepConclusion(s string) string {
+	switch s {
+	case "success", "failure", "skipped", "cancelled":
+		return s
+	}
+	return "failure"
 }
 
 func deref(s *string) string {
