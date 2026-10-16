@@ -522,3 +522,26 @@ func TestRequeuedSetupFailureIsNotRepeatedWhenGitHubRejectsItsUpdate(t *testing.
 		}
 	}
 }
+
+func TestRequeueDropsARunWhoseCommitIsAlreadyActive(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	sha := h.push(map[string]string{"a.txt": "a"})
+	stale, _ := strandedRun(t, h, sha)
+	stale.Status = "requeue"
+	if err := h.d.store.Save(stale); err != nil {
+		t.Fatal(err)
+	}
+	h.d.mu.Lock()
+	h.d.runs[stale.ID] = stale
+	h.d.runs["active-1"] = &store.Run{ID: "active-1", Repo: repo, Event: stale.Event, Status: "queued", Created: time.Now()}
+	h.d.mu.Unlock()
+	h.d.requeue(context.Background())
+	if st := storedStatuses(t, h); st[stale.ID] != "cancelled" {
+		t.Fatalf("run not cancelled: %v", st)
+	}
+	h.d.requeue(context.Background())
+	if n := countChecks(h, sha, "homerun / CI / build"); n != 1 {
+		t.Fatalf("requeue created checks: %d", n)
+	}
+}
