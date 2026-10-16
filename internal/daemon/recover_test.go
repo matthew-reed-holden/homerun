@@ -470,4 +470,27 @@ func TestOtherRequeueFailuresAreNotGivenUpEarly(t *testing.T) {
 	if st := storedStatuses(t, h); st[r.ID] != "requeue" {
 		t.Fatalf("given up on a non-fetch error: %v", st)
 	}
+	if n := countChecks(h, r.Event.SHA, "homerun"); n != 0 {
+		t.Fatalf("a homerun check was created: %d", n)
+	}
+}
+
+func TestGiveUpCheckIsNotRepeatedWhenGitHubRejectsItsUpdate(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	r := unfetchableRun(t, h, 25*time.Hour)
+	h.rep.failUpdates(1 << 30)
+	h.d.recover(context.Background())
+	for i := 0; i < 3; i++ {
+		h.poll()
+	}
+	if st := storedStatuses(t, h); st[r.ID] != "cancelled" {
+		t.Fatalf("run not cancelled: %v", st)
+	}
+	if n := countChecks(h, missingSHA, "homerun"); n != 1 {
+		t.Fatalf("want one homerun check, got %d", n)
+	}
+	h.rep.failUpdates(0)
+	h.poll()
+	assertGaveUp(t, h, r)
 }

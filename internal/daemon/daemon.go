@@ -626,9 +626,14 @@ func (d *Daemon) singleCheck(ctx context.Context, ev event.Event, conclusion, ti
 			slog.Warn("save state", "err", serr)
 		}
 		d.mu.Unlock()
+		return fmt.Errorf("%w: %w", errUpdatePending, err)
 	}
-	return err
+	return nil
 }
+
+// errUpdatePending marks a singleCheck whose check exists on GitHub and whose
+// final update will be re-sent by the poll.
+var errUpdatePending = errors.New("check update pending")
 
 // flushSetupChecks re-sends setup-failure updates GitHub has not accepted.
 func (d *Daemon) flushSetupChecks(ctx context.Context) {
@@ -1021,9 +1026,12 @@ func (d *Daemon) requeue(ctx context.Context) {
 			d.setStatus(r, "cancelled")
 		case err != nil:
 			slog.Error("re-queueing run", "run", r.ID, "err", err)
+			if !errors.Is(err, errUnfetchable) {
+				continue
+			}
 			d.mu.Lock()
 			r.Requeues++
-			giveUp := errors.Is(err, errUnfetchable) && (r.Requeues >= maxRequeues || time.Since(r.Created) > maxRequeueTime)
+			giveUp := r.Requeues >= maxRequeues || time.Since(r.Created) > maxRequeueTime
 			if serr := d.store.Save(r); serr != nil {
 				slog.Warn("save run", "run", r.ID, "err", serr)
 			}
@@ -1034,7 +1042,9 @@ func (d *Daemon) requeue(ctx context.Context) {
 			// A force-pushed commit never comes back; retrying would block the
 			// event and log on every poll forever.
 			gone := fmt.Errorf("commit %s can no longer be fetched (force-pushed or deleted); not running it", short(r.Event.SHA))
-			if errors.As(d.failSetup(rctx, r.Event, gone), &reported) {
+			// A pending update still means the check exists; trying again would
+			// create another one.
+			if ferr := d.failSetup(rctx, r.Event, gone); errors.As(ferr, &reported) || errors.Is(ferr, errUpdatePending) {
 				d.setStatus(r, "cancelled")
 			}
 		}
