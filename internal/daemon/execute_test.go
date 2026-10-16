@@ -651,3 +651,45 @@ func TestChecksOnlyRepoValidatesSecrets(t *testing.T) {
 		})
 	}
 }
+
+func TestStepsAndTimingRecorded(t *testing.T) {
+	h := newHarness(t, map[string]string{
+		".github/workflows/ci.yml": ciYML,
+		".github/homerun.yml":      "checks:\n  lint: \"true\"\n",
+	})
+	h.poll()
+	h.output(`{"jobID":"build","matrix":{},"msg":"⭐ Run Main make","stage":"Main","step":"make","stepID":["0"]}
+{"jobID":"build","matrix":{},"msg":"  ✅  Success - Main make","stage":"Main","step":"make","stepID":["0"],"stepResult":"success"}
+{"jobID":"build","jobResult":"success","matrix":{},"msg":"🏁  Job succeeded"}
+{"jobID":"docker","matrix":{},"msg":"⭐ Run Main boom","stage":"Main","step":"boom","stepID":["0"]}
+{"jobID":"docker","matrix":{},"msg":"  ❌  Failure - Main boom","stage":"Main","step":"boom","stepID":["0"],"stepResult":"failure"}
+{"jobID":"docker","jobResult":"failure","matrix":{},"msg":"🏁  Job failed"}
+`)
+	sha := h.push(nil)
+	h.poll()
+	run := h.waitRun(sha, "done")
+	if run.Started.IsZero() || run.Finished.Before(run.Started) {
+		t.Fatalf("run times: started %v finished %v", run.Started, run.Finished)
+	}
+	byName := map[string]*store.Check{}
+	for _, c := range run.Checks {
+		byName[c.Name] = c
+	}
+	want := map[string]struct{ prefix, step, concl string }{
+		"homerun / CI / build":    {"build", "make", "success"},
+		"homerun / CI / docker":   {"docker", "boom", "failure"},
+		"homerun / checks / lint": {"checks / lint", "true", "success"},
+	}
+	for name, w := range want {
+		c := byName[name]
+		if c == nil {
+			t.Fatalf("no check %s in %+v", name, run.Checks)
+		}
+		if c.LogPrefix != w.prefix || c.Started.IsZero() || c.Completed.Before(c.Started) {
+			t.Errorf("%s: prefix %q started %v completed %v", name, c.LogPrefix, c.Started, c.Completed)
+		}
+		if len(c.Steps) != 1 || c.Steps[0].Name != w.step || c.Steps[0].Status != "completed" || c.Steps[0].Conclusion != w.concl {
+			t.Errorf("%s steps: %+v", name, c.Steps)
+		}
+	}
+}

@@ -239,6 +239,25 @@ func (t *tracker) handle(e actlog.Event) {
 		if t.runCtx.Err() == nil {
 			t.start(e)
 		}
+	case actlog.StepStarted:
+		if c := t.open(e.Leg); c != nil {
+			now := time.Now()
+			t.d.mutate(func() {
+				c.Steps = append(c.Steps, store.Step{Name: e.Step, Stage: e.Stage, Status: "in_progress", Started: now})
+			})
+		}
+	case actlog.StepFinished:
+		if c := t.open(e.Leg); c != nil {
+			now := time.Now()
+			t.d.mutate(func() {
+				for i := len(c.Steps) - 1; i >= 0; i-- {
+					if s := &c.Steps[i]; s.Name == e.Step && s.Stage == e.Stage && s.Status != "completed" {
+						s.Status, s.Conclusion, s.Completed = "completed", e.Conclusion, now
+						break
+					}
+				}
+			})
+		}
 	case actlog.Finished:
 		if e.Conclusion == "failure" {
 			t.failed = true
@@ -286,6 +305,8 @@ func (t *tracker) start(e actlog.Event) {
 	if len(e.Matrix) == 0 {
 		if len(t.legs[e.Leg]) == 0 {
 			t.legs[e.Leg] = []*store.Check{parent}
+			prefix := t.legName(e)
+			t.d.mutate(func() { parent.LogPrefix = prefix })
 			t.d.report(t.ctx, t.run, parent, gh.Update{Status: "in_progress"})
 		}
 		return
@@ -311,7 +332,7 @@ func (t *tracker) start(e actlog.Event) {
 		t.lost[e.JobID] = true
 		return
 	}
-	c := &store.Check{Name: name, ID: id, Status: "queued", Workflow: t.wf.Path, JobID: e.JobID, Leg: e.Leg}
+	c := &store.Check{Name: name, ID: id, Status: "queued", Workflow: t.wf.Path, JobID: e.JobID, Leg: e.Leg, LogPrefix: t.legName(e)}
 	t.d.addCheck(t.run, c)
 	t.legs[e.Leg] = append(t.legs[e.Leg], c)
 	t.matrix[e.JobID] = append(t.matrix[e.JobID], c)
@@ -401,6 +422,12 @@ func (d *Daemon) runExtra(ctx, rctx context.Context, run *store.Run, c *store.Ch
 		d.complete(rctx, run, c, "neutral", forkSkipped, forkSkipped, "")
 		return
 	}
+	stepName, _, _ := strings.Cut(mk.Mask(command), "\n")
+	started := time.Now()
+	d.mutate(func() {
+		c.LogPrefix = "checks / " + c.Extra
+		c.Steps = []store.Step{{Name: stepName, Status: "in_progress", Started: started}}
+	})
 	d.report(rctx, run, c, gh.Update{Status: "in_progress"})
 	var tail []string
 	w := &lineWriter{fn: func(l string) {
@@ -436,6 +463,10 @@ func (d *Daemon) runExtra(ctx, rctx context.Context, run *store.Run, c *store.Ch
 		msg := "homerun error: " + d.scrub(mk.Mask(err.Error()))
 		conclusion, title, summary = "failure", head(msg, maxTitle), msg+"\n"+summary
 	}
+	ended := time.Now()
+	d.mutate(func() {
+		c.Steps[0].Status, c.Steps[0].Conclusion, c.Steps[0].Completed = "completed", conclusion, ended
+	})
 	d.complete(rctx, run, c, conclusion, title, summary, codeBlock(tail))
 }
 

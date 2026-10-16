@@ -19,15 +19,29 @@ import (
 	"github.com/matthew-reed-holden/homerun/internal/gh"
 )
 
+type Step struct {
+	Name       string    `json:"name"`
+	Stage      string    `json:"stage,omitempty"`
+	Status     string    `json:"status"`
+	Conclusion string    `json:"conclusion,omitempty"`
+	Started    time.Time `json:"started,omitzero"`
+	Completed  time.Time `json:"completed,omitzero"`
+}
+
 type Check struct {
-	Name       string `json:"name"`
-	ID         int64  `json:"id"`
-	Status     string `json:"status"`
-	Conclusion string `json:"conclusion,omitempty"`
-	Workflow   string `json:"workflow,omitempty"`
-	JobID      string `json:"job_id,omitempty"`
-	Leg        string `json:"leg,omitempty"`
-	Extra      string `json:"extra,omitempty"`
+	Name       string    `json:"name"`
+	ID         int64     `json:"id"`
+	Status     string    `json:"status"`
+	Conclusion string    `json:"conclusion,omitempty"`
+	Workflow   string    `json:"workflow,omitempty"`
+	JobID      string    `json:"job_id,omitempty"`
+	Leg        string    `json:"leg,omitempty"`
+	Extra      string    `json:"extra,omitempty"`
+	Started    time.Time `json:"started,omitzero"`
+	Completed  time.Time `json:"completed,omitzero"`
+	Steps      []Step    `json:"steps,omitempty"`
+	// LogPrefix is the [tag] this check's lines carry in the shared run log.
+	LogPrefix string `json:"log_prefix,omitempty"`
 	// Pending is the last update GitHub did not accept; it is re-sent until it is.
 	Pending *gh.Update `json:"pending,omitempty"`
 }
@@ -40,6 +54,8 @@ type Run struct {
 	Worktree string      `json:"worktree"`
 	Checks   []*Check    `json:"checks"`
 	Created  time.Time   `json:"created"`
+	Started  time.Time   `json:"started,omitzero"`
+	Finished time.Time   `json:"finished,omitzero"`
 }
 
 type State struct {

@@ -5,9 +5,11 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/matthew-reed-holden/homerun/internal/event"
 	"github.com/matthew-reed-holden/homerun/internal/gh"
+	"github.com/matthew-reed-holden/homerun/internal/store"
 )
 
 func TestBaselineThenPushClaimsOnce(t *testing.T) {
@@ -342,5 +344,28 @@ func TestSetupFailureHidesStateDir(t *testing.T) {
 	got := lastSummary(c)
 	if strings.Contains(got, h.d.opts.StateDir) || !strings.Contains(got, "<state>/work/x/.github/homerun.yml") {
 		t.Fatalf("summary leaks or loses the path: %q", got)
+	}
+}
+
+func TestStampTimesAndClosesOpenSteps(t *testing.T) {
+	t0 := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	c := &store.Check{Status: "in_progress", Steps: []store.Step{
+		{Name: "a", Status: "completed", Conclusion: "success", Started: t0, Completed: t0},
+		{Name: "b", Status: "in_progress", Started: t0},
+	}}
+	stamp(c, t0)
+	if !c.Started.Equal(t0) || !c.Completed.IsZero() {
+		t.Fatalf("in progress: %+v", c)
+	}
+	c.Status, c.Conclusion = "completed", "cancelled"
+	stamp(c, t0.Add(time.Minute))
+	if !c.Completed.Equal(t0.Add(time.Minute)) || !c.Started.Equal(t0) {
+		t.Fatalf("completed: %+v", c)
+	}
+	if s := c.Steps[1]; s.Status != "completed" || s.Conclusion != "cancelled" || s.Completed.IsZero() {
+		t.Fatalf("open step not closed: %+v", s)
+	}
+	if c.Steps[0].Conclusion != "success" {
+		t.Fatalf("finished step changed: %+v", c.Steps[0])
 	}
 }

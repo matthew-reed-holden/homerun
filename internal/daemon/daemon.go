@@ -635,9 +635,43 @@ func (d *Daemon) setStatus(run *store.Run, status string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	run.Status = status
+	now := time.Now()
+	if status == "running" && run.Started.IsZero() {
+		run.Started = now
+	}
+	if (status == "done" || status == "cancelled") && run.Finished.IsZero() {
+		run.Finished = now
+	}
 	if err := d.store.Save(run); err != nil {
 		slog.Warn("save run", "run", run.ID, "err", err)
 	}
+}
+
+// stamp records when a check started and finished, and closes steps act never
+// reported a result for, so a finished job never shows a step still running.
+func stamp(c *store.Check, now time.Time) {
+	if c.Status == "in_progress" && c.Started.IsZero() {
+		c.Started = now
+	}
+	if c.Status != "completed" || !c.Completed.IsZero() {
+		return
+	}
+	c.Completed = now
+	for i := range c.Steps {
+		if s := &c.Steps[i]; s.Status != "completed" {
+			s.Status, s.Completed = "completed", now
+			if c.Conclusion == "cancelled" {
+				s.Conclusion = "cancelled"
+			}
+		}
+	}
+}
+
+// mutate runs fn under d.mu, because State() reads checks while execute writes them.
+func (d *Daemon) mutate(fn func()) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	fn()
 }
 
 func (d *Daemon) addCheck(run *store.Run, c *store.Check) {
@@ -723,6 +757,7 @@ func (d *Daemon) report(ctx context.Context, run *store.Run, c *store.Check, u g
 	if u.Conclusion != "" {
 		c.Status, c.Conclusion = "completed", u.Conclusion
 	}
+	stamp(c, time.Now())
 	c.Pending = nil
 	err := d.store.Save(run)
 	d.mu.Unlock()
