@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"errors"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -90,5 +92,20 @@ func TestStartLine(t *testing.T) {
 	}
 	if got := startLine(&api.StartResponse{RunID: "r2", Message: "already running as run r2"}); got != "already running as run r2" {
 		t.Errorf("got %q", got)
+	}
+}
+
+func TestLoadClientDetailIsLocalOnly(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(p, []byte("app: {id: 1, private_key: {cmd: \"echo oops-detail >&2; exit 3\"}}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := loadClient(context.Background(), p, true)
+	if err == nil || !strings.Contains(err.Error(), "oops-detail") {
+		t.Fatalf("interactive error lacks the detail: %v", err)
+	}
+	_, _, err = loadClient(context.Background(), p, false)
+	if err == nil || strings.Contains(err.Error(), "oops-detail") {
+		t.Fatalf("daemon error carries the detail: %v", err)
 	}
 }

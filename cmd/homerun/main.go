@@ -77,7 +77,9 @@ func stateDir() string {
 	return filepath.Join(home, ".local", "state", "homerun")
 }
 
-func loadClient(ctx context.Context, path string) (*config.User, *gh.Client, error) {
+// loadClient's detail flag adds a failed secret command's stderr to the error;
+// the daemon passes false because its errors land in the journal on disk.
+func loadClient(ctx context.Context, path string, detail bool) (*config.User, *gh.Client, error) {
 	cfg, warns, err := config.LoadUser(path)
 	if err != nil {
 		return nil, nil, err
@@ -90,7 +92,7 @@ func loadClient(ctx context.Context, path string) (*config.User, *gh.Client, err
 	}
 	key, err := cfg.App.PrivateKey.Resolve(ctx)
 	if err != nil {
-		if d := config.Detail(err); d != "" {
+		if d := config.Detail(err); detail && d != "" {
 			return nil, nil, fmt.Errorf("app.private_key: %w: %s", err, d)
 		}
 		return nil, nil, fmt.Errorf("app.private_key: %w", err)
@@ -108,7 +110,7 @@ func cmdDaemon(args []string) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	cfg, client, err := loadClient(ctx, *cfgPath)
+	cfg, client, err := loadClient(ctx, *cfgPath, false)
 	if err != nil {
 		return err
 	}
@@ -159,7 +161,7 @@ func cmdRepoAdd(args []string) error {
 	}
 	name := fs.Arg(0)
 	ctx := context.Background()
-	_, client, err := loadClient(ctx, *cfgPath)
+	_, client, err := loadClient(ctx, *cfgPath, true)
 	if err != nil {
 		return err
 	}
