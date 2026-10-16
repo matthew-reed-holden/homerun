@@ -376,7 +376,7 @@ func (m *model) logKey(k tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(k, keys.Follow):
 		if strings.HasPrefix(l.ended, "stream ended") {
 			// Reconnect from the start: the daemon replays the log, then follows.
-			fresh := newLogView(l.runID, l.prefix, "", "", true)
+			fresh := newLogView(l.runID, l.prefix, "", "", 0, true)
 			m.log = fresh
 			return m.stream(l.runID)
 		}
@@ -396,11 +396,17 @@ func (m *model) openLog() tea.Cmd {
 		m.say("no local log for this check (it did not run here)")
 		return nil
 	}
-	stage, name := "", ""
+	stage, name, nth := "", "", 0
 	if step >= 0 {
 		stage, name = c.Steps[step].Stage, c.Steps[step].Name
+		// A job can repeat a step; the log's markers come in step order.
+		for _, s := range c.Steps[:step] {
+			if s.Stage == stage && s.Name == name {
+				nth++
+			}
+		}
 	}
-	m.log = newLogView(c.RunID, c.LogPrefix, stage, name, c.Status != "completed" && step < 0)
+	m.log = newLogView(c.RunID, c.LogPrefix, stage, name, nth, c.Status != "completed" && step < 0)
 	return m.stream(c.RunID)
 }
 

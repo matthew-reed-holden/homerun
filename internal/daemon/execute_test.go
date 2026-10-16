@@ -676,8 +676,8 @@ func TestStepsAndTimingRecorded(t *testing.T) {
 		byName[c.Name] = c
 	}
 	want := map[string]struct{ prefix, step, concl string }{
-		"homerun / CI / build":    {"build", "make", "success"},
-		"homerun / CI / docker":   {"docker", "boom", "failure"},
+		"homerun / CI / build":    {"CI / build", "make", "success"},
+		"homerun / CI / docker":   {"CI / docker", "boom", "failure"},
 		"homerun / checks / lint": {"checks / lint", "true", "success"},
 	}
 	for name, w := range want {
@@ -690,6 +690,42 @@ func TestStepsAndTimingRecorded(t *testing.T) {
 		}
 		if len(c.Steps) != 1 || c.Steps[0].Name != w.step || c.Steps[0].Status != "completed" || c.Steps[0].Conclusion != w.concl {
 			t.Errorf("%s steps: %+v", name, c.Steps)
+		}
+	}
+}
+
+func TestLogTagsAreUniquePerCheck(t *testing.T) {
+	h := newHarness(t, map[string]string{
+		".github/workflows/ci.yml":      "name: CI\non: push\njobs:\n  test: {runs-on: ubuntu-latest, steps: [{run: \"true\"}]}\n",
+		".github/workflows/nightly.yml": "name: Nightly\non: push\njobs:\n  test: {runs-on: ubuntu-latest, steps: [{run: \"true\"}]}\n",
+		".github/workflows/matrix.yml":  strings.NewReplacer("name: CI", "name: M", "  test:", "  leg:").Replace(matrixYML),
+	})
+	h.poll()
+	// The stub prints the same output for every workflow.
+	h.output(`{"jobID":"test","matrix":{},"msg":"plain line"}
+{"jobID":"test","matrix":{},"jobResult":"success","msg":"done"}
+{"jobID":"leg","matrix":{"n":1},"msg":"leg line"}
+{"jobID":"leg","matrix":{"n":1},"jobResult":"success","msg":"done"}
+`)
+	sha := h.push(nil)
+	h.poll()
+	run := h.waitRun(sha, "done")
+	prefixes := map[string]string{}
+	for _, c := range run.Checks {
+		prefixes[c.Name] = c.LogPrefix
+	}
+	logPath, _ := h.d.store.LogPath(run.ID)
+	logb, _ := os.ReadFile(logPath)
+	for name, want := range map[string]string{
+		"homerun / CI / test":      "CI / test",
+		"homerun / Nightly / test": "Nightly / test",
+		"homerun / M / leg (1)":    "M / leg (1)",
+	} {
+		if prefixes[name] != want {
+			t.Errorf("%s: prefix %q, want %q (all: %v)", name, prefixes[name], want, prefixes)
+		}
+		if !strings.Contains(string(logb), "["+want+"] ") {
+			t.Errorf("no [%s] line in log:\n%s", want, logb)
 		}
 	}
 }

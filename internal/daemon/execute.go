@@ -114,7 +114,7 @@ func (d *Daemon) execute(ctx context.Context, run *store.Run, p *plan, slot int)
 			d.closeWhere(rctx, run, func(c *store.Check) bool { return c.Workflow == w.Path && c.JobID == id }, "neutral", forkSkipped, "")
 		}
 		t := &tracker{d: d, ctx: rctx, runCtx: ctx, run: run, wf: w, log: logf,
-			legs: map[string][]*store.Check{}, tails: map[string][]string{}, matrix: map[string][]*store.Check{}, lost: map[string]bool{}, labels: map[string]string{}}
+			legs: map[string][]*store.Check{}, tails: map[string][]string{}, matrix: map[string][]*store.Check{}, lost: map[string]bool{}, labels: map[string]string{}, tags: map[string]string{}}
 		err := d.runner.Run(ctx, runner.Spec{Dir: run.Worktree, Event: ev.Name, EventPath: evPath, Workflow: w.Path,
 			Secrets: secrets, Slot: slot, Mask: mk.Mask, Fork: ev.Fork}, t.handle)
 		t.finish(err)
@@ -199,6 +199,7 @@ type tracker struct {
 	matrix map[string][]*store.Check // job id -> leg checks
 	lost   map[string]bool           // job id -> a leg's check could not be created
 	labels map[string]string         // leg key -> runs-on label act said it has no platform for
+	tags   map[string]string         // leg key -> its lines' tag in the run log, once its check exists
 	failed bool
 	// unmapped is set when a job with no check of its own failed or had an
 	// unmapped runs-on label (a job ID changed by masking, or a reusable
@@ -214,12 +215,31 @@ func (t *tracker) legName(e actlog.Event) string {
 	return actlog.LegName(name, e.Matrix)
 }
 
+// tag is what a leg's lines are prefixed with in the run log, which every
+// workflow of the run shares: its check name without "homerun / ", so a job
+// name used by two workflows, or a deduplicated leg name, stays apart.
+func (t *tracker) tag(e actlog.Event) string {
+	if s, ok := t.tags[e.Leg]; ok {
+		return s
+	}
+	return strings.TrimPrefix(CheckName(t.wf.Name, t.legName(e)), "homerun / ")
+}
+
+// tagFor fixes leg's tag to c's name the first time a check starts under it;
+// legs that mask alike share a key and so share the first one's tag.
+func (t *tracker) tagFor(leg string, c *store.Check) string {
+	if _, ok := t.tags[leg]; !ok {
+		t.tags[leg] = strings.TrimPrefix(c.Name, "homerun / ")
+	}
+	return t.tags[leg]
+}
+
 func (t *tracker) handle(e actlog.Event) {
 	switch e.Kind {
 	case actlog.Line:
 		prefix := "act"
 		if e.Leg != "" {
-			prefix = t.legName(e)
+			prefix = t.tag(e)
 		}
 		fmt.Fprintf(t.log, "[%s] %s\n", prefix, e.Text)
 		tail := append(t.tails[e.Leg], e.Text)
@@ -305,7 +325,7 @@ func (t *tracker) start(e actlog.Event) {
 	if len(e.Matrix) == 0 {
 		if len(t.legs[e.Leg]) == 0 {
 			t.legs[e.Leg] = []*store.Check{parent}
-			prefix := t.legName(e)
+			prefix := t.tagFor(e.Leg, parent)
 			t.d.mutate(func() { parent.LogPrefix = prefix })
 			t.d.report(t.ctx, t.run, parent, gh.Update{Status: "in_progress"})
 		}
@@ -332,7 +352,8 @@ func (t *tracker) start(e actlog.Event) {
 		t.lost[e.JobID] = true
 		return
 	}
-	c := &store.Check{Name: name, ID: id, Status: "queued", Workflow: t.wf.Path, JobID: e.JobID, Leg: e.Leg, LogPrefix: t.legName(e)}
+	c := &store.Check{Name: name, ID: id, Status: "queued", Workflow: t.wf.Path, JobID: e.JobID, Leg: e.Leg}
+	c.LogPrefix = t.tagFor(e.Leg, c)
 	t.d.addCheck(t.run, c)
 	t.legs[e.Leg] = append(t.legs[e.Leg], c)
 	t.matrix[e.JobID] = append(t.matrix[e.JobID], c)

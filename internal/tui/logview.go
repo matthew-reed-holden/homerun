@@ -18,6 +18,7 @@ type logView struct {
 	runID  string
 	prefix string
 	marker string // act's start line for the chosen step; "" opens at the top
+	skip   int    // earlier steps of the same name whose markers come first
 	lines  []string
 	top    int
 	h      int // visible log rows at the last render
@@ -30,10 +31,10 @@ type logView struct {
 	match  int
 }
 
-func newLogView(runID, prefix, stage, step string, follow bool) *logView {
+func newLogView(runID, prefix, stage, step string, nth int, follow bool) *logView {
 	in := textinput.New()
 	in.Prompt = "/"
-	l := &logView{runID: runID, prefix: prefix, follow: follow, input: in, match: -1}
+	l := &logView{runID: runID, prefix: prefix, follow: follow, input: in, match: -1, skip: nth}
 	if step != "" {
 		first, _, _ := strings.Cut(step, "\n")
 		if stage != "" {
@@ -65,7 +66,11 @@ func (l *logView) add(raw string) {
 		}
 	}
 	if l.marker != "" && !l.jumped && strings.Contains(line, l.marker) {
-		l.jumped, l.follow, l.top = true, false, len(l.lines)-1
+		if l.skip > 0 {
+			l.skip--
+		} else {
+			l.jumped, l.follow, l.top = true, false, len(l.lines)-1
+		}
 	}
 	if l.follow {
 		l.top = max(0, len(l.lines)-l.h)

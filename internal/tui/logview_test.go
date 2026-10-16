@@ -10,13 +10,13 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-const runLog = `[pass] ⭐ Run Main echo ok
-[pass] ok
-[fail] ⭐ Run Set up job
-[fail] pulling image
-[fail] ⭐ Run Main echo bad; exit 1
-[fail] | bad
-[fail]   ❌  Failure - Main echo bad; exit 1
+const runLog = `[CI / pass] ⭐ Run Main echo ok
+[CI / pass] ok
+[CI / fail] ⭐ Run Set up job
+[CI / fail] pulling image
+[CI / fail] ⭐ Run Main echo bad; exit 1
+[CI / fail] | bad
+[CI / fail]   ❌  Failure - Main echo bad; exit 1
 [homerun] done`
 
 func feed(l *logView, s string) {
@@ -26,13 +26,13 @@ func feed(l *logView, s string) {
 }
 
 func TestLogFiltersByPrefix(t *testing.T) {
-	l := newLogView("r1", "fail", "", "", false)
-	feed(l, runLog)
+	l := newLogView("r1", "CI / fail", "", "", 0, false)
+	feed(l, runLog+"\n[Nightly / fail] another workflow's job")
 	want := []string{"⭐ Run Set up job", "pulling image", "⭐ Run Main echo bad; exit 1", "| bad", "  ❌  Failure - Main echo bad; exit 1"}
 	if strings.Join(l.lines, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("lines:\n%s", strings.Join(l.lines, "\n"))
 	}
-	all := newLogView("r1", "", "", "", false)
+	all := newLogView("r1", "", "", "", 0, false)
 	feed(all, runLog)
 	if len(all.lines) != 8 {
 		t.Fatalf("unfiltered: %d", len(all.lines))
@@ -40,12 +40,12 @@ func TestLogFiltersByPrefix(t *testing.T) {
 }
 
 func TestLogJumpsToStep(t *testing.T) {
-	l := newLogView("r1", "fail", "Main", "echo bad; exit 1\nsecond line", true)
+	l := newLogView("r1", "CI / fail", "Main", "echo bad; exit 1\nsecond line", 0, true)
 	feed(l, runLog)
 	if l.top != 2 || l.follow {
 		t.Fatalf("top %d follow %v", l.top, l.follow)
 	}
-	missing := newLogView("r1", "fail", "Main", "not there", false)
+	missing := newLogView("r1", "CI / fail", "Main", "not there", 0, false)
 	feed(missing, runLog)
 	if missing.top != 0 {
 		t.Fatalf("missing step top %d", missing.top)
@@ -53,7 +53,7 @@ func TestLogJumpsToStep(t *testing.T) {
 }
 
 func TestLogFollowShowsNewest(t *testing.T) {
-	l := newLogView("r1", "", "", "", true)
+	l := newLogView("r1", "", "", "", 0, true)
 	_ = l.view("t", 40, 6, true) // 4 visible rows: 6 - 2 borders, minus the status line = 3
 	for i := range 50 {
 		l.add(fmt.Sprintf("line %d", i))
@@ -76,7 +76,7 @@ func TestLogFollowShowsNewest(t *testing.T) {
 }
 
 func TestLogCapsLines(t *testing.T) {
-	l := newLogView("r1", "", "", "", true)
+	l := newLogView("r1", "", "", "", 0, true)
 	for i := range maxLogLines + 500 {
 		l.add(fmt.Sprintf("line %d", i))
 	}
@@ -86,7 +86,7 @@ func TestLogCapsLines(t *testing.T) {
 }
 
 func TestLogSearchAndFailures(t *testing.T) {
-	l := newLogView("r1", "", "", "", false)
+	l := newLogView("r1", "", "", "", 0, false)
 	feed(l, runLog)
 	_ = l.view("t", 60, 10, true)
 	l.startSearch()
@@ -115,11 +115,28 @@ func TestLogSearchAndFailures(t *testing.T) {
 }
 
 func TestLogSanitises(t *testing.T) {
-	l := newLogView("r1", "", "", "", false)
+	l := newLogView("r1", "", "", "", 0, false)
 	l.add("a\tb \x1b]52;c;aGk=\x07 \x1b[2J done")
 	out := l.view("t", 40, 5, true)
 	dims(t, out, 40, 5)
 	if strings.Contains(out, "\x1b]52") || strings.Contains(out, "\x1b[2J") || !strings.Contains(ansi.Strip(out), "a    b") {
 		t.Fatalf("unsafe or unexpanded: %q", ansi.Strip(out))
+	}
+}
+
+func TestLogJumpsToNthStepOfSameName(t *testing.T) {
+	log := `[j] ⭐ Run Main make
+[j] first
+[j] ⭐ Run Main make
+[j] second`
+	l := newLogView("r1", "j", "Main", "make", 1, false)
+	feed(l, log)
+	if l.top != 2 {
+		t.Fatalf("top %d, want the second make", l.top)
+	}
+	first := newLogView("r1", "j", "Main", "make", 0, false)
+	feed(first, log)
+	if first.top != 0 || !first.jumped {
+		t.Fatalf("first: top %d jumped %v", first.top, first.jumped)
 	}
 }

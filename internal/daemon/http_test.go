@@ -70,7 +70,7 @@ func TestHTTPAPI(t *testing.T) {
 	}
 	b, _ := io.ReadAll(body) // returns because the run is finished
 	body.Close()
-	if !strings.Contains(string(b), "[build] building") {
+	if !strings.Contains(string(b), "[CI / build] building") {
 		t.Fatalf("log: %q", b)
 	}
 	st, _ = c.State(ctx)
@@ -167,7 +167,7 @@ func TestHTTPFollowLogAndCancel(t *testing.T) {
 	lines := bufio.NewScanner(body)
 	found := false
 	for !found && lines.Scan() {
-		found = strings.Contains(lines.Text(), "[build] started")
+		found = strings.Contains(lines.Text(), "[CI / build] started")
 	}
 	if !found || h.d.finished(resp.RunID) {
 		t.Fatalf("no live line before the run ended: err=%v", lines.Err())

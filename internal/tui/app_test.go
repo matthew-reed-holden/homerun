@@ -74,9 +74,9 @@ func newFake(t *testing.T, st api.State) (*fakeDaemon, *api.Client) {
 
 func fixture() api.State {
 	t0 := now.Add(-time.Minute)
-	pass := api.Check{Name: "homerun / CI / pass", Status: "completed", Conclusion: "success", RunID: "r1", LogPrefix: "pass",
+	pass := api.Check{Name: "homerun / CI / pass", Status: "completed", Conclusion: "success", RunID: "r1", LogPrefix: "CI / pass",
 		Started: t0, Completed: t0.Add(4 * time.Second), URL: "https://github.com/o/e2e/runs/1"}
-	fail := api.Check{Name: "homerun / CI / fail", Status: "completed", Conclusion: "failure", RunID: "r1", LogPrefix: "fail",
+	fail := api.Check{Name: "homerun / CI / fail", Status: "completed", Conclusion: "failure", RunID: "r1", LogPrefix: "CI / fail",
 		Started: t0, Completed: t0.Add(3 * time.Second), Steps: []api.Step{
 			{Name: "Set up job", Status: "completed", Conclusion: "success", Started: t0, Completed: t0.Add(time.Second)},
 			{Name: "echo bad; exit 1", Stage: "Main", Status: "completed", Conclusion: "failure", Started: t0, Completed: t0},
@@ -228,7 +228,7 @@ func TestOpenLogAtFailedStep(t *testing.T) {
 		t.Fatal("esc closes the log")
 	}
 	keysIn(m, "k", "k", "k", "enter") // pass job
-	if m.log == nil || m.log.prefix != "pass" {
+	if m.log == nil || m.log.prefix != "CI / pass" {
 		t.Fatal("job log")
 	}
 }
@@ -635,5 +635,19 @@ func TestCancelRefusesFinished(t *testing.T) {
 	keysIn(m, "l", "c") // its pass check is completed
 	if m.dlg != nil || !strings.Contains(m.status, "nothing to cancel") {
 		t.Fatalf("finished check: dialog %v status %q", m.dlg, m.status)
+	}
+}
+
+func TestOpenLogAtRepeatedStepName(t *testing.T) {
+	m, f := newTestModel(t)
+	st := fixture()
+	steps := st.Repos[0].Items[1].Checks[1].Steps
+	steps[0].Name, steps[0].Stage, steps[1].Name = "make", "Main", "make"
+	m.Update(stateMsg{&st})
+	f.logs["r1"] = "[CI / fail] ⭐ Run Main make\n[CI / fail] ok\n[CI / fail] ⭐ Run Main make\n[CI / fail] bad"
+	keysIn(m, "j", "l", "j", "j", "j") // the second make
+	drain(m, keysIn(m, "enter"))
+	if m.log == nil || m.log.top != 2 {
+		t.Fatalf("log top: %v", m.log != nil && m.log.top == 2)
 	}
 }
