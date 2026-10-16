@@ -427,3 +427,62 @@ func TestStateCarriesPRDetails(t *testing.T) {
 	}
 	t.Fatal("PR 8 not in state")
 }
+
+func TestSetupFailureUpdateNotAcceptedIsResent(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	h.rep.failUpdates(1)
+	sha := h.push(map[string]string{".github/workflows/ci.yml": "on: [push\n"})
+	h.poll()
+	cs := h.fake.Checks(repo, sha)
+	if len(cs) != 1 || cs[0].Name != "homerun" || cs[0].Status == "completed" {
+		t.Fatalf("want one queued homerun check, got %+v", cs)
+	}
+	h.poll()
+	c := h.waitDone(sha)["homerun"]
+	if c == nil || c.Conclusion != "failure" || !strings.HasPrefix(lastSummary(c), "homerun error:") {
+		t.Fatalf("want failed homerun check, got %+v", c)
+	}
+	if n := len(h.fake.Checks(repo, sha)); n != 1 {
+		t.Fatalf("%d checks", n)
+	}
+	if st, err := h.d.store.LoadState(); err != nil || len(st.Pending) != 0 {
+		t.Fatalf("pending left: %+v %v", st, err)
+	}
+}
+
+func TestSetupFailurePendingSurvivesRestart(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	h.rep.failUpdates(1)
+	sha := h.push(map[string]string{".github/workflows/ci.yml": "on: [push\n"})
+	h.poll()
+	if st, err := h.d.store.LoadState(); err != nil || len(st.Pending) != 1 {
+		t.Fatalf("want one pending update: %+v %v", st, err)
+	}
+	h.d.close()
+	d2, err := New(h.d.opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(d2.close)
+	d2.recover(context.Background())
+	c := h.waitDone(sha)["homerun"]
+	if c == nil || c.Conclusion != "failure" {
+		t.Fatalf("want failed homerun check, got %+v", c)
+	}
+	if st, err := d2.store.LoadState(); err != nil || len(st.Pending) != 0 {
+		t.Fatalf("pending left: %+v %v", st, err)
+	}
+}
+
+func TestSetupFailureAcceptedLeavesNothingPending(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	sha := h.push(map[string]string{".github/workflows/ci.yml": "on: [push\n"})
+	h.poll()
+	h.waitDone(sha)
+	if st, err := h.d.store.LoadState(); err != nil || len(st.Pending) != 0 {
+		t.Fatalf("pending: %+v %v", st, err)
+	}
+}

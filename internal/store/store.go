@@ -60,6 +60,15 @@ type Run struct {
 
 type State struct {
 	Branches map[string]map[string]string `json:"branches"` // repo -> branch -> sha
+	// Pending holds final updates of checks that belong to no run, which GitHub
+	// has not accepted yet.
+	Pending []PendingCheck `json:"pending,omitempty"`
+}
+
+type PendingCheck struct {
+	Repo   string    `json:"repo"`
+	ID     int64     `json:"id"`
+	Update gh.Update `json:"update"`
 }
 
 // Store keeps local run history only; GitHub's check runs are the durable record.

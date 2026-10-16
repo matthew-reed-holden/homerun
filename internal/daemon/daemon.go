@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -606,10 +607,38 @@ func (d *Daemon) singleCheck(ctx context.Context, ev event.Event, conclusion, ti
 	}
 	// Once created, the check must not be left queued by a cancelled caller.
 	uctx := context.WithoutCancel(ctx)
-	return gh.Retry(uctx, func() error {
-		return d.opts.Reporter.UpdateCheck(uctx, ev.Repo, id, gh.Update{Name: "homerun", Status: "completed",
-			Conclusion: conclusion, Title: title, Summary: summary})
-	})
+	u := gh.Update{Name: "homerun", Status: "completed", Conclusion: conclusion, Title: title, Summary: summary}
+	err = gh.Retry(uctx, func() error { return d.opts.Reporter.UpdateCheck(uctx, ev.Repo, id, u) })
+	if err != nil {
+		// The check exists and no run owns it: keep the update so a later poll
+		// can finish it instead of leaving it queued forever.
+		d.mu.Lock()
+		d.state.Pending = append(d.state.Pending, store.PendingCheck{Repo: ev.Repo, ID: id, Update: u})
+		if serr := d.store.SaveState(d.state); serr != nil {
+			slog.Warn("save state", "err", serr)
+		}
+		d.mu.Unlock()
+	}
+	return err
+}
+
+// flushSetupChecks re-sends setup-failure updates GitHub has not accepted.
+func (d *Daemon) flushSetupChecks(ctx context.Context) {
+	d.mu.Lock()
+	todo := slices.Clone(d.state.Pending)
+	d.mu.Unlock()
+	for _, p := range todo {
+		if err := d.opts.Reporter.UpdateCheck(ctx, p.Repo, p.ID, p.Update); err != nil {
+			slog.Warn("flush setup check", "repo", p.Repo, "err", err)
+			continue
+		}
+		d.mu.Lock()
+		d.state.Pending = slices.DeleteFunc(d.state.Pending, func(q store.PendingCheck) bool { return q.Repo == p.Repo && q.ID == p.ID })
+		if err := d.store.SaveState(d.state); err != nil {
+			slog.Warn("save state", "err", err)
+		}
+		d.mu.Unlock()
+	}
 }
 
 // scrub hides the state directory in text bound for a check run, which may be
@@ -817,6 +846,7 @@ func (d *Daemon) report(ctx context.Context, run *store.Run, c *store.Check, u g
 // A run whose updates are being sent right now is skipped: its sender holds
 // the newest state.
 func (d *Daemon) flushReports(ctx context.Context) {
+	d.flushSetupChecks(ctx)
 	d.mu.Lock()
 	var runs []*store.Run
 	for _, r := range d.runs {
