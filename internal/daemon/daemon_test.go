@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -368,4 +369,61 @@ func TestStampTimesAndClosesOpenSteps(t *testing.T) {
 	if c.Steps[0].Conclusion != "success" {
 		t.Fatalf("finished step changed: %+v", c.Steps[0])
 	}
+}
+
+func TestRecentRunsOrder(t *testing.T) {
+	t0 := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	var runs []*store.Run // newest first, as State sorts them
+	runs = append(runs, &store.Run{ID: "d0", Status: "done", Created: t0})
+	runs = append(runs, &store.Run{ID: "run", Status: "running", Created: t0.Add(-time.Second)})
+	runs = append(runs, &store.Run{ID: "q", Status: "queued", Created: t0.Add(-2 * time.Second)})
+	for i := 1; i <= 25; i++ {
+		runs = append(runs, &store.Run{ID: fmt.Sprintf("d%d", i), Status: "done", Created: t0.Add(-time.Duration(i+2) * time.Second)})
+	}
+	got := recentRuns(runs)
+	if len(got) != 22 || got[0].ID != "run" || got[1].ID != "q" || got[2].ID != "d0" || got[21].ID != "d19" {
+		ids := []string{}
+		for _, r := range got {
+			ids = append(ids, r.ID)
+		}
+		t.Fatalf("order: %v", ids)
+	}
+}
+
+func TestAPIRunLabelsAndChecks(t *testing.T) {
+	t0 := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	r := &store.Run{ID: "r1", Repo: "o/r", Status: "done", Event: event.Event{Name: "pull_request", PR: 4, SHA: "abc", Fork: true},
+		Checks: []*store.Check{{Name: "homerun / CI / a", Status: "completed", Conclusion: "success", LogPrefix: "a",
+			Started: t0, Completed: t0.Add(time.Second), Steps: []store.Step{{Name: "make", Status: "completed", Conclusion: "success"}}}}}
+	got := apiRun(r)
+	if got.Label != "#4" || !got.Fork || got.PR != 4 || len(got.Checks) != 1 {
+		t.Fatalf("run: %+v", got)
+	}
+	c := got.Checks[0]
+	if c.RunID != "r1" || c.LogPrefix != "a" || len(c.Steps) != 1 || c.Steps[0].Name != "make" || !c.Completed.Equal(t0.Add(time.Second)) {
+		t.Fatalf("check: %+v", c)
+	}
+	push := apiRun(&store.Run{ID: "r2", Event: event.Event{Name: "push", Ref: "refs/heads/main"}})
+	if push.Label != "main" {
+		t.Fatalf("push label %q", push.Label)
+	}
+}
+
+func TestStateCarriesPRDetails(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	base := h.git("rev-parse", "HEAD")
+	sha := h.pr(8, repo, map[string]string{"same.txt": "s"})
+	upd := time.Date(2026, 10, 14, 11, 0, 0, 0, time.UTC)
+	h.fake.SetPRs(repo, gh.Head{PR: 8, Title: "Feature", Author: "matt", Updated: upd, Ref: "feat", SHA: sha, HeadRepo: repo, BaseRef: "main", BaseSHA: base})
+	h.poll()
+	for _, it := range h.d.State().Repos[0].Items {
+		if it.PR == 8 {
+			if it.Label != "#8" || it.Title != "Feature" || it.Author != "matt" || !it.Updated.Equal(upd) {
+				t.Fatalf("item: %+v", it)
+			}
+			return
+		}
+	}
+	t.Fatal("PR 8 not in state")
 }

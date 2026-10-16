@@ -224,7 +224,7 @@ func streamLog(ctx context.Context, c *api.Client, id string) error {
 			if err != nil {
 				return err
 			}
-			if run.Finished() {
+			if run.Done() {
 				return nil
 			}
 			if !waiting {
@@ -249,7 +249,7 @@ func streamLog(ctx context.Context, c *api.Client, id string) error {
 func waitRun(ctx context.Context, c *api.Client, id string) (*api.Run, error) {
 	for {
 		run, err := c.Run(ctx, id)
-		if err != nil || run.Finished() {
+		if err != nil || run.Done() {
 			return run, err
 		}
 		time.Sleep(pollEvery)

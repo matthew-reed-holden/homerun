@@ -237,12 +237,12 @@ func TestHTTPRunStatus(t *testing.T) {
 		t.Fatalf("start: %+v %v", resp, err)
 	}
 	run, err := c.Run(ctx, resp.RunID)
-	if err != nil || run.Status != "queued" || run.Finished() {
+	if err != nil || run.Status != "queued" || run.Done() {
 		t.Fatalf("queued run: %+v %v", run, err)
 	}
 	release()
 	deadline := time.Now().Add(15 * time.Second)
-	for !run.Finished() {
+	for !run.Done() {
 		if time.Now().After(deadline) {
 			t.Fatalf("run never finished: %+v", run)
 		}

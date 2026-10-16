@@ -1,8 +1,10 @@
 package daemon
 
 import (
+	"fmt"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/matthew-reed-holden/homerun/internal/api"
 	"github.com/matthew-reed-holden/homerun/internal/store"
@@ -51,8 +53,8 @@ func (d *Daemon) State() api.State {
 							continue
 						}
 						overlaid[c.Name] = true
-						ac := byName[c.Name]
-						ac.Name, ac.Status, ac.Conclusion, ac.RunID = c.Name, c.Status, c.Conclusion, run.ID
+						ac := apiCheck(c, run.ID)
+						ac.URL = byName[c.Name].URL
 						byName[c.Name] = ac
 					}
 				}
@@ -66,6 +68,7 @@ func (d *Daemon) State() api.State {
 		}
 		st.Repos = append(st.Repos, r)
 	}
+	st.Runs = recentRuns(runs)
 	return st
 }
 
@@ -75,4 +78,46 @@ func (d *Daemon) finished(id string) bool {
 	r := d.runs[id]
 	// A run awaiting requeue never writes to its log again.
 	return r == nil || r.Status == "done" || r.Status == "cancelled" || r.Status == "requeue"
+}
+
+func apiCheck(c *store.Check, runID string) api.Check {
+	ac := api.Check{Name: c.Name, Status: c.Status, Conclusion: c.Conclusion, RunID: runID,
+		Started: c.Started, Completed: c.Completed, LogPrefix: c.LogPrefix}
+	for _, s := range c.Steps {
+		ac.Steps = append(ac.Steps, api.Step(s))
+	}
+	return ac
+}
+
+func apiRun(r *store.Run) api.Run {
+	label := strings.TrimPrefix(r.Event.Ref, "refs/heads/")
+	if r.Event.PR != 0 {
+		label = fmt.Sprintf("#%d", r.Event.PR)
+	}
+	out := api.Run{ID: r.ID, Repo: r.Repo, Label: label, PR: r.Event.PR, SHA: r.Event.SHA, Fork: r.Event.Fork,
+		Status: r.Status, Created: r.Created, Started: r.Started, Finished: r.Finished, Checks: make([]api.Check, 0, len(r.Checks))}
+	for _, c := range r.Checks {
+		out.Checks = append(out.Checks, apiCheck(c, r.ID))
+	}
+	return out
+}
+
+const recentFinished = 20
+
+// recentRuns puts what is happening now first, then the newest finished runs.
+func recentRuns(newestFirst []*store.Run) []api.Run {
+	var running, queued, rest []api.Run
+	for _, r := range newestFirst {
+		switch r.Status {
+		case "running":
+			running = append(running, apiRun(r))
+		case "queued":
+			queued = append(queued, apiRun(r))
+		default:
+			if len(rest) < recentFinished {
+				rest = append(rest, apiRun(r))
+			}
+		}
+	}
+	return append(append(running, queued...), rest...)
 }

@@ -15,24 +15,41 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 )
 
+type Step struct {
+	Name       string    `json:"name"`
+	Stage      string    `json:"stage,omitempty"`
+	Status     string    `json:"status"`
+	Conclusion string    `json:"conclusion,omitempty"`
+	Started    time.Time `json:"started,omitzero"`
+	Completed  time.Time `json:"completed,omitzero"`
+}
+
 type Check struct {
-	Name       string `json:"name"`
-	Status     string `json:"status"`
-	Conclusion string `json:"conclusion,omitempty"`
-	URL        string `json:"url,omitempty"`
-	RunID      string `json:"run_id,omitempty"`
+	Name       string    `json:"name"`
+	Status     string    `json:"status"`
+	Conclusion string    `json:"conclusion,omitempty"`
+	URL        string    `json:"url,omitempty"`
+	RunID      string    `json:"run_id,omitempty"`
+	Started    time.Time `json:"started,omitzero"`
+	Completed  time.Time `json:"completed,omitzero"`
+	Steps      []Step    `json:"steps,omitempty"`
+	LogPrefix  string    `json:"log_prefix,omitempty"`
 }
 
 type Item struct {
-	Label  string  `json:"label"`
-	PR     int     `json:"pr,omitempty"`
-	Ref    string  `json:"ref,omitempty"`
-	SHA    string  `json:"sha"`
-	URL    string  `json:"url,omitempty"`
-	Fork   bool    `json:"fork,omitempty"`
-	Checks []Check `json:"checks"`
+	Label   string    `json:"label"` // "#N" for a PR, the branch name otherwise
+	PR      int       `json:"pr,omitempty"`
+	Ref     string    `json:"ref,omitempty"`
+	SHA     string    `json:"sha"`
+	URL     string    `json:"url,omitempty"`
+	Fork    bool      `json:"fork,omitempty"`
+	Title   string    `json:"title,omitempty"`
+	Author  string    `json:"author,omitempty"`
+	Updated time.Time `json:"updated,omitzero"`
+	Checks  []Check   `json:"checks"`
 }
 
 type Repo struct {
@@ -44,18 +61,27 @@ type Repo struct {
 
 type State struct {
 	Repos []Repo `json:"repos"`
+	Runs  []Run  `json:"runs"` // running, then queued, then the 20 newest others
 }
 
 // Run is one local run as the daemon tracks it. Status is queued, running,
 // done, cancelled or requeue; only queued and running change again.
 type Run struct {
-	ID     string  `json:"id"`
-	Status string  `json:"status"`
-	Checks []Check `json:"checks"`
+	ID       string    `json:"id"`
+	Repo     string    `json:"repo"`
+	Label    string    `json:"label"` // "#N" or the branch name
+	PR       int       `json:"pr,omitempty"`
+	SHA      string    `json:"sha"`
+	Fork     bool      `json:"fork,omitempty"`
+	Status   string    `json:"status"`
+	Created  time.Time `json:"created"`
+	Started  time.Time `json:"started,omitzero"`
+	Finished time.Time `json:"finished,omitzero"`
+	Checks   []Check   `json:"checks"`
 }
 
-// Finished reports whether the run will not change again.
-func (r *Run) Finished() bool { return r.Status != "queued" && r.Status != "running" }
+// Done reports whether the run will not change again.
+func (r *Run) Done() bool { return r.Status != "queued" && r.Status != "running" }
 
 type StartRequest struct {
 	Repo string `json:"repo"`

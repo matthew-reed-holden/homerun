@@ -1,6 +1,9 @@
 package gh
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type Head struct {
 	PR       int
@@ -11,6 +14,8 @@ type Head struct {
 	BaseSHA  string
 	HeadRepo string
 	URL      string
+	Author   string
+	Updated  time.Time
 }
 
 type Check struct {

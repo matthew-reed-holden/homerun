@@ -125,10 +125,7 @@ func (d *Daemon) handleRun(w http.ResponseWriter, r *http.Request) {
 	run := d.runs[id]
 	var out api.Run
 	if run != nil {
-		out = api.Run{ID: run.ID, Status: run.Status, Checks: make([]api.Check, 0, len(run.Checks))}
-		for _, c := range run.Checks {
-			out.Checks = append(out.Checks, api.Check{Name: c.Name, Status: c.Status, Conclusion: c.Conclusion, RunID: run.ID})
-		}
+		out = apiRun(run)
 	}
 	d.mu.Unlock()
 	if run == nil {

@@ -99,6 +99,7 @@ func (c *Client) PullRequests(ctx context.Context, repo string) ([]Head, error) 
 		for _, p := range prs {
 			out = append(out, Head{
 				PR: p.GetNumber(), Title: p.GetTitle(), URL: p.GetHTMLURL(),
+				Author: p.GetUser().GetLogin(), Updated: p.GetUpdatedAt().Time,
 				Ref: p.GetHead().GetRef(), SHA: p.GetHead().GetSHA(), HeadRepo: p.GetHead().GetRepo().GetFullName(),
 				BaseRef: p.GetBase().GetRef(), BaseSHA: p.GetBase().GetSHA(),
 			})
