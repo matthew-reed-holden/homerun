@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -156,5 +157,35 @@ func TestLoadRepoRejectsDirSymlink(t *testing.T) {
 	}
 	if _, err := LoadRepo(dir); err == nil {
 		t.Fatal("want error")
+	}
+}
+
+func TestSecretDetailIsLocalOnly(t *testing.T) {
+	ctx := context.Background()
+	_, err := (Secret{Cmd: "echo oops-detail >&2; exit 3"}).Resolve(ctx)
+	if err == nil || strings.Contains(err.Error(), "oops-detail") {
+		t.Fatalf("error must not carry stderr: %v", err)
+	}
+	if got := Detail(err); got != "oops-detail" {
+		t.Errorf("Detail = %q", got)
+	}
+
+	_, err = (Secret{Cmd: "printf 'line1\\nline2\\n' >&2; exit 1"}).Resolve(ctx)
+	if got := Detail(err); got != "line1" {
+		t.Errorf("first line: %q", got)
+	}
+
+	_, err = (Secret{Cmd: "head -c 500 /dev/zero | tr '\\0' a >&2; exit 1"}).Resolve(ctx)
+	if got := Detail(err); len(got) != 200 {
+		t.Errorf("want 200 chars, got %d", len(got))
+	}
+
+	_, err = (Secret{Cmd: "printf '\\033]52;c;aGk=\\007\\033[31mbad\\033[0m\\n' >&2; exit 1"}).Resolve(ctx)
+	if got := Detail(err); got != "bad" {
+		t.Errorf("sanitised: %q", got)
+	}
+
+	if Detail(nil) != "" || Detail(errors.New("x")) != "" {
+		t.Error("want empty detail")
 	}
 }

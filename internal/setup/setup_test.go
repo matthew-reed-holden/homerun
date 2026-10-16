@@ -331,3 +331,14 @@ func TestDoctorHidesConfigParseError(t *testing.T) {
 		t.Fatalf("err=%v\n%s", err, out.String())
 	}
 }
+
+func TestDoctorShowsSecretCommandError(t *testing.T) {
+	fakeTools(t, "0.2.89")
+	cfg := filepath.Join(t.TempDir(), "config.yml")
+	os.WriteFile(cfg, []byte("app:\n  id: 1\n  private_key: {cmd: \"echo vault locked >&2; exit 1\"}\n"), 0o600)
+	var out bytes.Buffer
+	Doctor(context.Background(), cfg, &out)
+	if !strings.Contains(out.String(), "command failed: exit status 1: vault locked") {
+		t.Fatalf("detail missing:\n%s", out.String())
+	}
+}

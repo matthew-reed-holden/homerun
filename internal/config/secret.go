@@ -2,12 +2,15 @@ package config
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 )
 
 // Secret is a value from one of three sources. Plain strings are allowed:
@@ -48,6 +51,10 @@ func (s Secret) Resolve(ctx context.Context) (string, error) {
 		out, err := exec.CommandContext(ctx, "sh", "-c", s.Cmd).Output()
 		if err != nil {
 			// The error carries only the exit status; stdout may hold part of the secret.
+			var ee *exec.ExitError
+			if errors.As(err, &ee) {
+				err = &cmdError{ExitError: ee, stderr: string(ee.Stderr)}
+			}
 			return "", fmt.Errorf("command failed: %w", err)
 		}
 		return strings.TrimRight(string(out), "\r\n"), nil
@@ -59,4 +66,32 @@ func (s Secret) Resolve(ctx context.Context) (string, error) {
 		return v, nil
 	}
 	return s.Value, nil
+}
+
+// cmdError keeps stderr out of Error() because the error can reach public check
+// summaries; only Detail exposes it, for output that stays on this machine.
+type cmdError struct {
+	*exec.ExitError
+	stderr string
+}
+
+func (e *cmdError) Error() string { return e.ExitError.Error() }
+func (e *cmdError) Unwrap() error { return e.ExitError }
+
+// Detail returns the first line of a failed secret command's stderr, for local
+// display only.
+func Detail(err error) string {
+	var ce *cmdError
+	if !errors.As(err, &ce) {
+		return ""
+	}
+	for _, l := range strings.Split(ce.stderr, "\n") {
+		if l = strings.TrimSpace(termsafe.Line(l)); l != "" {
+			if r := []rune(l); len(r) > 200 {
+				l = string(r[:200])
+			}
+			return l
+		}
+	}
+	return ""
 }

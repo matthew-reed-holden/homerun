@@ -90,6 +90,9 @@ func loadClient(ctx context.Context, path string) (*config.User, *gh.Client, err
 	}
 	key, err := cfg.App.PrivateKey.Resolve(ctx)
 	if err != nil {
+		if d := config.Detail(err); d != "" {
+			return nil, nil, fmt.Errorf("app.private_key: %w: %s", err, d)
+		}
 		return nil, nil, fmt.Errorf("app.private_key: %w", err)
 	}
 	c, err := gh.New(cfg.App.ID, []byte(key))

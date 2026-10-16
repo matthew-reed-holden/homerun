@@ -92,6 +92,9 @@ func checkConfig(ctx context.Context, cfgPath string, cfg *config.User, check fu
 		return
 	}
 	key, err := cfg.App.PrivateKey.Resolve(ctx)
+	if d := config.Detail(err); d != "" {
+		err = fmt.Errorf("%w: %s", err, d)
+	}
 	check("GitHub App private key source resolves", err)
 	if err != nil {
 		return
