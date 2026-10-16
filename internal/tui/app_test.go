@@ -373,6 +373,8 @@ func TestClickBounds(t *testing.T) {
 	var checks []api.Check
 	for i := 0; i < 40; i++ {
 		checks = append(checks, api.Check{Name: "c", Status: "completed", Conclusion: "success", RunID: "r1", LogPrefix: "c"})
+	}
+	for i := 0; i < 40; i++ {
 		items = append(items, api.Item{Label: "b", Ref: "b", SHA: "abc1234567", Checks: checks})
 	}
 	st.Repos[0].Items = items
