@@ -608,6 +608,20 @@ func (m *model) wheel(mo tea.Mouse) {
 	m.tree.move(d)
 }
 
+// selectedItem is the item the main pane shows, so actions never disagree with
+// it: the first item while the repos panel is focused (its cursor is stale then).
+func (m *model) selectedItem() *api.Item {
+	switch m.left {
+	case paneRepos:
+		if r := m.repo(); len(r.Items) > 0 {
+			return &r.Items[0]
+		}
+	case paneItems:
+		return m.item()
+	}
+	return nil
+}
+
 // target is what r reruns: the selected run, or the selected (or first) item.
 func (m *model) target() (req api.StartRequest, fork bool, author string, ok bool) {
 	if m.left == paneRuns {
@@ -622,13 +636,7 @@ func (m *model) target() (req api.StartRequest, fork bool, author string, ok boo
 		return req, r.Fork, "", true
 	}
 	repo := m.repo()
-	it := m.item()
-	if m.left == paneRepos {
-		it = nil
-		if len(repo.Items) > 0 {
-			it = &repo.Items[0]
-		}
-	}
+	it := m.selectedItem()
 	if it == nil {
 		return req, false, "", false
 	}
@@ -701,8 +709,8 @@ func (m *model) open() tea.Cmd {
 	if c, _, ok := m.tree.selected(); ok && m.focus == paneMain {
 		u = c.URL
 	}
-	if u == "" && m.left != paneRuns {
-		if it := m.item(); it != nil {
+	if u == "" {
+		if it := m.selectedItem(); it != nil {
 			u = it.URL
 		}
 	}
@@ -724,7 +732,7 @@ func (m *model) copySHA() tea.Cmd {
 		if r := m.run(); r != nil {
 			sha = r.SHA
 		}
-	} else if it := m.item(); it != nil {
+	} else if it := m.selectedItem(); it != nil {
 		sha = it.SHA
 	}
 	if sha == "" {

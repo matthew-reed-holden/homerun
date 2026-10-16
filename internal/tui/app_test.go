@@ -541,3 +541,24 @@ func TestHelpPopup(t *testing.T) {
 		t.Fatal("any key closes help")
 	}
 }
+
+func TestActionsFollowMainPaneFromRepos(t *testing.T) {
+	m, f := newTestModel(t)
+	var opened []string
+	old := openURL
+	openURL = func(u string) error { opened = append(opened, u); return nil }
+	t.Cleanup(func() { openURL = old })
+	keysIn(m, "j", "j", "1") // items cursor on #2, but panel 1 shows main
+	keysIn(m, "y")
+	if !strings.Contains(m.status, "fd387ab") {
+		t.Fatalf("status %q", m.status)
+	}
+	m.Update(keysIn(m, "o")())
+	if len(opened) != 1 || opened[0] != "https://github.com/o/e2e/tree/main" {
+		t.Fatalf("opened %v", opened)
+	}
+	m.Update(keysIn(m, "r")())
+	if len(f.starts) != 1 || f.starts[0] != (api.StartRequest{Repo: "o/e2e", Ref: "main"}) {
+		t.Fatalf("starts %+v", f.starts)
+	}
+}
