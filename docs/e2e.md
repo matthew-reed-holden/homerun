@@ -87,7 +87,7 @@ From a second account, fork the repo and open a PR.
 
 - [ ] Only a neutral `homerun` check "fork PR: awaiting approval" appears;
       nothing runs.
-- [ ] In the TUI the PR row shows `[fork]`; `r` asks for confirmation and any
+- [ ] In the TUI the PR row shows `◇ … awaiting`; `r` asks for confirmation and any
       key but `y` cancels.
 - [ ] Approve with `y` (or `./bin/homerun run --pr N matthew-reed-holden/homerun-e2e`).
 - [ ] `host` and `checks / shellcheck` are neutral "skipped: fork PR";
