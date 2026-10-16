@@ -588,6 +588,34 @@ jobs:
 	}
 }
 
+func TestUnmappedLabelNamedAlongsideUnmappedReusableJob(t *testing.T) {
+	h := newHarness(t, map[string]string{
+		".github/workflows/ci.yml": `name: CI
+on: push
+jobs:
+  win: {runs-on: windows-latest, steps: [{run: "true"}]}
+  call: {uses: ./.github/workflows/inner.yml}
+`,
+		".github/workflows/inner.yml": `name: Inner
+on: workflow_call
+jobs:
+  in: {runs-on: macos-latest, steps: [{run: "true"}]}
+`})
+	h.poll()
+	h.output("{\"jobID\":\"win\",\"matrix\":{},\"msg\":\"\U0001F6A7  Skipping unsupported platform -- Try running with `-P windows-latest=...`\"}\n" +
+		"{\"job\":\"call/Inner/in\",\"jobID\":\"in\",\"matrix\":{},\"msg\":\"\U0001F6A7  Skipping unsupported platform -- Try running with `-P macos-latest=...`\"}\n")
+	sha := h.push(nil)
+	h.poll()
+	cs := h.waitDone(sha)
+	win, call := cs["homerun / CI / win"], cs["homerun / CI / call"]
+	if win == nil || win.Conclusion != "failure" || !strings.Contains(lastSummary(win), "runs-on label windows-latest is not mapped") {
+		t.Errorf("win: %+v summary %q", win, lastSummary(win))
+	}
+	if call == nil || call.Conclusion != "failure" || !strings.HasPrefix(lastSummary(call), "homerun error: a job homerun could not map") {
+		t.Errorf("call: %+v summary %q", call, lastSummary(call))
+	}
+}
+
 func TestUnmappedRunsOnLabelFails(t *testing.T) {
 	h := newHarness(t, map[string]string{".github/workflows/ci.yml": `name: CI
 on: push

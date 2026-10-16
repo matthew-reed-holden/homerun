@@ -376,13 +376,15 @@ func (t *tracker) finish(actErr error) {
 	case actErr != nil && !t.failed:
 		conclusion, summary = "failure", "homerun error: act exited without finishing this job: "+t.d.scrub(actErr.Error())
 	}
-	if conclusion == "skipped" {
+	if conclusion == "skipped" || t.unmapped && conclusion == "failure" {
 		// A job act started cannot have been skipped for a failed need. act
 		// starts and then silently drops a job whose runs-on label has no
 		// platform, sending no result and exiting 0.
 		for leg, cs := range t.legs {
 			for _, c := range cs {
-				if !t.d.completed(c) {
+				// With an unmapped job elsewhere, only a known label is certain; the
+				// rest get the generic summary below.
+				if !t.d.completed(c) && (conclusion == "skipped" || t.labels[leg] != "") {
 					msg := "homerun error: act never finished this job; its runs-on label may not be mapped; add it under platforms: in your user config"
 					if l := t.labels[leg]; l != "" {
 						msg = "homerun error: runs-on label " + l + " is not mapped; add it under platforms: in your user config"
