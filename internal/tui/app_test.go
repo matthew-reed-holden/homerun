@@ -562,3 +562,44 @@ func TestActionsFollowMainPaneFromRepos(t *testing.T) {
 		t.Fatalf("starts %+v", f.starts)
 	}
 }
+
+func TestInsertedRunKeepsSelectionAndLog(t *testing.T) {
+	m, f := newTestModel(t)
+	f.logs["r1"] = runLog
+	keysIn(m, "3", "j", "j", "l") // runs: r1 → main
+	drain(m, keysIn(m, "enter"))
+	if m.log == nil {
+		t.Fatal("no log")
+	}
+	st := fixture()
+	st.Runs = append([]api.Run{st.Runs[0], {ID: "r4", Repo: "o/e2e", Label: "main", SHA: "fd387ab0000", Status: "queued"}}, st.Runs[1:]...)
+	m.Update(stateMsg{&st})
+	if r := m.run(); r == nil || r.ID != "r1" || m.log == nil {
+		t.Fatalf("run %+v log %v", m.run(), m.log)
+	}
+}
+
+func TestInsertedItemKeepsSelectionAndLog(t *testing.T) {
+	m, f := newTestModel(t)
+	f.logs["r1"] = runLog
+	keysIn(m, "j", "l", "j", "j", "j") // #1 → main
+	drain(m, keysIn(m, "enter"))
+	st := fixture()
+	items := st.Repos[0].Items
+	st.Repos[0].Items = append([]api.Item{items[0], {Label: "dev", Ref: "dev", SHA: "1234567890"}}, items[1:]...)
+	m.Update(stateMsg{&st})
+	if it := m.item(); it == nil || it.Label != "#1" || m.log == nil {
+		t.Fatalf("item %+v log %v", m.item(), m.log)
+	}
+}
+
+func TestInsertedRepoKeepsSelection(t *testing.T) {
+	m, _ := newTestModel(t)
+	keysIn(m, "1", "j") // o/backend
+	st := fixture()
+	st.Repos = append([]api.Repo{{Name: "o/aaa"}}, st.Repos...)
+	m.Update(stateMsg{&st})
+	if m.repo().Name != "o/backend" {
+		t.Fatalf("repo %q", m.repo().Name)
+	}
+}

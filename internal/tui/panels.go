@@ -10,7 +10,9 @@ import (
 	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 )
 
-type entry struct{ icon, text string }
+// entry is one row; key names what it shows, so a refresh that inserts or
+// reorders rows keeps the cursor on the same thing.
+type entry struct{ icon, text, key string }
 
 // list is one numbered left-hand panel. It owns its cursor and scroll offset
 // so a state refresh never moves the user's place.
@@ -23,6 +25,15 @@ type list struct {
 }
 
 func (l *list) set(rows []entry) {
+	if l.cur < len(l.rows) {
+		k := l.rows[l.cur].key
+		for i, r := range rows {
+			if r.key == k {
+				l.rows, l.cur = rows, i
+				return
+			}
+		}
+	}
 	l.rows = rows
 	l.cur = clampInt(l.cur, 0, len(rows)-1)
 }
@@ -86,14 +97,14 @@ func repoEntries(st api.State) []entry {
 	out := make([]entry, 0, len(st.Repos))
 	for _, r := range st.Repos {
 		if r.Error != "" {
-			out = append(out, entry{"✘", termsafe.Line(r.Name) + " (error)"})
+			out = append(out, entry{"✘", termsafe.Line(r.Name) + " (error)", r.Name})
 			continue
 		}
 		var all []api.Check
 		for _, it := range r.Items {
 			all = append(all, it.Checks...)
 		}
-		out = append(out, entry{Rollup(all), termsafe.Line(r.Name)})
+		out = append(out, entry{Rollup(all), termsafe.Line(r.Name), r.Name})
 	}
 	return out
 }
@@ -116,7 +127,7 @@ func itemEntries(r api.Repo, now time.Time) []entry {
 	var out []entry
 	for _, it := range r.Items {
 		if it.PR == 0 {
-			out = append(out, entry{Rollup(it.Checks), termsafe.Line(it.Label) + "  " + short(it.SHA)})
+			out = append(out, entry{Rollup(it.Checks), termsafe.Line(it.Label) + "  " + short(it.SHA), r.Name + ":" + it.Label})
 			continue
 		}
 		icon, text := Rollup(it.Checks), termsafe.Line(it.Label+" "+it.Title)
@@ -128,10 +139,10 @@ func itemEntries(r api.Repo, now time.Time) []entry {
 		} else if a := age(it.Updated, now); a != "" {
 			text += " " + a
 		}
-		out = append(out, entry{icon, text})
+		out = append(out, entry{icon, text, r.Name + ":" + it.Label})
 	}
 	for _, u := range r.Unhandled {
-		out = append(out, entry{" ", dim.Render("not handled: " + termsafe.Line(u))})
+		out = append(out, entry{" ", dim.Render("not handled: " + termsafe.Line(u)), "unhandled:" + r.Name + ":" + u})
 	}
 	return out
 }
@@ -142,13 +153,13 @@ func runEntries(runs []api.Run, now time.Time) []entry {
 		name := termsafe.Line(repoShort(r.Repo) + " " + r.Label)
 		switch r.Status {
 		case "running":
-			out = append(out, entry{"⟳", name + " " + timing("in_progress", r.Started, time.Time{}, now)})
+			out = append(out, entry{"⟳", name + " " + timing("in_progress", r.Started, time.Time{}, now), r.ID})
 		case "queued", "requeue":
-			out = append(out, entry{"·", name + " " + r.Status})
+			out = append(out, entry{"·", name + " " + r.Status, r.ID})
 		case "cancelled":
-			out = append(out, entry{"○", strings.TrimSpace(name + " cancelled " + age(r.Finished, now))})
+			out = append(out, entry{"○", strings.TrimSpace(name + " cancelled " + age(r.Finished, now)), r.ID})
 		default:
-			out = append(out, entry{Rollup(r.Checks), strings.TrimSpace(name + " " + timing("completed", r.Started, r.Finished, now) + " " + age(r.Finished, now))})
+			out = append(out, entry{Rollup(r.Checks), strings.TrimSpace(name + " " + timing("completed", r.Started, r.Finished, now) + " " + age(r.Finished, now)), r.ID})
 		}
 	}
 	return out

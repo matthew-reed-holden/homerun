@@ -28,7 +28,7 @@ func dims(t *testing.T, s string, w, h int) {
 func rows(n int) []entry {
 	var out []entry
 	for i := range n {
-		out = append(out, entry{"✔", fmt.Sprintf("row %d", i)})
+		out = append(out, entry{"✔", fmt.Sprintf("row %d", i), fmt.Sprint(i)})
 	}
 	return out
 }
@@ -123,10 +123,10 @@ func TestRepoAndRunEntries(t *testing.T) {
 		{Repo: "o/e2e", Label: "main", Status: "done", Started: now.Add(-11 * time.Minute), Finished: now.Add(-10 * time.Minute),
 			Checks: []api.Check{{Status: "completed", Conclusion: "success"}}},
 	}
-	want := []entry{{"⟳", "e2e #1 1m12s…"}, {"·", "e2e main queued"}, {"✔", "e2e main 1m00s 10m"}}
+	want := []entry{{"⟳", "e2e #1 1m12s…", ""}, {"·", "e2e main queued", ""}, {"✔", "e2e main 1m00s 10m", ""}}
 	got := runEntries(runs, now)
 	for i := range want {
-		if got[i] != want[i] {
+		if got[i].icon != want[i].icon || got[i].text != want[i].text {
 			t.Errorf("run %d: %+v want %+v", i, got[i], want[i])
 		}
 	}
