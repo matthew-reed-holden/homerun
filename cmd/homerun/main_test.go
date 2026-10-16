@@ -83,3 +83,12 @@ func TestSummarize(t *testing.T) {
 		}
 	}
 }
+
+func TestStartLine(t *testing.T) {
+	if got := startLine(&api.StartResponse{RunID: "r1"}); got != "Queued run r1." {
+		t.Errorf("got %q", got)
+	}
+	if got := startLine(&api.StartResponse{RunID: "r2", Message: "already running as run r2"}); got != "already running as run r2" {
+		t.Errorf("got %q", got)
+	}
+}

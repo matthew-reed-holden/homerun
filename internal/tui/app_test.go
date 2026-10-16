@@ -18,12 +18,13 @@ import (
 )
 
 type fakeDaemon struct {
-	mu      sync.Mutex
-	state   api.State
-	starts  []api.StartRequest
-	cancels []string
-	logs    map[string]string
-	reloads int
+	mu        sync.Mutex
+	state     api.State
+	starts    []api.StartRequest
+	cancels   []string
+	logs      map[string]string
+	reloads   int
+	startResp *api.StartResponse
 }
 
 func newFake(t *testing.T, st api.State) (*fakeDaemon, *api.Client) {
@@ -40,8 +41,12 @@ func newFake(t *testing.T, st api.State) (*fakeDaemon, *api.Client) {
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		f.mu.Lock()
 		f.starts = append(f.starts, req)
+		resp := api.StartResponse{RunID: "r9"}
+		if f.startResp != nil {
+			resp = *f.startResp
+		}
 		f.mu.Unlock()
-		_ = json.NewEncoder(w).Encode(api.StartResponse{RunID: "r9"})
+		_ = json.NewEncoder(w).Encode(resp)
 	})
 	mux.HandleFunc("POST /v1/runs/{id}/cancel", func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
@@ -678,5 +683,14 @@ func TestFetchTimesOut(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("fetch hung on a wedged daemon")
+	}
+}
+
+func TestRerunShowsTheDaemonsMessageForAnActiveRun(t *testing.T) {
+	m, f := newTestModel(t)
+	f.startResp = &api.StartResponse{RunID: "r2", Message: "already running as run r2"}
+	m.Update(keysIn(m, "r")())
+	if m.status != "already running as run r2" {
+		t.Fatalf("status %q", m.status)
 	}
 }

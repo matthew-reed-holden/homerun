@@ -681,7 +681,7 @@ func (m *model) start(req api.StartRequest) tea.Cmd {
 		switch {
 		case err != nil:
 			return statusMsg("rerun failed: " + err.Error())
-		case resp.RunID == "":
+		case resp.RunID == "", resp.Message != "":
 			return statusMsg(resp.Message)
 		}
 		return statusMsg("queued run " + resp.RunID)

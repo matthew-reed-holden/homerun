@@ -200,7 +200,7 @@ func cmdRun(args []string) error {
 		fmt.Println(resp.Message)
 		return nil
 	}
-	fmt.Printf("Queued run %s.\n", resp.RunID)
+	fmt.Println(startLine(resp))
 	if err := streamLog(ctx, c, resp.RunID); err != nil {
 		return err
 	}
@@ -211,6 +211,15 @@ func cmdRun(args []string) error {
 	msg, err := summarize(run)
 	fmt.Println(msg)
 	return err
+}
+
+// startLine prefers the daemon's message, which says when the run is one that
+// was already going.
+func startLine(resp *api.StartResponse) string {
+	if resp.Message != "" {
+		return resp.Message
+	}
+	return "Queued run " + resp.RunID + "."
 }
 
 const pollEvery = time.Second
