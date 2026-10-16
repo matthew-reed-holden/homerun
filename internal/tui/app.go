@@ -639,7 +639,7 @@ func (m *model) target() (req api.StartRequest, fork bool, author string, ok boo
 		if r.PR == 0 {
 			req.Ref = r.Label
 		}
-		return req, r.Fork, "", true
+		return req, r.Fork, m.author(r.Repo, r.PR), true
 	}
 	repo := m.repo()
 	it := m.selectedItem()
@@ -651,6 +651,21 @@ func (m *model) target() (req api.StartRequest, fork bool, author string, ok boo
 		req.Ref = it.Ref
 	}
 	return req, it.Fork, it.Author, true
+}
+
+// author is who opened PR pr in repo, for a run, which does not carry it.
+func (m *model) author(repo string, pr int) string {
+	for _, r := range m.state.Repos {
+		if r.Name != repo {
+			continue
+		}
+		for _, it := range r.Items {
+			if it.PR == pr {
+				return it.Author
+			}
+		}
+	}
+	return ""
 }
 
 func (m *model) start(req api.StartRequest) tea.Cmd {

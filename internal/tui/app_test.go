@@ -435,6 +435,9 @@ func TestForkRunNeedsYFromRuns(t *testing.T) {
 	if cmd := keysIn(m, "r"); cmd != nil || m.dlg == nil {
 		t.Fatal("rerun of a fork run must ask")
 	}
+	if !strings.Contains(ansi.Strip(m.render()), "Run fork PR e2e#2 from @bob?") {
+		t.Fatalf("prompt:\n%s", ansi.Strip(m.render()))
+	}
 	m.Update(statusMsg("queued run r8")) // a late status covers the prompt
 	if m.dlg != nil {
 		t.Fatal("covered confirmation stayed armed")

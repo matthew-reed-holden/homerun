@@ -30,8 +30,8 @@ func TestOnlyYConfirms(t *testing.T) {
 }
 
 func TestForkDialogSanitisesAuthor(t *testing.T) {
-	d := forkDialog(api.StartRequest{PR: 7}, "bob\x1b]52;c;aGk=\x07", func(api.StartRequest) tea.Cmd { return nil })
-	if strings.Contains(d.view(80), "\x1b]52") || !strings.Contains(ansi.Strip(d.view(80)), "#7 from @bob") {
+	d := forkDialog(api.StartRequest{Repo: "o/e\x1b[2J2e", PR: 7}, "bob\x1b]52;c;aGk=\x07", func(api.StartRequest) tea.Cmd { return nil })
+	if v := d.view(80); strings.Contains(v, "\x1b]52") || strings.Contains(v, "\x1b[2J") || !strings.Contains(ansi.Strip(v), "Run fork PR e2e#7 from @bob?") {
 		t.Fatalf("view: %q", d.view(80))
 	}
 	c := cancelDialog("r9", "#4", func(string) tea.Cmd { return nil })

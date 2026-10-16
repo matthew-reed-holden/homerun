@@ -56,7 +56,7 @@ func forkDialog(req api.StartRequest, author string, start func(api.StartRequest
 		who = " from @" + termsafe.Line(author)
 	}
 	return &dialog{
-		title:   fmt.Sprintf("Run fork PR #%d%s?", req.PR, who),
+		title:   fmt.Sprintf("Run fork PR %s#%d%s?", termsafe.Line(repoShort(req.Repo)), req.PR, who),
 		body:    "Untrusted code runs on this machine (sandboxed, no secrets).\n\n[y] run · any other key cancels",
 		confirm: start(req),
 	}
