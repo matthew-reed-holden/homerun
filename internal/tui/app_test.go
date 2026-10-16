@@ -603,3 +603,37 @@ func TestInsertedRepoKeepsSelection(t *testing.T) {
 		t.Fatalf("repo %q", m.repo().Name)
 	}
 }
+
+func TestCancelFromItems(t *testing.T) {
+	m, _ := newTestModel(t)
+	st := fixture()
+	st.Repos[0].Items[1].Checks[1].Status, st.Repos[0].Items[1].Checks[1].RunID = "in_progress", "r7"
+	m.Update(stateMsg{&st})
+	keysIn(m, "j", "c") // #1 has a running local check
+	if m.dlg == nil || !strings.Contains(ansi.Strip(m.render()), "Cancel run r7") {
+		t.Fatalf("no cancel dialog for r7; status %q", m.status)
+	}
+	keysIn(m, "esc")
+	st = fixture()
+	m.Update(stateMsg{&st})
+	keysIn(m, "c") // #1's checks are finished, but run r2 for its SHA is running
+	if m.dlg == nil || !strings.Contains(ansi.Strip(m.render()), "Cancel run r2") {
+		t.Fatalf("no cancel dialog for r2; status %q", m.status)
+	}
+	keysIn(m, "esc", "1", "c") // panel 1 shows main, which has nothing live
+	if m.dlg != nil || !strings.Contains(m.status, "nothing to cancel") {
+		t.Fatalf("dialog %v status %q", m.dlg, m.status)
+	}
+}
+
+func TestCancelRefusesFinished(t *testing.T) {
+	m, _ := newTestModel(t)
+	keysIn(m, "3", "j", "j", "c") // r1 is done
+	if m.dlg != nil || !strings.Contains(m.status, "nothing to cancel") {
+		t.Fatalf("finished run: dialog %v status %q", m.dlg, m.status)
+	}
+	keysIn(m, "l", "c") // its pass check is completed
+	if m.dlg != nil || !strings.Contains(m.status, "nothing to cancel") {
+		t.Fatalf("finished check: dialog %v status %q", m.dlg, m.status)
+	}
+}

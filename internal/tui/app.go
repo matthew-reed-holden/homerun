@@ -684,20 +684,41 @@ func (m *model) cancelRun(id string) tea.Cmd {
 	}
 }
 
-func (m *model) cancel() {
-	id, label := "", ""
-	if m.left == paneRuns && m.focus != paneMain {
-		if r := m.run(); r != nil {
-			id, label = r.ID, r.Label
-		}
-	} else if c, _, ok := m.tree.selected(); ok && m.focus == paneMain {
-		id, label = c.RunID, displayName(c.Name)
-	} else if m.left == paneRuns {
-		if r := m.run(); r != nil {
-			id, label = r.ID, r.Label
+func live(status string) bool { return status == "running" || status == "queued" }
+
+// itemRun is the local run working on the selected item: one of its unfinished
+// checks' runs, else a live run for the same commit (still before its checks start).
+func (m *model) itemRun() (id, label string) {
+	it := m.selectedItem()
+	if it == nil {
+		return "", ""
+	}
+	for _, c := range it.Checks {
+		if c.Status != "completed" && c.RunID != "" {
+			return c.RunID, it.Label
 		}
 	}
-	if id == "" {
+	repo := m.repo().Name
+	for _, r := range m.state.Runs {
+		if r.Repo == repo && r.SHA == it.SHA && live(r.Status) {
+			return r.ID, it.Label
+		}
+	}
+	return "", ""
+}
+
+func (m *model) cancel() {
+	id, label, finished := "", "", false
+	if c, _, ok := m.tree.selected(); ok && m.focus == paneMain {
+		id, label, finished = c.RunID, displayName(c.Name), c.Status == "completed"
+	} else if m.left == paneRuns {
+		if r := m.run(); r != nil {
+			id, label, finished = r.ID, r.Label, !live(r.Status)
+		}
+	} else {
+		id, label = m.itemRun()
+	}
+	if id == "" || finished {
 		m.say("nothing to cancel here")
 		return
 	}
