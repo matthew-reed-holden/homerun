@@ -21,10 +21,36 @@ type node struct{ check, step int } // step -1 is the job row
 
 func (t *tree) reset(cs []api.Check) { t.checks, t.open, t.cur, t.off = cs, map[string]bool{}, 0, 0 }
 
-// update swaps in fresh checks for the same item, keeping fold choices and cursor.
+// update swaps in fresh checks for the same item, keeping fold choices and the
+// cursor on the same job or step: steps appended above it, or the auto-opened
+// job changing, must not slide it onto another check that c or o would act on.
 func (t *tree) update(cs []api.Check) {
+	name, step, had := "", -1, false
+	if c, s, ok := t.selected(); ok {
+		name, step, had = c.Name, s, true
+	}
 	t.checks = cs
-	t.cur = clampInt(t.cur, 0, len(t.nodes())-1)
+	ns := t.nodes()
+	if had {
+		job := -1
+		for i, n := range ns {
+			if cs[n.check].Name != name {
+				continue
+			}
+			if n.step == step {
+				t.cur = i
+				return
+			}
+			if n.step == -1 {
+				job = i
+			}
+		}
+		if job >= 0 { // its step is folded away or gone
+			t.cur = job
+			return
+		}
+	}
+	t.cur = clampInt(t.cur, 0, len(ns)-1)
 }
 
 // autoOpen names the job to unfold when the user has not chosen: the first

@@ -91,3 +91,40 @@ func TestTreeSanitises(t *testing.T) {
 		t.Fatalf("unsafe output: %q", out)
 	}
 }
+
+func TestTreeCursorStaysOnJobWhenStepsAppear(t *testing.T) {
+	a := api.Check{Name: "a", Status: "in_progress", Steps: []api.Step{{Name: "s1", Status: "completed", Conclusion: "success"}}}
+	b := api.Check{Name: "b", Status: "completed", Conclusion: "success", Steps: []api.Step{{Name: "y"}}}
+	var tr tree
+	tr.reset([]api.Check{a, b})
+	tr.end() // b
+	a.Steps = append(a.Steps, api.Step{Name: "s2", Status: "in_progress"})
+	tr.update([]api.Check{a, b})
+	if c, step, _ := tr.selected(); c.Name != "b" || step != -1 {
+		t.Fatalf("cursor on %s step %d", c.Name, step)
+	}
+}
+
+func TestTreeCursorStaysWhenAutoOpenMoves(t *testing.T) {
+	a := api.Check{Name: "a", Status: "in_progress", Steps: []api.Step{{Name: "x1"}, {Name: "x2"}}}
+	b := api.Check{Name: "b", Status: "completed", Conclusion: "success"}
+	c := api.Check{Name: "c", Status: "in_progress", Steps: []api.Step{{Name: "z"}}}
+	var tr tree
+	tr.reset([]api.Check{a, b, c})
+	tr.end() // c's job row
+	c.Status, c.Conclusion = "completed", "failure"
+	tr.update([]api.Check{a, b, c})
+	if got, step, _ := tr.selected(); got.Name != "c" || step != -1 {
+		t.Fatalf("cursor on %s step %d", got.Name, step)
+	}
+	b.Steps = []api.Step{{Name: "y1"}, {Name: "y2"}}
+	tr.reset([]api.Check{a, b})
+	tr.move(3) // b
+	tr.toggle()
+	tr.end() // b's y2, below a's open steps
+	a.Status, a.Conclusion = "completed", "success"
+	tr.update([]api.Check{a, b})
+	if got, step, _ := tr.selected(); got.Name != "b" || step != 1 {
+		t.Fatalf("step cursor on %s step %d", got.Name, step)
+	}
+}
