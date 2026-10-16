@@ -494,3 +494,31 @@ func TestGiveUpCheckIsNotRepeatedWhenGitHubRejectsItsUpdate(t *testing.T) {
 	h.poll()
 	assertGaveUp(t, h, r)
 }
+
+func TestRequeuedSetupFailureIsNotRepeatedWhenGitHubRejectsItsUpdate(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	sha := h.push(map[string]string{".github/workflows/ci.yml": "on: [push\n"})
+	stale, _ := strandedRun(t, h, sha)
+	h.rep.failUpdates(1 << 30)
+	h.d.recover(context.Background())
+	for i := 0; i < 3; i++ {
+		h.poll()
+	}
+	if st := storedStatuses(t, h); st[stale.ID] != "cancelled" {
+		t.Fatalf("run not cancelled: %v", st)
+	}
+	if n := countChecks(h, sha, "homerun"); n != 1 {
+		t.Fatalf("want one homerun check, got %d", n)
+	}
+	h.rep.failUpdates(0)
+	h.poll()
+	if n := countChecks(h, sha, "homerun"); n != 1 {
+		t.Fatalf("want one homerun check after updates succeed, got %d", n)
+	}
+	for _, c := range h.fake.Checks(repo, sha) {
+		if c.Name == "homerun" && c.Status != "completed" {
+			t.Errorf("homerun check left %s", c.Status)
+		}
+	}
+}

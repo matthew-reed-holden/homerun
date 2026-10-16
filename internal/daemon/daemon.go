@@ -1022,7 +1022,8 @@ func (d *Daemon) requeue(ctx context.Context) {
 		case errors.As(err, &active):
 			// Another run already covers this commit.
 			d.setStatus(r, "cancelled")
-		case err == nil && run == nil, errors.As(err, &reported):
+		// A pending update still means the setup check exists; the flush completes it.
+		case err == nil && run == nil, errors.As(err, &reported), errors.Is(err, errUpdatePending):
 			d.setStatus(r, "cancelled")
 		case err != nil:
 			slog.Error("re-queueing run", "run", r.ID, "err", err)
