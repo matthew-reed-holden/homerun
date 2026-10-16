@@ -246,8 +246,11 @@ func (m *model) cycle(d int) {
 }
 
 // moved reacts to a cursor change in panel p: a new repo means new items.
-func (m *model) moved(p pane) {
+func (m *model) moved(p pane, before int) {
 	if p == paneRepos {
+		if m.repos.cur == before {
+			return
+		}
 		m.items.home()
 		m.items.set(itemEntries(m.repo(), m.now()))
 	}
@@ -289,6 +292,7 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 
 func (m *model) leftKey(k tea.KeyPressMsg) {
 	l := m.list(m.focus)
+	before := l.cur
 	switch {
 	case key.Matches(k, keys.Down):
 		l.move(1)
@@ -304,7 +308,7 @@ func (m *model) leftKey(k tea.KeyPressMsg) {
 	default:
 		return
 	}
-	m.moved(m.focus)
+	m.moved(m.focus, before)
 }
 
 func (m *model) mainKey(k tea.KeyPressMsg) tea.Cmd {
@@ -537,7 +541,7 @@ func (m *model) bar() string {
 
 // click and wheel map a mouse position onto the layout.
 func (m *model) click(mo tea.Mouse) {
-	if m.dlg != nil {
+	if m.dlg != nil || mo.Button != tea.MouseLeft {
 		return
 	}
 	lay := m.layout()
@@ -546,8 +550,12 @@ func (m *model) click(mo tea.Mouse) {
 		for i, p := range lay.panels {
 			if y < lay.heights[i] {
 				m.focusLeft(p)
-				m.list(p).click(y)
-				m.moved(p)
+				l := m.list(p)
+				before := l.cur
+				if y < lay.heights[i]-1 {
+					l.click(y)
+				}
+				m.moved(p, before)
 				return
 			}
 			y -= lay.heights[i]
@@ -555,12 +563,15 @@ func (m *model) click(mo tea.Mouse) {
 		return
 	}
 	m.focus = paneMain
-	if m.log == nil {
+	if m.log == nil && mo.Y < lay.bodyH-1 {
 		m.tree.click(mo.Y)
 	}
 }
 
 func (m *model) wheel(mo tea.Mouse) {
+	if m.dlg != nil {
+		return
+	}
 	d := 1
 	if mo.Button == tea.MouseWheelUp {
 		d = -1
@@ -570,8 +581,10 @@ func (m *model) wheel(mo tea.Mouse) {
 		y := mo.Y
 		for i, p := range lay.panels {
 			if y < lay.heights[i] {
-				m.list(p).move(d)
-				m.moved(p)
+				l := m.list(p)
+				before := l.cur
+				l.move(d)
+				m.moved(p, before)
 				return
 			}
 			y -= lay.heights[i]

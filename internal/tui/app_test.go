@@ -292,3 +292,107 @@ func TestQuitKey(t *testing.T) {
 		t.Fatal("q is not quit")
 	}
 }
+
+func TestStaleLogMessagesIgnored(t *testing.T) {
+	m, f := newTestModel(t)
+	f.logs["r1"] = runLog
+	keysIn(m, "j", "l", "j", "j", "j")
+	drain(m, keysIn(m, "enter"))
+	lines, ended := len(m.log.lines), m.log.ended
+	m.Update(logMsg{m.gen - 1, "stale"})
+	m.Update(logEndMsg{m.gen - 1, errors.New("boom")})
+	if len(m.log.lines) != lines || m.log.ended != ended {
+		t.Fatal("stale message reached the log")
+	}
+	old := m.gen
+	keysIn(m, "esc")
+	m.Update(logMsg{old, "late"})
+	m.Update(logEndMsg{old, nil})
+	if m.log != nil {
+		t.Fatal("log reappeared")
+	}
+}
+
+func TestLogErrorEndsStream(t *testing.T) {
+	m, _ := newTestModel(t)
+	m.c = api.NewClient(filepath.Join(t.TempDir(), "missing"))
+	keysIn(m, "j", "l", "j", "j", "j")
+	drain(m, keysIn(m, "enter"))
+	if m.log == nil || !strings.HasPrefix(m.log.ended, "stream ended") {
+		t.Fatalf("ended: %+v", m.log)
+	}
+}
+
+func TestRefreshKeepsLogOpen(t *testing.T) {
+	m, f := newTestModel(t)
+	f.logs["r1"] = runLog
+	keysIn(m, "j", "l", "j", "j", "j")
+	drain(m, keysIn(m, "enter"))
+	st := fixture()
+	m.Update(stateMsg{&st})
+	if m.log == nil {
+		t.Fatal("refresh closed the log")
+	}
+}
+
+func TestSearchTypingDoesNotQuit(t *testing.T) {
+	m, f := newTestModel(t)
+	f.logs["r1"] = runLog
+	keysIn(m, "j", "l", "j", "j", "j")
+	drain(m, keysIn(m, "enter"))
+	keysIn(m, "/")
+	if !m.log.typing {
+		t.Fatal("search did not open")
+	}
+	if cmd := keysIn(m, "q"); cmd != nil {
+		if _, ok := cmd().(tea.QuitMsg); ok {
+			t.Fatal("q quit while typing")
+		}
+	}
+	if m.log.input.Value() != "q" {
+		t.Fatalf("input %q", m.log.input.Value())
+	}
+}
+
+func TestRepoNoOpKeepsItemsAndLog(t *testing.T) {
+	m, f := newTestModel(t)
+	f.logs["r1"] = runLog
+	keysIn(m, "j", "l", "j", "j", "j")
+	drain(m, keysIn(m, "enter"))
+	m.focus = paneRepos // "1" itself re-targets the main pane and legitimately drops the log
+	keysIn(m, "k")
+	if m.items.cur != 1 || m.log == nil {
+		t.Fatalf("items.cur=%d log=%v", m.items.cur, m.log)
+	}
+}
+
+func TestClickBounds(t *testing.T) {
+	m, _ := newTestModel(t)
+	lay := m.layout()
+	m.click(tea.Mouse{X: 5, Y: lay.heights[0] + lay.heights[1] - 1, Button: tea.MouseLeft}) // items bottom border
+	if m.items.cur != 0 {
+		t.Fatalf("border click selected %d", m.items.cur)
+	}
+	m.focus = paneItems
+	m.click(tea.Mouse{X: 50, Y: lay.bodyH, Button: tea.MouseLeft}) // key bar
+	if m.tree.cur != 0 {
+		t.Fatal("bar click reached tree")
+	}
+}
+
+func TestDialogBlocksWheelAndRightClick(t *testing.T) {
+	m, _ := newTestModel(t)
+	keysIn(m, "?")
+	if m.dlg == nil {
+		t.Fatal("no dialog")
+	}
+	m.wheel(tea.Mouse{X: 5, Y: 8, Button: tea.MouseWheelDown})
+	if m.items.cur != 0 {
+		t.Fatal("wheel under dialog")
+	}
+	m.dlg = nil
+	m.click(tea.Mouse{X: 5, Y: 8, Button: tea.MouseRight})
+	if m.items.cur != 0 || m.focus != paneItems {
+		t.Fatal("right click acted")
+	}
+}
