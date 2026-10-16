@@ -757,3 +757,69 @@ func TestLogTagsAreUniquePerCheck(t *testing.T) {
 		}
 	}
 }
+
+func TestCollidingWorkflowNamesUseFilePaths(t *testing.T) {
+	job := func(id string) string {
+		return "name: CI\non: push\njobs:\n  " + id + ": {name: test, runs-on: ubuntu-latest, steps: [{run: \"true\"}]}\n"
+	}
+	h := newHarness(t, map[string]string{
+		".github/workflows/ci.yml":  job("a"),
+		".github/workflows/ci2.yml": job("b"),
+	})
+	h.poll()
+	// The stub prints the same output for every workflow; each job id appears in one.
+	h.output(`{"jobID":"a","matrix":{},"msg":"line a"}
+{"jobID":"a","matrix":{},"jobResult":"success","msg":"done"}
+{"jobID":"b","matrix":{},"msg":"line b"}
+{"jobID":"b","matrix":{},"jobResult":"failure","msg":"failed"}
+`)
+	sha := h.push(nil)
+	h.poll()
+	run := h.waitRun(sha, "done")
+	got := map[string]*store.Check{}
+	for _, c := range run.Checks {
+		got[c.Name] = c
+	}
+	logPath, _ := h.d.store.LogPath(run.ID)
+	logb, _ := os.ReadFile(logPath)
+	want := map[string]string{
+		"homerun / .github/workflows/ci.yml / test":  "success",
+		"homerun / .github/workflows/ci2.yml / test": "failure",
+	}
+	if len(got) != 2 {
+		t.Fatalf("checks: %v", got)
+	}
+	prefixes := map[string]bool{}
+	for name, concl := range want {
+		c := got[name]
+		if c == nil || c.Conclusion != concl {
+			t.Fatalf("%s: %+v (all: %v)", name, c, got)
+		}
+		prefixes[c.LogPrefix] = true
+		if !strings.Contains(string(logb), "["+c.LogPrefix+"] ") {
+			t.Errorf("no [%s] line in log:\n%s", c.LogPrefix, logb)
+		}
+	}
+	if len(prefixes) != 2 {
+		t.Errorf("log prefixes not distinct: %v", prefixes)
+	}
+}
+
+func TestWorkflowCollidingWithExtraCheckIsRenamed(t *testing.T) {
+	h := newHarness(t, map[string]string{
+		".github/workflows/c.yml": "name: checks\non: push\njobs:\n  lint: {runs-on: ubuntu-latest, steps: [{run: \"true\"}]}\n",
+	})
+	h.poll()
+	sha := h.push(map[string]string{".github/homerun.yml": "checks:\n  lint: \"true\"\n"})
+	h.poll()
+	run := h.waitRun(sha, "done")
+	names := map[string]bool{}
+	for _, c := range run.Checks {
+		names[c.Name] = true
+	}
+	for _, n := range []string{"homerun / checks / lint", "homerun / .github/workflows/c.yml / lint"} {
+		if !names[n] || len(names) != 2 {
+			t.Fatalf("want %s in %v", n, names)
+		}
+	}
+}

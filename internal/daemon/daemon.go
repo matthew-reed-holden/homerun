@@ -523,6 +523,18 @@ func (d *Daemon) plan(ctx context.Context, m *git.Mirror, run *store.Run) (*plan
 	for _, name := range rc.CheckNames() {
 		run.Checks = append(run.Checks, &store.Check{Name: CheckName("checks", name), Extra: name})
 	}
+	// GitHub shows only the latest check per name, so a duplicate could hide a failure.
+	count := map[string]int{}
+	for _, c := range run.Checks {
+		count[c.Name]++
+	}
+	for _, w := range p.workflows {
+		for _, j := range w.Jobs {
+			if c := d.findCheck(run, w.Path, j.ID); c != nil && count[c.Name] > 1 {
+				c.Name = CheckName(w.Path, j.Name)
+			}
+		}
+	}
 	d.mu.Lock()
 	d.unhandled[ev.Repo] = unhandled
 	d.mu.Unlock()
