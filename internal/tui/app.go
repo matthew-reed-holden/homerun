@@ -80,11 +80,17 @@ func Run(c *api.Client) error {
 
 func (m *model) Init() tea.Cmd { return tea.Batch(m.fetch(), tick()) }
 
+// fetchTimeout bounds a state request, so a wedged daemon cannot pile them up
+// behind the 2s tick.
+var fetchTimeout = 2 * time.Second
+
 func tick() tea.Cmd { return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return tickMsg{} }) }
 
 func (m *model) fetch() tea.Cmd {
 	return func() tea.Msg {
-		s, err := m.c.State(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
+		defer cancel()
+		s, err := m.c.State(ctx)
 		if err != nil {
 			return errMsg{err}
 		}

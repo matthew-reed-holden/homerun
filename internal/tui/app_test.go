@@ -654,3 +654,29 @@ func TestOpenLogAtRepeatedStepName(t *testing.T) {
 		t.Fatalf("log top: %v", m.log != nil && m.log.top == 2)
 	}
 }
+
+func TestFetchTimesOut(t *testing.T) {
+	old := fetchTimeout
+	fetchTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { fetchTimeout = old })
+	sock := filepath.Join(t.TempDir(), "s")
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release := make(chan struct{})
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { <-release })}
+	go func() { _ = srv.Serve(ln) }()
+	t.Cleanup(func() { close(release); _ = srv.Close() })
+	m := newModel(api.NewClient(sock), func() time.Time { return now })
+	done := make(chan tea.Msg, 1)
+	go func() { done <- m.fetch()() }()
+	select {
+	case msg := <-done:
+		if _, ok := msg.(errMsg); !ok {
+			t.Fatalf("msg %T", msg)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("fetch hung on a wedged daemon")
+	}
+}
