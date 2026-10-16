@@ -388,3 +388,86 @@ func TestRequeueForUnregisteredRepoRunsNoGit(t *testing.T) {
 		t.Fatalf("runs: %v", st)
 	}
 }
+
+const missingSHA = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+
+func unfetchableRun(t *testing.T, h *harness, age time.Duration) *store.Run {
+	t.Helper()
+	r, _ := strandedRun(t, h, missingSHA)
+	r.Created = time.Now().Add(-age)
+	if err := h.d.store.Save(r); err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+func assertGaveUp(t *testing.T, h *harness, r *store.Run) {
+	t.Helper()
+	if st := storedStatuses(t, h); st[r.ID] != "cancelled" {
+		t.Fatalf("run not cancelled: %v", st)
+	}
+	want := "homerun error: commit " + missingSHA[:7] + " can no longer be fetched (force-pushed or deleted); not running it"
+	n := 0
+	for _, c := range h.fake.Checks(repo, missingSHA) {
+		if c.Name == "homerun" {
+			n++
+			if len(c.Updates) == 0 || c.Updates[len(c.Updates)-1].Summary != want {
+				t.Errorf("updates %+v", c.Updates)
+			}
+		}
+	}
+	if n != 1 {
+		t.Fatalf("want one homerun check, got %d", n)
+	}
+	h.poll()
+	if n := countChecks(h, missingSHA, "homerun"); n != 1 {
+		t.Errorf("further poll retried: %d homerun checks", n)
+	}
+}
+
+func TestUnfetchableRequeueIsGivenUpAfterTheCap(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	r := unfetchableRun(t, h, 0)
+	h.d.recover(context.Background())
+	for i := 0; i < 18; i++ {
+		h.poll()
+	}
+	if st := storedStatuses(t, h); st[r.ID] != "requeue" {
+		t.Fatalf("below the cap: %v", st)
+	}
+	h.d.mu.Lock()
+	n := h.d.runs[r.ID].Requeues
+	h.d.mu.Unlock()
+	if n != 19 {
+		t.Fatalf("Requeues = %d, want 19", n)
+	}
+	h.poll()
+	assertGaveUp(t, h, r)
+}
+
+func TestUnfetchableRequeueIsGivenUpAfterADay(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	r := unfetchableRun(t, h, 25*time.Hour)
+	h.d.recover(context.Background())
+	assertGaveUp(t, h, r)
+}
+
+func TestOtherRequeueFailuresAreNotGivenUpEarly(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	r, _ := strandedRun(t, h, h.push(map[string]string{"a.txt": "a"}))
+	r.Created = time.Now().Add(-25 * time.Hour)
+	if err := h.d.store.Save(r); err != nil {
+		t.Fatal(err)
+	}
+	h.d.opts.Source = &flakySource{Fake: h.fake, fails: 25}
+	h.d.recover(context.Background())
+	for i := 0; i < 22; i++ {
+		h.poll()
+	}
+	if st := storedStatuses(t, h); st[r.ID] != "requeue" {
+		t.Fatalf("given up on a non-fetch error: %v", st)
+	}
+}

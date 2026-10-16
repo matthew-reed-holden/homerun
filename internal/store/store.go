@@ -56,6 +56,8 @@ type Run struct {
 	Created  time.Time   `json:"created"`
 	Started  time.Time   `json:"started,omitzero"`
 	Finished time.Time   `json:"finished,omitzero"`
+	// Requeues counts failed attempts to start this run again after a restart.
+	Requeues int `json:"requeues,omitempty"`
 }
 
 type State struct {

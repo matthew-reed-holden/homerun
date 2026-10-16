@@ -350,6 +350,14 @@ func (d *Daemon) awaitingRequeue(ev event.Event) bool {
 	return false
 }
 
+// errUnfetchable marks a commit the mirror cannot produce even after fetching.
+var errUnfetchable = errors.New("commit not in the mirror")
+
+const (
+	maxRequeues    = 20
+	maxRequeueTime = 24 * time.Hour
+)
+
 // activeError reports that ev's commit already has a queued or running run.
 type activeError struct{ RunID string }
 
@@ -447,7 +455,7 @@ func (d *Daemon) start(ctx context.Context, ev event.Event, handover func(tracke
 			return nil, err
 		}
 		if _, err := m.RevParse(ctx, ev.SHA); err != nil {
-			return nil, fmt.Errorf("commit %s is not fetchable yet: %w", ev.SHA, err)
+			return nil, fmt.Errorf("commit %s is not fetchable yet: %w: %w", ev.SHA, errUnfetchable, err)
 		}
 	}
 	run := &store.Run{ID: store.NewID(), Repo: ev.Repo, Event: ev, Status: "queued", Created: time.Now()}
@@ -1013,6 +1021,29 @@ func (d *Daemon) requeue(ctx context.Context) {
 			d.setStatus(r, "cancelled")
 		case err != nil:
 			slog.Error("re-queueing run", "run", r.ID, "err", err)
+			d.mu.Lock()
+			r.Requeues++
+			giveUp := errors.Is(err, errUnfetchable) && (r.Requeues >= maxRequeues || time.Since(r.Created) > maxRequeueTime)
+			if serr := d.store.Save(r); serr != nil {
+				slog.Warn("save run", "run", r.ID, "err", serr)
+			}
+			d.mu.Unlock()
+			if !giveUp {
+				continue
+			}
+			// A force-pushed commit never comes back; retrying would block the
+			// event and log on every poll forever.
+			gone := fmt.Errorf("commit %s can no longer be fetched (force-pushed or deleted); not running it", short(r.Event.SHA))
+			if errors.As(d.failSetup(rctx, r.Event, gone), &reported) {
+				d.setStatus(r, "cancelled")
+			}
 		}
 	}
+}
+
+func short(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
+	}
+	return sha
 }
