@@ -186,9 +186,16 @@ func TestParserSteps(t *testing.T) {
 func TestStepConclusionFailsClosed(t *testing.T) {
 	p := &Parser{}
 	evs := p.Feed([]byte(`{"jobID":"a","matrix":{},"msg":"x","stage":"Main","step":"s","stepID":["0"],"stepResult":"weird"}`))
+	seen := false
 	for _, e := range evs {
-		if e.Kind == StepFinished && e.Conclusion != "failure" {
-			t.Fatalf("conclusion %q", e.Conclusion)
+		if e.Kind == StepFinished {
+			seen = true
+			if e.Conclusion != "failure" {
+				t.Fatalf("conclusion %q", e.Conclusion)
+			}
 		}
+	}
+	if !seen {
+		t.Fatalf("no StepFinished in %+v", evs)
 	}
 }
