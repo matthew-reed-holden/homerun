@@ -49,6 +49,8 @@ func TestGolden(t *testing.T) {
 		{"wide-items-badges", 120, 40, []string{"j"}},
 		{"wide-pr-summary", 120, 40, []string{"j"}},
 		{"standard-pr-summary", 80, 24, []string{"j"}},
+		{"wide-pr-description", 120, 40, []string{"j", "enter", "l"}},
+		{"standard-pr-description", 80, 24, []string{"j", "enter", "l"}},
 		{"wide-runs", 120, 40, []string{"3"}},
 		{"wide-fork-dialog", 120, 40, []string{"j", "j", "r"}},
 		{"standard-tree", 80, 24, []string{"j", "l"}},
@@ -69,7 +71,15 @@ func TestGolden(t *testing.T) {
 					Body: "Makes the thing\noptional.", Checks: []pr.Check{{Name: "pass", Status: "completed", Conclusion: "success"}, {Name: "fail", Status: "completed", Conclusion: "failure", Required: true}}}}})
 			}
 			m.Update(tea.WindowSizeMsg{Width: c.w, Height: c.h})
-			keysIn(m, c.keys...)
+			if strings.HasSuffix(c.name, "-pr-description") {
+				recordDetailTicks(t)
+				m.o.PRs = &pr.Fake{Details: map[string]*pr.Detail{"o/e2e#1": detailFixture()}}
+				for _, k := range c.keys {
+					run(m, m.key(press(k)))
+				}
+			} else {
+				keysIn(m, c.keys...)
+			}
 			golden(t, c.name, ansi.Strip(m.render()))
 		})
 	}

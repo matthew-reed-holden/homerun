@@ -177,7 +177,7 @@ func requiredFailing(s pr.Summary) bool {
 // summaryBlock is the PR summary and its rule for the main pane, inner wide;
 // nil unless the pane shows a PR row with list data.
 func (m *model) summaryBlock(inner int) []string {
-	if _, _, _, errText := m.source(); m.log != nil || errText != "" {
+	if _, _, _, errText := m.source(); m.pr != nil || m.log != nil || errText != "" {
 		return nil
 	}
 	var it *api.Item

@@ -6,7 +6,7 @@ import "charm.land/bubbles/v2/key"
 // generated from it, so they cannot disagree with what the keys do.
 type keyMap struct {
 	Panel1, Panel2, Panel3, Next, Prev, Into, Back       key.Binding
-	Up, Down, Top, Bottom, Fold, Enter, Esc              key.Binding
+	Up, Down, Top, Bottom, Fold, Enter, Esc, Move        key.Binding
 	Search, NextMatch, PrevMatch, NextFail, Follow, Zoom key.Binding
 	Rerun, Cancel, Open, Copy, Reload, Help, Quit        key.Binding
 }
@@ -30,6 +30,7 @@ var keys = keyMap{
 	Fold:      bind("space", "fold", "space"),
 	Enter:     bind("enter", "log", "enter"),
 	Esc:       bind("esc", "back", "esc"),
+	Move:      bind("j/k", "up/down", "j", "k"), // for the bar only; Up and Down do the moving
 	Search:    bind("/", "search", "/"),
 	NextMatch: bind("n", "next match", "n"),
 	PrevMatch: bind("N", "prev match", "N"),
@@ -51,6 +52,8 @@ const (
 	inPanels barCtx = iota
 	inTree
 	inLog
+	inPRSections
+	inPRDesc
 )
 
 func (k keyMap) bar(c barCtx) []key.Binding {
@@ -59,6 +62,10 @@ func (k keyMap) bar(c barCtx) []key.Binding {
 		return []key.Binding{k.Enter, k.Fold, k.Back, k.Rerun, k.Cancel, k.Open, k.Help, k.Quit}
 	case inLog:
 		return []key.Binding{k.Search, k.NextMatch, k.NextFail, k.Follow, k.Zoom, k.Esc, k.Help}
+	case inPRSections:
+		return []key.Binding{k.Move, k.Into, k.Esc, k.Open, k.Help, k.Quit}
+	case inPRDesc:
+		return []key.Binding{k.Move, k.Open, k.Esc}
 	}
 	return []key.Binding{k.Panel1, k.Into, k.Rerun, k.Cancel, k.Open, k.Help, k.Quit}
 }
@@ -66,7 +73,7 @@ func (k keyMap) bar(c barCtx) []key.Binding {
 func (k keyMap) groups() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Panel1, k.Next, k.Prev, k.Into, k.Back, k.Reload, k.Help, k.Quit},
-		{k.Up, k.Down, k.Top, k.Bottom, k.Fold, k.Enter},
+		{k.Up, k.Down, k.Move, k.Top, k.Bottom, k.Fold, k.Enter},
 		{k.Search, k.NextMatch, k.PrevMatch, k.NextFail, k.Follow, k.Zoom, k.Esc},
 		{k.Rerun, k.Cancel, k.Open, k.Copy},
 	}

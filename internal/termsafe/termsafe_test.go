@@ -28,4 +28,7 @@ func TestText(t *testing.T) {
 	if got != "ab\n    cd\ne" {
 		t.Fatalf("got %q", got)
 	}
+	if got := Text("a\x1b]52;c;aGk=\x07\nb\tc\r"); got != "a\nb    c" {
+		t.Fatalf("got %q", got)
+	}
 }

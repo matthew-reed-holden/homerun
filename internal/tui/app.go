@@ -24,6 +24,7 @@ const (
 	paneItems
 	paneRuns
 	paneMain
+	paneSections // inside a PR
 )
 
 type (
@@ -94,6 +95,8 @@ type model struct {
 	behind  map[string]int                // "repo#n" -> commits behind base
 	prRepo  string                        // the repo the list was last fetched for
 	prDelay time.Duration                 // the next list poll interval
+	pr      *prView                       // the open PR; nil on the dashboard
+	prGen   int                           // identifies the open PR so a stale fetch or tick is ignored
 
 	gen      int // identifies the current log stream so a stale one is ignored
 	nextLine func() tea.Cmd
@@ -204,6 +207,8 @@ func (m *model) list(p pane) *list {
 		return &m.repos
 	case paneRuns:
 		return &m.runs
+	case paneSections:
+		return &m.pr.secs
 	}
 	return &m.items
 }
@@ -212,6 +217,9 @@ func (m *model) refresh() {
 	m.repos.set(repoEntries(m.state))
 	m.items.set(m.itemRows())
 	m.runs.set(runEntries(m.state.Runs, m.now()))
+	if m.pr != nil {
+		m.syncSections()
+	}
 	m.syncMain()
 }
 
@@ -237,6 +245,12 @@ func itemSource(r api.Repo, it api.Item, now time.Time) (string, string, []api.C
 // source is what the main pane shows: a key naming its owner (so a refresh keeps
 // fold state but a new selection resets it), a title, checks, or an error.
 func (m *model) source() (key, title string, cs []api.Check, errText string) {
+	if p := m.pr; p != nil {
+		if r, it := m.prItem(); it != nil && p.section == 1 {
+			return itemSource(r, *it, m.now())
+		}
+		return fmt.Sprintf("pr:%s:%d", m.prRef(), p.section), m.prTitle(), nil, ""
+	}
 	switch m.left {
 	case paneRuns:
 		if r := m.run(); r != nil {
@@ -289,6 +303,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case listTickMsg:
 		return m, m.onTick()
+	case detailMsg:
+		return m, m.onDetail(msg)
+	case detailTickMsg:
+		return m, m.onDetailTick(msg)
 	case addedMsg:
 		if msg.err != nil {
 			m.dlg = addFailedDialog(msg.name, msg.err)
@@ -407,6 +425,9 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 	if m.log != nil && m.log.typing {
 		return m.log.typeKey(k)
 	}
+	if m.pr != nil && !key.Matches(k, keys.Quit) && !key.Matches(k, keys.Help) {
+		return m.prKeyPress(k)
+	}
 	switch {
 	case key.Matches(k, keys.Quit):
 		if n := m.activeRuns(); n > 0 && m.hosting() {
@@ -461,6 +482,9 @@ func (m *model) leftKey(k tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(k, keys.Bottom):
 		l.end()
 	case key.Matches(k, keys.Into):
+		if it := m.selectedItem(); key.Matches(k, keys.Enter) && m.o.PRs != nil && it != nil && it.PR > 0 {
+			return m.openPR(m.repo().Name, it.PR)
+		}
 		m.focus = paneMain
 		return nil
 	default:
@@ -631,6 +655,12 @@ func (m *model) layout() layout {
 		return layout{mainW: m.w, bodyH: bodyH}
 	}
 	leftW := 34
+	if m.pr != nil {
+		if m.w < 80 {
+			leftW = 26
+		}
+		return layout{leftW: leftW, mainW: m.w - leftW, bodyH: bodyH, panels: []pane{paneSections}, heights: []int{bodyH}}
+	}
 	if m.w < 80 {
 		leftW = 26
 		return layout{leftW: leftW, mainW: m.w - leftW, bodyH: bodyH, panels: []pane{m.left}, heights: []int{bodyH}}
@@ -682,6 +712,9 @@ func (m *model) render() string {
 }
 
 func (m *model) mainView(w, h int) string {
+	if m.pr != nil && m.pr.section == 0 {
+		return m.descView(w, h)
+	}
 	_, title, _, errText := m.source()
 	focused := m.focus == paneMain
 	switch {
@@ -700,11 +733,15 @@ func (m *model) mainView(w, h int) string {
 
 func (m *model) bar() string {
 	ctx := inPanels
-	if m.focus == paneMain {
+	switch {
+	case m.pr != nil && m.focus != paneMain:
+		ctx = inPRSections
+	case m.pr != nil && m.pr.section == 0:
+		ctx = inPRDesc
+	case m.focus == paneMain && m.log != nil:
+		ctx = inLog
+	case m.focus == paneMain:
 		ctx = inTree
-		if m.log != nil {
-			ctx = inLog
-		}
 	}
 	s := m.help.ShortHelpView(keys.bar(ctx))
 	if off := m.prOff(); off != "" {
@@ -731,6 +768,10 @@ func (m *model) click(mo tea.Mouse) tea.Cmd {
 		return nil
 	}
 	lay := m.layout()
+	if m.pr != nil {
+		m.prClick(mo, lay)
+		return nil
+	}
 	if mo.X < lay.leftW {
 		y := mo.Y
 		for i, p := range lay.panels {
@@ -763,6 +804,10 @@ func (m *model) wheel(mo tea.Mouse) tea.Cmd {
 		d = -1
 	}
 	lay := m.layout()
+	if m.pr != nil {
+		m.prWheel(d, lay, mo.X)
+		return nil
+	}
 	if mo.X < lay.leftW {
 		y := mo.Y
 		for i, p := range lay.panels {

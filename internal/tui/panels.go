@@ -15,7 +15,7 @@ import (
 // reorders rows keeps the cursor on the same thing.
 type entry struct{ icon, text, key string }
 
-// list is one numbered left-hand panel. It owns its cursor and scroll offset
+// list is one left-hand panel, numbered unless n is 0. It owns its cursor and scroll offset
 // so a state refresh never moves the user's place.
 type list struct {
 	n     int
@@ -68,7 +68,11 @@ func (l *list) view(w, h int, focused bool) string {
 		}
 		lines = append(lines, paint(r.icon)+" "+r.text)
 	}
-	return frame(fmt.Sprintf("%d %s", l.n, l.title), lines, w, h, focused)
+	title := l.title
+	if l.n > 0 {
+		title = fmt.Sprintf("%d %s", l.n, l.title)
+	}
+	return frame(title, lines, w, h, focused)
 }
 
 // frame draws a rounded box of exactly w×h cells with the title set into the
