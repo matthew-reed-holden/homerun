@@ -57,7 +57,7 @@ type model struct {
 	now func() time.Time
 	o   Options
 
-	hostErr  error // the last Host attempt's error
+	hostErr  error // the last Host attempt's error; ticks do not retry after one, R does
 	hostBusy bool  // a Host attempt is in flight
 
 	state     api.State
@@ -116,7 +116,8 @@ func (m *model) fetch() tea.Cmd {
 }
 
 // host starts the engine here when nobody serves the API: the daemon or the
-// TUI hosting it went away. Never more than one attempt at a time.
+// TUI hosting it went away. Never more than one attempt at a time. Ticks call
+// it only while the last attempt had no error; R calls it after one.
 func (m *model) host() tea.Cmd {
 	if m.o.Host == nil || m.hostBusy || (m.connected && m.err == nil) || m.hosting() {
 		return nil
@@ -239,7 +240,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
 	case stateMsg:
-		m.state, m.connected, m.err = *msg.s, true, nil
+		m.state, m.connected, m.err, m.hostErr = *msg.s, true, nil, nil
 		m.refresh()
 	case errMsg:
 		if m.err == nil {
@@ -247,6 +248,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.err = msg.err
 	case tickMsg:
+		if m.hostErr != nil {
+			return m, tea.Batch(m.fetch(), tick())
+		}
 		return m, tea.Batch(m.fetch(), tick(), m.host())
 	case hostMsg:
 		m.hostBusy, m.hostErr = false, msg.err
@@ -342,6 +346,9 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(k, keys.Prev):
 		m.cycle(-1)
 	case key.Matches(k, keys.Reload):
+		if m.hostErr != nil {
+			return m.host()
+		}
 		return m.reload()
 	case key.Matches(k, keys.Rerun):
 		return m.rerun()
@@ -567,7 +574,7 @@ func (m *model) render() string {
 		msg := "Start the daemon: homerun daemon\n\n(q to quit)"
 		switch {
 		case m.hostErr != nil:
-			msg = "homerun could not start: " + termsafe.Line(m.hostErr.Error()) + "\n\n(q to quit)"
+			msg = "homerun could not start: " + termsafe.Line(m.hostErr.Error()) + "\n\n(R to retry · q to quit)"
 		case m.err != nil:
 			msg = termsafe.Line(m.err.Error()) + "\n\n" + msg
 		}

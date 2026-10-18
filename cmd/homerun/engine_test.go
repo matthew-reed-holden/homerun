@@ -48,6 +48,10 @@ func TestTryHostLosesLockRaceBecomesClient(t *testing.T) {
 	go func() { done <- d.Run(ctx) }()
 	t.Cleanup(func() { cancel(); <-done })
 
+	e.source = func(context.Context) (*config.User, gh.Source, gh.Reporter, int64, error) {
+		t.Error("resolved the config and key although the lock is held")
+		return nil, nil, nil, 0, errors.New("locked")
+	}
 	hosting, err := e.tryHost()
 	if hosting || err != nil {
 		t.Fatalf("tryHost = %v, %v; want false, nil", hosting, err)
@@ -93,5 +97,34 @@ func TestTryHostDefersToAnsweringServer(t *testing.T) {
 		}}
 	if ok, err := second.tryHost(); ok || err != nil {
 		t.Fatalf("second tryHost = %v, %v; want false, nil", ok, err)
+	}
+}
+
+func TestShutdownCancelsPendingAttempt(t *testing.T) {
+	e := testEngine(t)
+	entered := make(chan struct{})
+	e.source = func(ctx context.Context) (*config.User, gh.Source, gh.Reporter, int64, error) {
+		close(entered) // a password-manager prompt the user never answers
+		<-ctx.Done()
+		return nil, nil, nil, 0, ctx.Err()
+	}
+	res := make(chan error, 1)
+	go func() { _, err := e.tryHost(); res <- err }()
+	<-entered
+	done := make(chan error, 1)
+	go func() { done <- e.shutdown() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("shutdown: %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("shutdown blocked behind a pending host attempt")
+	}
+	if err := <-res; err == nil {
+		t.Fatal("a cancelled attempt reported no error")
+	}
+	if e.hosting() {
+		t.Fatal("hosting after shutdown")
 	}
 }

@@ -852,11 +852,51 @@ func TestHostErrorShownBeforeData(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	s := ansi.Strip(m.render())
 	if !strings.Contains(s, "homerun could not start: no GitHub App configured; run: homerun setup") ||
-		!strings.Contains(s, "(q to quit)") || strings.Contains(s, "Start the daemon") {
+		!strings.Contains(s, "(R to retry · q to quit)") || strings.Contains(s, "Start the daemon") {
 		t.Fatalf("screen:\n%s", s)
 	}
 	m.Update(hostMsg{err: errors.New("act not found on PATH (see: homerun doctor)")})
 	if s := ansi.Strip(m.render()); !strings.Contains(s, "homerun could not start: act not found on PATH") {
 		t.Fatalf("a later host error is not shown:\n%s", s)
+	}
+}
+
+func TestHostErrorStopsAutoRetryUntilR(t *testing.T) {
+	calls := 0
+	_, c := newFake(t, api.State{})
+	m := newModel(c, func() time.Time { return now }, Options{
+		Host:    func() (bool, error) { calls++; return false, errors.New("app.private_key: command failed") },
+		Hosting: hosting(false),
+	})
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m.Update(errMsg{errors.New("unreachable")})
+	_, cmd := m.Update(tickMsg{})
+	if !hostAttempt(t, m, cmd) || calls != 1 {
+		t.Fatalf("first tick: %d calls", calls)
+	}
+	for range 2 {
+		m.Update(errMsg{errors.New("unreachable")})
+		_, cmd = m.Update(tickMsg{})
+		if hostAttempt(t, m, cmd) || calls != 1 {
+			t.Fatalf("a tick retried after a host error: %d calls", calls)
+		}
+	}
+	if !hostAttempt(t, m, keysIn(m, "R")) || calls != 2 {
+		t.Fatalf("R did not retry: %d calls", calls)
+	}
+}
+
+func TestHostErrorFromLaunchIsNotRetriedOnTicks(t *testing.T) {
+	calls := 0
+	_, c := newFake(t, api.State{})
+	m := newModel(c, func() time.Time { return now }, Options{
+		Host:    func() (bool, error) { calls++; return false, nil },
+		Hosting: hosting(false),
+		HostErr: errors.New("act not found on PATH (see: homerun doctor)"),
+	})
+	m.Update(errMsg{errors.New("unreachable")})
+	_, cmd := m.Update(tickMsg{})
+	if hostAttempt(t, m, cmd) || calls != 0 {
+		t.Fatalf("retried the launch's host error on a tick: %d calls", calls)
 	}
 }

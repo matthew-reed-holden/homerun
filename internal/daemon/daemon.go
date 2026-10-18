@@ -147,6 +147,17 @@ func lockState(dir, owner string) (*os.File, error) {
 	return f, nil
 }
 
+// Locked reports whether another process holds dir's engine lock, without
+// taking it, so a would-be host can step aside before resolving any secret.
+func Locked(dir string) bool {
+	f, err := os.OpenFile(filepath.Join(dir, "daemon.lock"), os.O_RDONLY, 0)
+	if err != nil {
+		return false
+	}
+	defer f.Close() // closing releases a lock this probe took
+	return errors.Is(syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB), syscall.EWOULDBLOCK)
+}
+
 func CheckName(workflow, job string) string { return "homerun / " + workflow + " / " + job }
 
 func (d *Daemon) config() *config.User {

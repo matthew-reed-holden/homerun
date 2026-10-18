@@ -31,6 +31,19 @@ type engine struct {
 	stop context.CancelFunc // nil until hosting
 	done chan error
 	d    *daemon.Daemon
+	// life bounds every attempt: shutdown cancels it, so quitting never waits
+	// on a secret command's prompt.
+	life context.Context
+	end  context.CancelFunc
+}
+
+func (e *engine) lifetime() context.Context {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.life == nil {
+		e.life, e.end = context.WithCancel(context.Background())
+	}
+	return e.life
 }
 
 // tryHost returns false, nil when a server answers or the lock race was lost.
@@ -41,10 +54,16 @@ func (e *engine) tryHost() (hosting bool, err error) {
 		return true, nil
 	}
 	sock := api.SocketPath()
-	if serving(sock) {
+	// A held lock means another engine, perhaps slow to answer: resolving the
+	// key (which may prompt) would only end in ErrLocked.
+	if serving(sock) || daemon.Locked(stateDir()) {
 		return false, nil
 	}
-	cfg, src, rep, appID, err := e.loadSource(context.Background())
+	life := e.lifetime()
+	cfg, src, rep, appID, err := e.loadSource(life)
+	if err == nil && life.Err() != nil {
+		err = life.Err()
+	}
 	if err != nil {
 		return false, err
 	}
@@ -106,6 +125,8 @@ func (e *engine) hosting() bool {
 // shutdown cancels and waits for Run and Serve; nil when not hosting. A
 // foreground engine cancels its runs on the way out.
 func (e *engine) shutdown() error {
+	e.lifetime()
+	e.end()
 	e.try.Lock()
 	defer e.try.Unlock()
 	e.mu.Lock()
