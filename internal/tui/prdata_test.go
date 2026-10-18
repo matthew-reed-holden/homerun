@@ -14,6 +14,7 @@ import (
 
 func prModel(t *testing.T, f *pr.Fake) *model {
 	t.Helper()
+	recordTicks(t)
 	st := fixture()
 	_, c := newFake(t, st)
 	m := newModel(c, func() time.Time { return now }, Options{PRs: f})
@@ -34,8 +35,22 @@ func runBatch(m *model, cmd tea.Cmd) {
 			runBatch(m, c)
 		}
 	case listMsg:
-		m.Update(msg)
+		_, c := m.Update(msg)
+		runBatch(m, c)
 	}
+}
+
+// recordTicks swaps listTick for one that notes its interval and returns at once.
+func recordTicks(t *testing.T) *[]time.Duration {
+	t.Helper()
+	var got []time.Duration
+	old := listTick
+	listTick = func(d time.Duration) tea.Cmd {
+		got = append(got, d)
+		return func() tea.Msg { return listTickMsg{} }
+	}
+	t.Cleanup(func() { listTick = old })
+	return &got
 }
 
 func TestListPolledForSelectedRepoOnly(t *testing.T) {
@@ -57,46 +72,75 @@ func TestListPolledForSelectedRepoOnly(t *testing.T) {
 func TestListPollInterval(t *testing.T) {
 	f := &pr.Fake{}
 	m := prModel(t, f)
+	ticks := recordTicks(t)
 	if m.prDelay != 60*time.Second {
 		t.Fatalf("initial %v", m.prDelay)
 	}
+	tick := func() {
+		_, c := m.Update(listTickMsg{})
+		runBatch(m, c)
+	}
+	tick()
 	f.Low = true
-	var got []time.Duration
-	for range 4 {
-		runBatch(m, func() tea.Msg { return listPoll(m.o.PRs, "o/e2e", []int{1}) })
-		got = append(got, m.prDelay)
-	}
-	want := []time.Duration{120 * time.Second, 240 * time.Second, 300 * time.Second, 300 * time.Second}
-	if !slices.Equal(got, want) {
-		t.Fatalf("delays %v", got)
-	}
-	m.prDelay = 120 * time.Second
-	m.Update(listMsg{repo: "o/e2e", low: true})
-	if !strings.Contains(ansi.Strip(m.bar()), "GitHub rate limit, retrying at 12:04") {
+	tick()
+	if !strings.Contains(ansi.Strip(m.bar()), "GitHub rate limit, retrying at 12:02") {
 		t.Fatalf("bar: %q", ansi.Strip(m.bar()))
 	}
+	tick()
+	tick()
+	tick()
 	f.Low = false
-	runBatch(m, func() tea.Msg { return listPoll(m.o.PRs, "o/e2e", []int{1}) })
+	tick()
+	want := []time.Duration{60, 120, 240, 300, 300, 60}
+	for i := range want {
+		want[i] *= time.Second
+	}
+	if !slices.Equal(*ticks, want) {
+		t.Fatalf("scheduled %v, want %v", *ticks, want)
+	}
+}
+
+func TestSelectionFetchLeavesIntervalAlone(t *testing.T) {
+	f := &pr.Fake{Low: true}
+	m := prModel(t, f)
+	runBatch(m, keysIn(m, "1", "j"))
+	runBatch(m, keysIn(m, "k"))
 	if m.prDelay != 60*time.Second {
-		t.Fatalf("not reset: %v", m.prDelay)
+		t.Fatalf("selection fetch moved the interval: %v", m.prDelay)
 	}
 }
 
 func TestListPollRateLimitError(t *testing.T) {
 	f := &pr.Fake{Err: &pr.RateLimitError{}}
 	m := prModel(t, f)
-	if m.prDelay != 120*time.Second || !strings.Contains(ansi.Strip(m.bar()), "GitHub rate limit, retrying at 12:02") {
-		t.Fatalf("delay %v bar %q", m.prDelay, ansi.Strip(m.bar()))
+	ticks := recordTicks(t)
+	_, c := m.Update(listTickMsg{})
+	runBatch(m, c)
+	if (*ticks)[0] != 120*time.Second || !strings.Contains(ansi.Strip(m.bar()), "GitHub rate limit, retrying at 12:02") {
+		t.Fatalf("ticks %v bar %q", *ticks, ansi.Strip(m.bar()))
+	}
+}
+
+func TestListTickWithNothingToFetchStillReschedules(t *testing.T) {
+	f := &pr.Fake{}
+	m := prModel(t, f)
+	ticks := recordTicks(t)
+	runBatch(m, keysIn(m, "1", "j")) // o/backend: no PRs
+	_, c := m.Update(listTickMsg{})
+	runBatch(m, c)
+	if len(*ticks) != 1 || len(f.Lists) != 1 {
+		t.Fatalf("ticks %v lists %+v", *ticks, f.Lists)
 	}
 }
 
 func TestListTickFetchesAndReschedules(t *testing.T) {
 	f := &pr.Fake{}
 	m := prModel(t, f)
+	ticks := recordTicks(t)
 	_, cmd := m.Update(listTickMsg{})
 	runBatch(m, cmd)
-	if len(f.Lists) != 2 {
-		t.Fatalf("tick did not fetch: %+v", f.Lists)
+	if len(f.Lists) != 2 || len(*ticks) != 1 {
+		t.Fatalf("lists %+v ticks %v", f.Lists, *ticks)
 	}
 }
 
@@ -153,10 +197,18 @@ func TestNoTokenDashboardUnchanged(t *testing.T) {
 	}
 	keysIn(m, "j")
 	lines := strings.Split(ansi.Strip(m.render()), "\n")
-	m.Update(tea.WindowSizeMsg{Width: 200, Height: 40})
-	if bar := ansi.Strip(m.bar()); !strings.Contains(bar, "PR pages off: gh: not logged in. Run gh auth login or set user_token.") {
-		t.Fatalf("bar: %q", bar)
+	const msg = "PR pages off: gh: not logged in. Run gh auth login or set user_token."
+	if bar := ansi.Strip(m.bar()); !strings.Contains(bar, msg) {
+		t.Fatalf("bar at 120: %q", bar)
 	}
+	if bar := strings.Split(ansi.Strip(m.render()), "\n"); !strings.HasPrefix(bar[len(bar)-1], msg) {
+		t.Fatalf("not leading: %q", bar[len(bar)-1])
+	}
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	if bar := ansi.Strip(m.bar()); !strings.HasPrefix(bar, msg) {
+		t.Fatalf("bar at 80: %q", bar)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	want, err := readGolden("wide-items")
 	if err != nil {
 		t.Fatal(err)

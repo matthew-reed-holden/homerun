@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/matthew-reed-holden/homerun/internal/pr"
+	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 )
 
 const (
@@ -25,11 +26,13 @@ type (
 		sums map[int]pr.Summary
 		err  error
 		low  bool // the rate limit is low, or the fetch hit it
+		tick bool // from the poll tick: only these move the interval and reschedule
 	}
 	listTickMsg struct{}
 )
 
-func listTick(d time.Duration) tea.Cmd {
+// listTick is a var so tests can read the interval without waiting it out.
+var listTick = func(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(time.Time) tea.Msg { return listTickMsg{} })
 }
 
@@ -41,22 +44,35 @@ func (m *model) prStart() tea.Cmd {
 	return listTick(m.prDelay)
 }
 
-// prSync fetches the list when the selected repo changed since the last fetch,
-// and says once why PR pages are off.
+// prSync fetches the list when the selected repo changed since the last fetch.
 func (m *model) prSync() tea.Cmd {
 	name := m.repo().Name
 	if name == m.prRepo {
 		return nil
 	}
-	if m.prRepo == "" && m.o.PRs == nil && m.o.PRsErr != nil {
-		m.say("PR pages off: " + m.o.PRsErr.Error() + ". Run gh auth login or set user_token.")
-	}
 	m.prRepo = name
-	return m.fetchList()
+	return m.fetchList(false)
+}
+
+// prOff is the bar's standing line while PR pages are off.
+func (m *model) prOff() string {
+	if m.o.PRs != nil || m.o.PRsErr == nil {
+		return ""
+	}
+	return termsafe.Line("PR pages off: " + m.o.PRsErr.Error() + ". Run gh auth login or set user_token.")
+}
+
+// onTick fetches, then schedules the next tick once the result has set the
+// interval; with nothing to fetch it schedules at once.
+func (m *model) onTick() tea.Cmd {
+	if c := m.fetchList(true); c != nil {
+		return c
+	}
+	return listTick(m.prDelay)
 }
 
 // fetchList lists the selected repo's PRs off the UI goroutine.
-func (m *model) fetchList() tea.Cmd {
+func (m *model) fetchList(tick bool) tea.Cmd {
 	if m.o.PRs == nil {
 		return nil
 	}
@@ -71,7 +87,11 @@ func (m *model) fetchList() tea.Cmd {
 		return nil
 	}
 	api := m.o.PRs
-	return func() tea.Msg { return listPoll(api, repo, nums) }
+	return func() tea.Msg {
+		msg := listPoll(api, repo, nums)
+		msg.tick = tick
+		return msg
+	}
 }
 
 func listPoll(api pr.API, repo string, nums []int) listMsg {
@@ -79,10 +99,10 @@ func listPoll(api pr.API, repo string, nums []int) listMsg {
 	defer cancel()
 	sums, err := api.List(ctx, repo, nums)
 	var rl *pr.RateLimitError
-	return listMsg{repo, sums, err, api.RateLow() || errors.As(err, &rl)}
+	return listMsg{repo: repo, sums: sums, err: err, low: api.RateLow() || errors.As(err, &rl)}
 }
 
-// onList stores a result under its own repo and sets the next interval:
+// onList stores a result under its own repo and, for a tick's, sets the next interval:
 // doubled up to five minutes while rate limited, back to a minute after.
 func (m *model) onList(msg listMsg) {
 	if msg.err == nil {
@@ -91,6 +111,9 @@ func (m *model) onList(msg listMsg) {
 		}
 		m.prs[msg.repo] = msg.sums
 		m.refresh()
+	}
+	if !msg.tick {
+		return
 	}
 	if !msg.low {
 		m.prDelay = prPoll

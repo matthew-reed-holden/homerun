@@ -284,8 +284,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.prSync()
 	case listMsg:
 		m.onList(msg)
+		if msg.tick {
+			return m, listTick(m.prDelay)
+		}
 	case listTickMsg:
-		return m, tea.Batch(m.fetchList(), listTick(m.prDelay))
+		return m, m.onTick()
 	case addedMsg:
 		if msg.err != nil {
 			m.dlg = addFailedDialog(msg.name, msg.err)
@@ -699,6 +702,10 @@ func (m *model) bar() string {
 		}
 	}
 	s := m.help.ShortHelpView(keys.bar(ctx))
+	if off := m.prOff(); off != "" {
+		// Ahead of the key hints, so truncation cannot cut the fix off.
+		s = off + "  " + s
+	}
 	if m.status != "" && m.now().Sub(m.statusAt) < 5*time.Second {
 		s += "   " + m.status
 	}
