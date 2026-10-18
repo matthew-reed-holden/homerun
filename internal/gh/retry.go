@@ -84,7 +84,9 @@ func retryable(err error) bool {
 }
 
 // Permanent reports whether GitHub rejected a request in a way that resending
-// the same request will never fix (bad credentials, or the object is gone or invalid).
+// the same request will never fix (the object is gone or invalid, or access is
+// refused). A 401 is not permanent: a rotated or misconfigured key can be fixed,
+// and dropping the update would lose it.
 func Permanent(err error) bool {
 	var rl *github.RateLimitError
 	var abuse *github.AbuseRateLimitError
@@ -104,7 +106,7 @@ func Permanent(err error) bool {
 
 func permanentStatus(code int) bool {
 	switch code {
-	case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusGone, http.StatusUnprocessableEntity:
+	case http.StatusForbidden, http.StatusNotFound, http.StatusGone, http.StatusUnprocessableEntity:
 		return true
 	}
 	return false
