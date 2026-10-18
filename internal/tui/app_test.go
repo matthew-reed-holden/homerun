@@ -997,3 +997,59 @@ func TestAddFailureShowsInstallLink(t *testing.T) {
 		t.Fatal(opened, m.dlg)
 	}
 }
+
+func TestQuitSignalQuits(t *testing.T) {
+	quit := make(chan struct{})
+	// A hosting TUI with a run in progress: the signal must not wait on the quit prompt.
+	m := hostModel(t, Options{Hosting: hosting(true), Quit: quit}, api.Run{ID: "r2", Status: "running"})
+	cmd := m.waitQuit()
+	if cmd == nil {
+		t.Fatal("no command waits on Options.Quit")
+	}
+	got := make(chan tea.Msg, 1)
+	go func() { got <- cmd() }()
+	select {
+	case <-got:
+		t.Fatal("quit before the signal")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(quit)
+	var msg tea.Msg
+	select {
+	case msg = <-got:
+	case <-time.After(time.Second):
+		t.Fatal("the signal did not wake the model")
+	}
+	_, cmd = m.Update(msg)
+	if cmd == nil {
+		t.Fatal("no quit after the signal")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok || m.dlg != nil {
+		t.Fatalf("the signal did not quit at once (dlg %+v)", m.dlg)
+	}
+	if (&model{}).waitQuit() != nil {
+		t.Fatal("waits on a nil Quit")
+	}
+}
+
+func TestStaleBannerShowsFailedRehost(t *testing.T) {
+	m := hostModel(t, Options{Host: func() (bool, error) { return false, nil }, Hosting: hosting(false)})
+	m.Update(errMsg{errors.New("unreachable")})
+	m.Update(hostMsg{err: errors.New("act not found\x1b[2J on PATH")})
+	out := m.bar()
+	if strings.Contains(out, "\x1b[2J") {
+		t.Fatalf("unsafe banner: %q", out)
+	}
+	if plain := ansi.Strip(out); !strings.Contains(plain, "stale: daemon unreachable (since 0s) · could not start: act not found on PATH · R retries") {
+		t.Fatalf("banner: %q", plain)
+	}
+}
+
+func TestNeverConnectedHostingSaysStarting(t *testing.T) {
+	_, c := newFake(t, api.State{})
+	m := newModel(c, func() time.Time { return now }, Options{Host: func() (bool, error) { return false, nil }, Hosting: hosting(false)})
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	if s := ansi.Strip(m.render()); !strings.Contains(s, "Starting homerun…") || strings.Contains(s, "Start the daemon") {
+		t.Fatalf("screen:\n%s", s)
+	}
+}

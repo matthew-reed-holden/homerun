@@ -46,6 +46,7 @@ type (
 		ok  bool
 		err error
 	}
+	quitSignalMsg struct{}
 )
 
 // Options connect the dashboard to an engine it may host itself.
@@ -55,6 +56,7 @@ type Options struct {
 	HostErr error  // the first Host attempt's error, made before Run
 	Launch  string // OWNER/NAME or ""
 	AddRepo func(ctx context.Context, name string) error
+	Quit    <-chan struct{} // closed on a signal that must quit at once (SIGHUP)
 }
 
 type model struct {
@@ -101,7 +103,20 @@ func Run(c *api.Client, o Options) error {
 	return err
 }
 
-func (m *model) Init() tea.Cmd { return tea.Batch(m.fetch(), tick()) }
+// waitQuit turns a close of Options.Quit into a quit that skips the prompt:
+// nobody is left to answer it when the terminal goes away.
+func (m *model) waitQuit() tea.Cmd {
+	q := m.o.Quit
+	if q == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		<-q
+		return quitSignalMsg{}
+	}
+}
+
+func (m *model) Init() tea.Cmd { return tea.Batch(m.fetch(), tick(), m.waitQuit()) }
 
 // fetchTimeout bounds a state request, so a wedged daemon cannot pile them up
 // behind the 2s tick.
@@ -275,6 +290,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.ok {
 			return m, m.fetch()
 		}
+	case quitSignalMsg:
+		m.closeLog()
+		return m, tea.Quit
 	case statusMsg:
 		// A confirmation whose prompt is covered must not stay armed.
 		m.dlg = nil
@@ -612,6 +630,9 @@ func (m *model) render() string {
 	}
 	if !m.connected {
 		msg := "Start the daemon: homerun daemon\n\n(q to quit)"
+		if m.o.Host != nil {
+			msg = "Starting homerun…\n\n(q to quit)"
+		}
 		switch {
 		case m.hostErr != nil:
 			msg = "homerun could not start: " + termsafe.Line(m.hostErr.Error()) + "\n\n(R to retry · q to quit)"
@@ -662,7 +683,11 @@ func (m *model) bar() string {
 	}
 	if m.err != nil {
 		// First, so truncation to the width cannot cut the warning off.
-		s = yellow.Render("stale: daemon unreachable (since "+dur(m.now().Sub(m.errSince))+")") + "  " + s
+		warn := "stale: daemon unreachable (since " + dur(m.now().Sub(m.errSince)) + ")"
+		if m.hostErr != nil {
+			warn += " · could not start: " + termsafe.Line(m.hostErr.Error()) + " · R retries"
+		}
+		s = yellow.Render(warn) + "  " + s
 	}
 	return truncate(s, m.w)
 }

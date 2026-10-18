@@ -160,9 +160,17 @@ func cmdTUI() error {
 	_, hostErr := e.tryHost()
 	cwd, _ := os.Getwd()
 	cfgPath := config.DefaultUserPath()
+	// Bubble Tea handles only SIGINT and SIGTERM. Closing the terminal sends
+	// SIGHUP, which must still quit through shutdown so runs close as cancelled.
+	hup := make(chan os.Signal, 1)
+	signal.Notify(hup, syscall.SIGHUP)
+	defer signal.Stop(hup)
+	quit := make(chan struct{})
+	go func() { <-hup; close(quit) }()
 	err = tui.Run(api.NewClient(api.SocketPath()), tui.Options{Host: e.tryHost, Hosting: e.hosting, HostErr: hostErr,
 		Launch:  git.OriginRepo(context.Background(), cwd),
-		AddRepo: func(ctx context.Context, n string) error { return addRepo(ctx, cfgPath, n) }})
+		AddRepo: func(ctx context.Context, n string) error { return addRepo(ctx, cfgPath, n) },
+		Quit:    quit})
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	return errors.Join(err, e.shutdown())
 }
@@ -241,7 +249,7 @@ func cmdRun(args []string) error {
 	if _, err := e.tryHost(); err != nil {
 		return err
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
 	err := runOnce(ctx, e, api.NewClient(api.SocketPath()), api.StartRequest{Repo: fs.Arg(0), Ref: fs.Arg(1), PR: *pr})
 	return errors.Join(err, e.shutdown())
