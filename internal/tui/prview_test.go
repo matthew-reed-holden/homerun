@@ -277,9 +277,10 @@ func TestPRKeysByContext(t *testing.T) {
 	if cmd := keysIn(m, "r"); cmd != nil || m.dlg != nil {
 		t.Fatal("r fired in Description")
 	}
-	if keysIn(m, "c"); m.dlg != nil {
-		t.Fatal("c fired in Description")
+	if keysIn(m, "c"); m.dlg != nil || !m.commenting() {
+		t.Fatal("c in Description opens the comment box, not cancel")
 	}
+	keysIn(m, "esc")
 	var opened []string
 	old := openURL
 	openURL = func(u string) error { opened = append(opened, u); return nil }
@@ -555,5 +556,91 @@ func TestDescriptionCIsNotCancel(t *testing.T) {
 	}
 	if keysIn(m, "c"); m.dlg != nil || m.status != "" {
 		t.Fatalf("c in Description: dlg %v status %q", m.dlg, m.status)
+	}
+}
+
+func typeIn(m *model, s string) {
+	for _, r := range s {
+		keysIn(m, string(r))
+	}
+}
+
+func TestCommentSends(t *testing.T) {
+	m, f := prOpenModel(t, openDetail())
+	keysIn(m, "l")
+	if m.pr.section != 0 || m.focus != paneMain {
+		t.Fatal("not in Description")
+	}
+	keysIn(m, "c")
+	out := screen(m)
+	if !strings.Contains(out, "Comment on #1") || !strings.Contains(out, "ctrl+s send · esc close") {
+		t.Fatalf("no comment box:\n%s", out)
+	}
+	typeIn(m, "quit now")
+	if m.dlg != nil || m.pr == nil || !strings.Contains(screen(m), "quit now") {
+		t.Fatalf("keys leaked past the box:\n%s", screen(m))
+	}
+	calls := len(f.DetailCalls)
+	step(m, keysIn(m, "ctrl+s"))
+	if !slices.Equal(f.Comments, []pr.CommentCall{{PRID: "PR_1", Body: "quit now"}}) {
+		t.Fatalf("comments %+v", f.Comments)
+	}
+	if m.status != "comment sent" || strings.Contains(screen(m), "Comment on #1") || len(f.DetailCalls) != calls+1 {
+		t.Fatalf("status %q calls %v", m.status, f.DetailCalls)
+	}
+}
+
+func TestCommentEmptyNotSent(t *testing.T) {
+	m, f := prOpenModel(t, openDetail())
+	keysIn(m, "l", "c", "space", "enter")
+	step(m, keysIn(m, "ctrl+s"))
+	if m.status != "comment is empty" || len(f.Comments) != 0 || !strings.Contains(screen(m), "Comment on #1") {
+		t.Fatalf("status %q comments %v", m.status, f.Comments)
+	}
+}
+
+func TestCommentDraftKept(t *testing.T) {
+	m, f := prOpenModel(t, openDetail())
+	keysIn(m, "l", "c")
+	typeIn(m, "wip")
+	keysIn(m, "esc")
+	if strings.Contains(screen(m), "Comment on #1") {
+		t.Fatal("esc left the box open")
+	}
+	keysIn(m, "c")
+	if !strings.Contains(screen(m), "wip") {
+		t.Fatalf("draft lost:\n%s", screen(m))
+	}
+	step(m, keysIn(m, "ctrl+s"))
+	keysIn(m, "c")
+	if s := screen(m); !strings.Contains(s, "Comment on #1") || strings.Contains(s, "wip") || len(f.Comments) != 1 {
+		t.Fatalf("draft survived a send:\n%s", s)
+	}
+}
+
+func TestCommentErrorKeepsDraft(t *testing.T) {
+	m, f := prOpenModel(t, openDetail())
+	f.Err = errors.New("boom")
+	keysIn(m, "l", "c")
+	typeIn(m, "keep")
+	step(m, keysIn(m, "ctrl+s"))
+	if m.status != "comment failed: boom" {
+		t.Fatalf("status %q", m.status)
+	}
+	keysIn(m, "c")
+	if !strings.Contains(screen(m), "keep") {
+		t.Fatalf("draft lost:\n%s", screen(m))
+	}
+}
+
+func TestMutationResultClosesDialog(t *testing.T) {
+	m, _ := prOpenModel(t, openDetail())
+	keysIn(m, "m")
+	if m.dlg == nil {
+		t.Fatal("no dialog")
+	}
+	m.Update(mutatedMsg{verb: "comment", done: "comment sent", repo: "o/e2e", n: 1})
+	if m.dlg != nil {
+		t.Fatal("covered prompt stayed armed")
 	}
 }

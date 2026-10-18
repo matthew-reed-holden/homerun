@@ -29,6 +29,7 @@ type Fake struct {
 	DetailCalls []string // "repo#n", one per Detail call
 	Err         error    // fails every method
 	MergeErr    error
+	CommentErr  error
 	UpdateErr   error
 	Low         bool
 }
@@ -72,6 +73,9 @@ func (f *Fake) Comment(_ context.Context, prID, body string) error {
 	defer f.Unlock()
 	if f.Err != nil {
 		return f.Err
+	}
+	if f.CommentErr != nil {
+		return f.CommentErr
 	}
 	f.Comments = append(f.Comments, CommentCall{prID, body})
 	return nil

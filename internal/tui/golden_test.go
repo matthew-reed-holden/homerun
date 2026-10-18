@@ -55,6 +55,7 @@ func TestGolden(t *testing.T) {
 		{"standard-pr-description", 80, 24, []string{"j", "enter", "l"}},
 		{"wide-merge-dialog", 120, 40, []string{"j", "enter", "l", "m"}},
 		{"standard-merge-dialog", 80, 24, []string{"j", "enter", "l", "m"}},
+		{"wide-comment", 120, 40, []string{"j", "enter", "l", "c", "h", "i"}},
 		{"wide-runs", 120, 40, []string{"3"}},
 		{"wide-fork-dialog", 120, 40, []string{"j", "j", "r"}},
 		{"standard-tree", 80, 24, []string{"j", "l"}},
@@ -75,7 +76,7 @@ func TestGolden(t *testing.T) {
 					Body: "Makes the thing\noptional.", Checks: []pr.Check{{Name: "pass", Status: "completed", Conclusion: "success"}, {Name: "fail", Status: "completed", Conclusion: "failure", Required: true}}}}})
 			}
 			m.Update(tea.WindowSizeMsg{Width: c.w, Height: c.h})
-			if d := detailFixture(); strings.HasSuffix(c.name, "-pr-description") || strings.HasSuffix(c.name, "-pr-checks") || strings.HasSuffix(c.name, "-merge-dialog") {
+			if d := detailFixture(); strings.HasSuffix(c.name, "-pr-description") || strings.HasSuffix(c.name, "-pr-checks") || strings.HasSuffix(c.name, "-merge-dialog") || c.name == "wide-comment" {
 				if strings.HasSuffix(c.name, "-merge-dialog") {
 					d = openDetail()
 					d.MergeMethods = []string{"MERGE", "SQUASH", "REBASE"}

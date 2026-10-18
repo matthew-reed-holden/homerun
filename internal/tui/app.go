@@ -345,6 +345,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case quitSignalMsg:
 		m.closeLog()
 		return m, tea.Quit
+	case tea.PasteMsg:
+		if m.commenting() {
+			m.pr.draft, _ = m.pr.draft.Update(msg)
+		}
 	case statusMsg:
 		// A confirmation whose prompt is covered must not stay armed.
 		m.dlg = nil
@@ -437,6 +441,9 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 		}
 		m.dlg = nil
 		return d.key(k)
+	}
+	if m.commenting() && k.String() != "ctrl+c" {
+		return m.commentKey(k)
 	}
 	if m.log != nil && m.log.typing {
 		return m.log.typeKey(k)
@@ -728,6 +735,9 @@ func (m *model) render() string {
 	if m.dlg != nil {
 		screen = overlay(screen, m.dlg.view(m.w), m.w, m.h)
 	}
+	if m.commenting() {
+		screen = overlay(screen, m.commentView(), m.w, m.h)
+	}
 	return screen
 }
 
@@ -790,7 +800,7 @@ func (m *model) bar() string {
 
 // click and wheel map a mouse position onto the layout.
 func (m *model) click(mo tea.Mouse) tea.Cmd {
-	if m.dlg != nil || mo.Button != tea.MouseLeft {
+	if m.dlg != nil || m.commenting() || mo.Button != tea.MouseLeft {
 		return nil
 	}
 	lay := m.layout()
@@ -822,7 +832,7 @@ func (m *model) click(mo tea.Mouse) tea.Cmd {
 }
 
 func (m *model) wheel(mo tea.Mouse) tea.Cmd {
-	if m.dlg != nil {
+	if m.dlg != nil || m.commenting() {
 		return nil
 	}
 	d := 1

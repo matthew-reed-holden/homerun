@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/glamour/v2"
@@ -32,10 +33,12 @@ type prView struct {
 	vp      viewport.Model
 	pageW   int // the width vp's content was built for; 0 forces a rebuild
 	secs    list
-	delay   time.Duration // the next detail poll interval
-	seq     int           // numbers detail fetches in the order issued
-	shown   int           // the seq of the detail result applied last
-	back    pane          // the focus esc restores
+	delay   time.Duration  // the next detail poll interval
+	seq     int            // numbers detail fetches in the order issued
+	shown   int            // the seq of the detail result applied last
+	back    pane           // the focus esc restores
+	draft   textarea.Model // the comment being written; kept across esc and failed sends
+	typing  bool           // the comment box is open
 }
 
 type (
@@ -59,7 +62,7 @@ var detailTick = func(d time.Duration, gen int) tea.Cmd {
 // openPR replaces the left column with repo#n's sections and fetches its detail.
 func (m *model) openPR(repo string, n int) tea.Cmd {
 	m.prGen++
-	m.pr = &prView{repo: repo, number: n, delay: prDetailPoll, back: m.focus, vp: viewport.New()}
+	m.pr = &prView{repo: repo, number: n, delay: prDetailPoll, back: m.focus, vp: viewport.New(), draft: newDraft()}
 	m.focus = paneSections
 	m.syncSections()
 	m.syncMain()
@@ -269,6 +272,8 @@ func (m *model) sectionsKey(k tea.KeyPressMsg) tea.Cmd {
 		m.prMutate(true)
 	case key.Matches(k, keys.Update):
 		m.prMutate(false)
+	case key.Matches(k, keys.Comment) && m.pr.section == 0:
+		m.openComment()
 	}
 	if m.pr != nil {
 		m.pickSection()
@@ -295,6 +300,8 @@ func (m *model) descKey(k tea.KeyPressMsg) tea.Cmd {
 		m.prMutate(true)
 	case key.Matches(k, keys.Update):
 		m.prMutate(false)
+	case key.Matches(k, keys.Comment):
+		m.openComment()
 	}
 	return nil
 }

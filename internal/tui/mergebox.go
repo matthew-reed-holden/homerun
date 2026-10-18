@@ -142,12 +142,18 @@ func (m *model) mutate(verb, done, repo string, n int, f func(context.Context, p
 }
 
 func (m *model) onMutated(msg mutatedMsg) tea.Cmd {
+	// Like statusMsg: a covered confirmation must not stay armed.
+	m.dlg = nil
+	mine := m.pr != nil && m.pr.repo == msg.repo && m.pr.number == msg.n
 	if msg.err != nil {
 		m.say(msg.verb + " failed: " + msg.err.Error())
 	} else {
-		m.say(fmt.Sprintf("%s #%d", msg.done, msg.n))
+		m.say(msg.done)
+		if mine && msg.verb == "comment" {
+			m.pr.draft.Reset()
+		}
 	}
-	if m.pr != nil && m.pr.repo == msg.repo && m.pr.number == msg.n {
+	if mine {
 		return m.refetchPR()
 	}
 	return m.fetchList(false)
@@ -174,7 +180,7 @@ func (m *model) mergeDetail(repo string, n int, d *pr.Detail) {
 	title := fmt.Sprintf("Merge #%d into %s?", n, termsafe.Line(d.BaseRef))
 	m.dlg = choiceDialog(title, "merge", labels, max(0, slices.Index(methods, d.DefaultMethod)), func(i int) tea.Cmd {
 		meth := methods[i]
-		return m.mutate("merge", "merged", repo, n, func(ctx context.Context, api pr.API) error { return api.Merge(ctx, id, meth, sha) })
+		return m.mutate("merge", fmt.Sprintf("merged #%d", n), repo, n, func(ctx context.Context, api pr.API) error { return api.Merge(ctx, id, meth, sha) })
 	})
 }
 
@@ -195,7 +201,7 @@ func (m *model) updateDetail(repo string, n int, d *pr.Detail) {
 	id, sha := d.ID, d.HeadSHA
 	labels := []string{"Merge " + base + " into branch", "Rebase"}
 	m.dlg = choiceDialog(fmt.Sprintf("Update #%d from %s?", n, base), "update", labels, 0, func(i int) tea.Cmd {
-		return m.mutate("update", "updated", repo, n, func(ctx context.Context, api pr.API) error { return api.UpdateBranch(ctx, id, sha, i == 1) })
+		return m.mutate("update", fmt.Sprintf("updated #%d", n), repo, n, func(ctx context.Context, api pr.API) error { return api.UpdateBranch(ctx, id, sha, i == 1) })
 	})
 }
 
