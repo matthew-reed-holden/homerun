@@ -109,7 +109,10 @@ func (c *Client) do(ctx context.Context, method, url string, body any, out any) 
 }
 
 type gqlOut struct{ data json.RawMessage }
-type gqlError struct{ Type, Message string }
+type gqlError struct {
+	Type, Message string
+	Path          []any
+}
 
 // trackRate records whether the response left under 10% of the limit.
 func (c *Client) trackRate(resp *http.Response) bool {
@@ -142,10 +145,10 @@ func (c *Client) query(ctx context.Context, q string, vars map[string]any, out a
 	if err != nil {
 		return err
 	}
-	// A missing alias comes back as null data plus a NOT_FOUND error; that is not a failure.
+	// A missing PR alias comes back as null data plus a NOT_FOUND error; that is not a failure.
 	fatal := errs[:0:0]
 	for _, e := range errs {
-		if e.Type != "NOT_FOUND" {
+		if e.Type != "NOT_FOUND" || len(e.Path) == 1 { // path ["repository"] is the repo itself, not a PR alias
 			fatal = append(fatal, e)
 		}
 	}

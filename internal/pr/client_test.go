@@ -159,3 +159,13 @@ func TestListNotFoundIsNotFatal(t *testing.T) {
 		t.Fatalf("err %v", err)
 	}
 }
+
+func TestListMissingRepoFails(t *testing.T) {
+	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, `{"data":{"repository":null},"errors":[{"type":"NOT_FOUND","path":["repository"],"message":"Could not resolve to a Repository"}]}`)
+	})
+	_, err := c.List(context.Background(), "o/r", []int{1})
+	if err == nil || !strings.Contains(err.Error(), "Could not resolve to a Repository") {
+		t.Fatalf("err %v", err)
+	}
+}
