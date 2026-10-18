@@ -64,6 +64,7 @@ type Daemon struct {
 	mirrors   map[string]*git.Mirror
 	repoLocks map[string]*sync.Mutex
 	sendLocks map[string]*sync.Mutex // run id -> held while sending that run's check updates
+	polled    map[string]bool        // repos this engine has polled once: the first poll only records heads
 	lastPrune time.Time
 	closing   bool // a foreground close is cancelling the runs
 }
@@ -108,6 +109,7 @@ func New(o Options) (*Daemon, error) {
 		mirrors:   map[string]*git.Mirror{},
 		repoLocks: map[string]*sync.Mutex{},
 		sendLocks: map[string]*sync.Mutex{},
+		polled:    map[string]bool{},
 	}, nil
 }
 
@@ -293,8 +295,9 @@ func (d *Daemon) pollRepo(ctx context.Context, repo string) error {
 
 	var pushes []event.Event
 	d.mu.Lock()
-	known, baselined := d.state.Branches[repo]
-	if !baselined {
+	known, registered := d.state.Branches[repo]
+	baselined := registered && d.polled[repo]
+	if !registered {
 		known = map[string]string{}
 		d.state.Branches[repo] = known
 	}
@@ -304,7 +307,7 @@ func (d *Daemon) pollRepo(ctx context.Context, repo string) error {
 		before, ok := known[b.Ref]
 		switch {
 		case !baselined:
-			known[b.Ref] = b.SHA // heads that existed before registration are history, not work
+			known[b.Ref] = b.SHA // heads that existed before registration, or moved while no engine ran, are history, not work
 		case ok && before == b.SHA:
 		default:
 			if !ok {
@@ -319,6 +322,9 @@ func (d *Daemon) pollRepo(ctx context.Context, repo string) error {
 		}
 	}
 	err = d.store.SaveState(d.state)
+	if err == nil {
+		d.polled[repo] = true
+	}
 	d.mu.Unlock()
 	if err != nil {
 		return err

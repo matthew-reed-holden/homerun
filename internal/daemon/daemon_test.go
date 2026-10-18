@@ -757,3 +757,36 @@ jobs:
 		}
 	}
 }
+
+func TestStartBaselinesBranchesMovedWhileStopped(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	h.d.close()
+
+	moved := h.push(map[string]string{"a.txt": "a"})
+	prSHA := h.pr(1, repo, map[string]string{"b.txt": "b"})
+
+	d, err := New(h.d.opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.retry = func(_ context.Context, fn func() error) error { return fn() }
+	t.Cleanup(d.close)
+	h.d = d
+	d.recover(context.Background())
+	h.poll()
+
+	if cs := h.fake.Checks(repo, moved); len(cs) != 0 {
+		t.Fatalf("branch head moved while stopped must not run, got %d checks", len(cs))
+	}
+	if cs := h.fake.Checks(repo, prSHA); len(cs) == 0 {
+		t.Fatal("open PR head without a claim must run")
+	}
+	h.waitDone(prSHA)
+
+	next := h.push(map[string]string{"c.txt": "c"})
+	h.poll()
+	if cs := h.fake.Checks(repo, next); len(cs) != 2 {
+		t.Fatalf("push after the first poll must be claimed, got %d checks", len(cs))
+	}
+}
