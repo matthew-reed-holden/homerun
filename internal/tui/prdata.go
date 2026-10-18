@@ -61,7 +61,24 @@ func (m *model) prOff() string {
 	if m.o.PRs != nil || m.o.PRsErr == nil {
 		return ""
 	}
-	return termsafe.Line("PR pages off: " + m.o.PRsErr.Error() + ". Run gh auth login or set user_token.")
+	reason, _, _ := strings.Cut(m.o.PRsErr.Error(), "\n")
+	// ponytail: the reason is cut to 20 columns so the fix fits an 80-column bar.
+	return "PR pages off: " + truncate(termsafe.Line(reason), 20) + ". Run gh auth login or set user_token."
+}
+
+// rateLine is the bar's standing line while a poll interval is raised for the rate limit.
+func (m *model) rateLine() string {
+	var at time.Time
+	if m.prDelay > prPoll {
+		at = m.prRetry
+	}
+	if p := m.pr; p != nil && p.delay > prDetailPoll && p.retry.After(at) {
+		at = p.retry
+	}
+	if at.IsZero() {
+		return ""
+	}
+	return "GitHub rate limit, retrying at " + at.Format("15:04")
 }
 
 // onTick fetches, then schedules the next tick once the result has set the
@@ -106,14 +123,23 @@ func listPoll(api pr.API, repo string, nums []int) listMsg {
 
 // onList stores a result under its own repo and, for a tick's, sets the next interval:
 // doubled up to five minutes while rate limited, back to a minute after.
+// A failed list drops the repo's data, so no row shows stale badges, and says
+// the error once until a list succeeds or the error changes.
 func (m *model) onList(msg listMsg) {
-	if msg.err == nil {
-		if m.prs == nil {
-			m.prs = map[string]map[int]pr.Summary{}
-		}
-		m.prs[msg.repo] = msg.sums
-		m.refresh()
+	if m.prs == nil {
+		m.prs = map[string]map[int]pr.Summary{}
 	}
+	if msg.err == nil {
+		m.prs[msg.repo], m.listErr = msg.sums, ""
+	} else {
+		delete(m.prs, msg.repo)
+		var rl *pr.RateLimitError
+		if e := msg.err.Error(); e != m.listErr && !errors.As(msg.err, &rl) { // the rate line covers that
+			m.listErr = e
+			m.say("PR list failed: " + e)
+		}
+	}
+	m.refresh()
 	if !msg.tick {
 		return
 	}
@@ -122,7 +148,7 @@ func (m *model) onList(msg listMsg) {
 		return
 	}
 	m.prDelay = min(m.prDelay*2, prPollMax)
-	m.say("GitHub rate limit, retrying at " + m.now().Add(m.prDelay).Format("15:04"))
+	m.prRetry = m.now().Add(m.prDelay)
 }
 
 func (m *model) summary(repo string, n int) (pr.Summary, bool) {

@@ -136,15 +136,8 @@ func itemEntries(r api.Repo, now time.Time, prs map[int]pr.Summary, behind func(
 			out = append(out, entry{Rollup(it.Checks), termsafe.Line(it.Label) + "  " + short(it.SHA), r.Name + ":" + it.Label})
 			continue
 		}
-		icon, text := Rollup(it.Checks), termsafe.Line(it.Label+" "+it.Title)
-		if it.Author != "" {
-			text += " @" + termsafe.Line(it.Author)
-		}
-		if awaiting(it) {
-			icon, text = "◇", text+" awaiting"
-		} else if a := age(it.Updated, now); a != "" {
-			text += " " + a
-		}
+		// Badges go ahead of the title, so a long title cannot push them out of the panel.
+		icon, text := Rollup(it.Checks), termsafe.Line(it.Label)
 		if s, ok := prs[it.PR]; ok {
 			b, known := 0, false
 			if behind != nil {
@@ -153,6 +146,15 @@ func itemEntries(r api.Repo, now time.Time, prs map[int]pr.Summary, behind func(
 			if bs := badges(s, b, known); bs != "" {
 				text += " " + bs
 			}
+		}
+		text += " " + termsafe.Line(it.Title)
+		if it.Author != "" {
+			text += " @" + termsafe.Line(it.Author)
+		}
+		if awaiting(it) {
+			icon, text = "◇", text+" awaiting"
+		} else if a := age(it.Updated, now); a != "" {
+			text += " " + a
 		}
 		out = append(out, entry{icon, text, r.Name + ":" + it.Label})
 	}

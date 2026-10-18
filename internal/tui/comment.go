@@ -51,7 +51,8 @@ func (m *model) commentKey(k tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
-// sendComment posts the draft and closes the box; the draft stays until the send succeeds.
+// sendComment posts the draft and closes the box. The draft empties now, so
+// reopening cannot post it twice; a failed send puts it back.
 func (m *model) sendComment() tea.Cmd {
 	p := m.pr
 	body := strings.TrimSpace(p.draft.Value())
@@ -60,8 +61,22 @@ func (m *model) sendComment() tea.Cmd {
 		return nil
 	}
 	p.typing = false
+	p.draft.Reset()
 	id := p.d.ID
-	return m.mutate("comment", "comment sent", p.repo, p.number, func(ctx context.Context, api pr.API) error { return api.Comment(ctx, id, body) })
+	send := m.mutate("comment", "comment sent", p.repo, p.number, func(ctx context.Context, api pr.API) error { return api.Comment(ctx, id, body) })
+	return func() tea.Msg {
+		msg := send().(mutatedMsg)
+		msg.body = body
+		return msg
+	}
+}
+
+// restoreDraft puts a failed comment back ahead of anything typed since.
+func (p *prView) restoreDraft(body string) {
+	if v := p.draft.Value(); v != "" {
+		body += "\n" + v
+	}
+	p.draft.SetValue(body)
 }
 
 func (m *model) commentView() string {

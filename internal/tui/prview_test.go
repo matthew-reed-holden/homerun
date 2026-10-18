@@ -644,3 +644,38 @@ func TestMutationResultClosesDialog(t *testing.T) {
 		t.Fatal("covered prompt stayed armed")
 	}
 }
+
+// A send clears the draft at once, so reopening the box cannot post it twice.
+func TestCommentSendClearsDraftUntilResult(t *testing.T) {
+	m, f := prOpenModel(t, openDetail())
+	keysIn(m, "l", "c")
+	typeIn(m, "one")
+	send := keysIn(m, "ctrl+s")
+	keysIn(m, "c")
+	if s := screen(m); strings.Contains(s, "one") {
+		t.Fatalf("sent text still in the reopened box:\n%s", s)
+	}
+	step(m, keysIn(m, "ctrl+s"))
+	if len(f.Comments) != 0 || m.status != "comment is empty" {
+		t.Fatalf("comments %v status %q", f.Comments, m.status)
+	}
+	typeIn(m, "two")
+	step(m, send)
+	if len(f.Comments) != 1 || m.pr.draft.Value() != "two" {
+		t.Fatalf("comments %v draft %q", f.Comments, m.pr.draft.Value())
+	}
+}
+
+func TestCommentFailureRestoresDraft(t *testing.T) {
+	m, f := prOpenModel(t, openDetail())
+	f.Err = errors.New("boom")
+	keysIn(m, "l", "c")
+	typeIn(m, "one")
+	send := keysIn(m, "ctrl+s")
+	keysIn(m, "c")
+	typeIn(m, "two")
+	step(m, send)
+	if v := m.pr.draft.Value(); v != "one\ntwo" {
+		t.Fatalf("draft %q", v)
+	}
+}

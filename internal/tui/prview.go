@@ -34,6 +34,7 @@ type prView struct {
 	pageW   int // the width vp's content was built for; 0 forces a rebuild
 	secs    list
 	delay   time.Duration  // the next detail poll interval
+	retry   time.Time      // when a raised detail poll runs next
 	seq     int            // numbers detail fetches in the order issued
 	shown   int            // the seq of the detail result applied last
 	back    pane           // the focus esc restores
@@ -131,7 +132,7 @@ func (m *model) onDetail(msg detailMsg) tea.Cmd {
 	}
 	if msg.low {
 		p.delay = min(p.delay*2, prPollMax)
-		m.say("GitHub rate limit, retrying at " + m.now().Add(p.delay).Format("15:04"))
+		p.retry = m.now().Add(p.delay)
 	} else {
 		p.delay = prDetailPoll
 	}

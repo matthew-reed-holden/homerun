@@ -19,6 +19,7 @@ type (
 		repo       string
 		n          int
 		err        error
+		body       string // a comment's text, restored to the draft if it failed
 	}
 	// rowDetailMsg is the detail m or u on a dashboard row waited for.
 	rowDetailMsg struct {
@@ -147,11 +148,11 @@ func (m *model) onMutated(msg mutatedMsg) tea.Cmd {
 	mine := m.pr != nil && m.pr.repo == msg.repo && m.pr.number == msg.n
 	if msg.err != nil {
 		m.say(msg.verb + " failed: " + msg.err.Error())
+		if mine && msg.body != "" {
+			m.pr.restoreDraft(msg.body)
+		}
 	} else {
 		m.say(msg.done)
-		if mine && msg.verb == "comment" {
-			m.pr.draft.Reset()
-		}
 	}
 	if mine {
 		return m.refetchPR()

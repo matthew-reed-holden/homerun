@@ -4,7 +4,7 @@
 ╰────────────────────────────────╯│Checks none                                                                         │
 ╭─2 Branches & PRs───────────────╮│Reviews: approved · Files 0 (+0 −0) · 💬 0                                          │
 │✔ main  fd387ab                 ││────────────────────────────────────────────────────────────────────────────────────│
-│✘ #1 e2e PR @matt 5m ⚔ ✔ draft  ││✔ CI / pass                                                                       4s│
+│✘ #1 ⚔ ✔ draft e2e PR @matt 5m  ││✔ CI / pass                                                                       4s│
 │◇ #2 typo fix @bob awaiting     ││✘ CI / fail — echo bad; exit 1                                                    3s│
 │                                ││  exit status 1                                                                     │
 │                                ││  ✔ Set up job                                                                    1s│

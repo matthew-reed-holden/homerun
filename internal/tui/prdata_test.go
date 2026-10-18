@@ -179,8 +179,9 @@ func TestBadges(t *testing.T) {
 				}
 				return
 			}
-			if text != base+" "+c.want {
-				t.Fatalf("got %q, want %q + %q", text, base, c.want)
+			label, rest, _ := strings.Cut(base, " ")
+			if want := label + " " + c.want + " " + rest; text != want {
+				t.Fatalf("got %q, want %q", text, want)
 			}
 		})
 	}
@@ -235,7 +236,7 @@ func TestLateListResultKeyedByRepo(t *testing.T) {
 		t.Fatal("o/backend rows changed")
 	}
 	keysIn(m, "k")
-	if !strings.Contains(ansi.Strip(m.render()), "#1 e2e PR @matt 5m draft") {
+	if !strings.Contains(ansi.Strip(m.render()), "#1 draft e2e PR @matt 5m") {
 		t.Fatalf("badges not shown at once:\n%s", ansi.Strip(m.render()))
 	}
 }
@@ -330,5 +331,168 @@ func TestSummaryClickOffsetsTree(t *testing.T) {
 	m.click(tea.Mouse{X: 60, Y: h + 3, Button: tea.MouseLeft}) // second tree row
 	if m.tree.cur != 1 {
 		t.Fatalf("cur %d", m.tree.cur)
+	}
+}
+
+// Badges sit before the title, so the 32-column panel never cuts them off.
+func TestBadgesSurviveLongTitle(t *testing.T) {
+	m := prModel(t, &pr.Fake{})
+	st := fixture()
+	st.Repos[0].Items[1].Title = "Make the release workflow publish checksums for every artifact"
+	m.Update(stateMsg{&st})
+	m.Update(listMsg{repo: "o/e2e", sums: map[int]pr.Summary{1: {Number: 1, Mergeable: "CONFLICTING", ReviewDecision: "APPROVED", IsDraft: true,
+		Checks: []pr.Check{{Required: true, Status: "completed", Conclusion: "failure"}}}}})
+	m.behind = map[string]int{"o/e2e#1": 3}
+	m.items.set(m.itemRows())
+	keysIn(m, "k") // the PR row unselected, so it renders as is
+	for _, l := range strings.Split(screen(m), "\n") {
+		if strings.Contains(l, "#1 ") && strings.Contains(l, "Make the") {
+			if !strings.Contains(l, "#1 ↓3 ⚔ ✔ ! draft Make the") {
+				t.Fatalf("badges cut: %q", l)
+			}
+			return
+		}
+	}
+	t.Fatalf("no PR row:\n%s", screen(m))
+}
+
+// A failed list leaves the repo's rows with no badges and no summary, and says
+// the error once, not on every tick.
+func TestListErrorClearsBadges(t *testing.T) {
+	f := &pr.Fake{PRs: map[string]map[int]pr.Summary{"o/e2e": {1: {Number: 1, Title: "e2e PR", ReviewDecision: "APPROVED", IsDraft: true}}}}
+	m := prModel(t, f)
+	keysIn(m, "j")
+	if !strings.Contains(screen(m), "#1 ✔ draft") || len(m.summaryBlock(80)) == 0 {
+		t.Fatalf("no badges after a good list:\n%s", screen(m))
+	}
+	f.Err = errors.New("github: 401 Bad credentials")
+	_, c := m.Update(listTickMsg{})
+	runBatch(m, c)
+	if s := screen(m); strings.Contains(s, "✔ draft") || len(m.summaryBlock(80)) != 0 {
+		t.Fatalf("stale badges kept:\n%s", s)
+	}
+	if !strings.Contains(m.status, "401 Bad credentials") {
+		t.Fatalf("status %q", m.status)
+	}
+	m.status = ""
+	_, c = m.Update(listTickMsg{})
+	runBatch(m, c)
+	if m.status != "" {
+		t.Fatalf("same error said again: %q", m.status)
+	}
+	f.Err = nil
+	_, c = m.Update(listTickMsg{})
+	runBatch(m, c)
+	f.Err = errors.New("github: 401 Bad credentials")
+	_, c = m.Update(listTickMsg{})
+	runBatch(m, c)
+	if !strings.Contains(m.status, "401") {
+		t.Fatalf("error after a recovery not said: %q", m.status)
+	}
+}
+
+func barText(m *model) string { return ansi.Strip(m.bar()) }
+
+// A fresh status goes ahead of the key hints, so they truncate and it does not.
+func TestBarStatusAheadOfHints(t *testing.T) {
+	const msg = "merge failed: Pull Request is not mergeable"
+	for _, w := range []int{80, 120} {
+		m, _ := prOpenModel(t, openDetail())
+		m.Update(tea.WindowSizeMsg{Width: w, Height: 40})
+		keysIn(m, "l") // Description
+		m.say(msg)
+		if b := barText(m); !strings.HasPrefix(b, msg+"  ") {
+			t.Fatalf("%d Description bar %q", w, b)
+		}
+		keysIn(m, "h", "j", "l") // Checks
+		m.say(msg)
+		if b := barText(m); !strings.HasPrefix(b, msg+"  ") {
+			t.Fatalf("%d Checks bar %q", w, b)
+		}
+	}
+	m := summaryModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m.say(msg)
+	if b := barText(m); !strings.HasPrefix(b, msg+"  ") {
+		t.Fatalf("PR row bar %q", b)
+	}
+}
+
+func TestBarDescriptionHasHelpAndQuit(t *testing.T) {
+	m, _ := prOpenModel(t, openDetail())
+	m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
+	keysIn(m, "l")
+	if b := barText(m); !strings.Contains(b, "? help") || !strings.Contains(b, "q quit") {
+		t.Fatalf("bar %q", b)
+	}
+}
+
+// The rate-limit line stands while an interval is raised, not for 5s a tick.
+func TestBarRateLimitStands(t *testing.T) {
+	f := &pr.Fake{}
+	m := prModel(t, f)
+	keysIn(m, "j")
+	f.Low = true
+	_, c := m.Update(listTickMsg{})
+	runBatch(m, c)
+	m.status = ""
+	const rl = "GitHub rate limit, retrying at 12:02"
+	if b := barText(m); !strings.HasPrefix(b, rl+"  ") {
+		t.Fatalf("list raised: bar %q", b)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m.say("opened https://github.com/o/e2e/pull/1")
+	if b := barText(m); !strings.HasPrefix(b, rl+"  opened https://github.com/o/e2e/pull/1") {
+		t.Fatalf("80 cols: bar %q", b)
+	}
+	f.Low = false
+	_, c = m.Update(listTickMsg{})
+	runBatch(m, c)
+	if b := barText(m); strings.Contains(b, "rate limit") {
+		t.Fatalf("back to normal: bar %q", b)
+	}
+
+	m, f = prOpenModel(t, openDetail())
+	recordDetailTicks(t)
+	f.Low = true
+	_, c = m.Update(detailTickMsg{m.prGen})
+	run(m, c)
+	m.status = ""
+	if b := barText(m); !strings.HasPrefix(b, "GitHub rate limit, retrying at 12:01  ") {
+		t.Fatalf("detail raised: bar %q", b)
+	}
+	f.Low = false
+	_, c = m.Update(detailTickMsg{m.prGen})
+	run(m, c)
+	if b := barText(m); strings.Contains(b, "rate limit") {
+		t.Fatalf("detail back to normal: bar %q", b)
+	}
+}
+
+// prOff keeps its fix instruction whole at 80 columns however long the reason.
+func TestBarPROffCapsReason(t *testing.T) {
+	st := fixture()
+	_, c := newFake(t, st)
+	reason := errors.New("command failed: exit status 1: no oauth token found for github.com\nsecond line")
+	m := newModel(c, func() time.Time { return now }, Options{PRsErr: reason})
+	m.Update(stateMsg{&st})
+	m.say("config reloaded")
+	for _, w := range []int{80, 120} {
+		m.Update(tea.WindowSizeMsg{Width: w, Height: 24})
+		b := barText(m)
+		off, rest, ok := strings.Cut(b, ". Run gh auth login or set user_token.")
+		if !ok || !strings.HasPrefix(off, "PR pages off: command failed") || strings.Contains(b, "second line") {
+			t.Fatalf("%d: bar %q", w, b)
+		}
+		if ansi.StringWidth(off)+37 > 72 {
+			t.Fatalf("%d: prOff too wide: %q", w, off)
+		}
+		// At 80 columns the status gets what prOff leaves; at 120 it is whole.
+		if want := "  config reloaded  "; !strings.HasPrefix(want, strings.TrimSuffix(rest, "…")) && !strings.HasPrefix(rest, want) {
+			t.Fatalf("%d: status not after prOff: %q", w, rest)
+		}
+		if w == 120 && !strings.Contains(rest, "1-3 panel") {
+			t.Fatalf("120: hints hidden: %q", b)
+		}
 	}
 }

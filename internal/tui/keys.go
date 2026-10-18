@@ -72,9 +72,9 @@ func (k keyMap) bar(c barCtx) []key.Binding {
 	case inPRSections:
 		return []key.Binding{k.Move, k.Into, k.Esc, k.Open, k.Help, k.Quit}
 	case inPRDesc:
-		return []key.Binding{k.Move, k.Merge, k.Update, k.Comment, k.Open, k.Esc}
+		return []key.Binding{k.Move, k.Merge, k.Update, k.Comment, k.Open, k.Esc, k.Help, k.Quit}
 	case inPRChecks:
-		return []key.Binding{k.Move, k.Enter, k.Fold, k.Rerun, k.Cancel, k.Open, k.Esc, k.Help}
+		return []key.Binding{k.Move, k.Enter, k.Fold, k.Rerun, k.Cancel, k.Open, k.Esc, k.Help, k.Quit}
 	case inPRRow:
 		return []key.Binding{k.Panel1, k.Into, k.Rerun, k.Cancel, k.Open, k.Merge, k.Update, k.Help, k.Quit}
 	}

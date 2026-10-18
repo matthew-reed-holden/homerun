@@ -95,6 +95,8 @@ type model struct {
 	behind  map[string]int                // "repo#n" -> commits behind base
 	prRepo  string                        // the repo the list was last fetched for
 	prDelay time.Duration                 // the next list poll interval
+	listErr string                        // the list error said last; "" after a good list
+	prRetry time.Time                     // when the raised list poll runs next
 	pr      *prView                       // the open PR; nil on the dashboard
 	prGen   int                           // identifies the open PR so a stale fetch or tick is ignored
 
@@ -779,23 +781,25 @@ func (m *model) bar() string {
 			ctx = inPRRow
 		}
 	}
-	s := m.help.ShortHelpView(keys.bar(ctx))
-	if off := m.prOff(); off != "" {
-		// Ahead of the key hints, so truncation cannot cut the fix off.
-		s = off + "  " + s
-	}
-	if m.status != "" && m.now().Sub(m.statusAt) < 5*time.Second {
-		s += "   " + m.status
-	}
+	// Standing lines and a fresh status lead, so truncation cuts key hints first.
+	var parts []string
 	if m.err != nil {
-		// First, so truncation to the width cannot cut the warning off.
 		warn := "stale: daemon unreachable (since " + dur(m.now().Sub(m.errSince)) + ")"
 		if m.hostErr != nil {
 			warn += " · could not start: " + termsafe.Line(m.hostErr.Error()) + " · R retries"
 		}
-		s = yellow.Render(warn) + "  " + s
+		parts = append(parts, yellow.Render(warn))
 	}
-	return truncate(s, m.w)
+	for _, p := range []string{m.prOff(), m.rateLine()} {
+		if p != "" {
+			parts = append(parts, p)
+		}
+	}
+	if m.status != "" && m.now().Sub(m.statusAt) < 5*time.Second {
+		parts = append(parts, m.status)
+	}
+	parts = append(parts, m.help.ShortHelpView(keys.bar(ctx)))
+	return truncate(strings.Join(parts, "  "), m.w)
 }
 
 // click and wheel map a mouse position onto the layout.
