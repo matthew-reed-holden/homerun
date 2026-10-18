@@ -17,7 +17,7 @@ func TestParseGitHubRemote(t *testing.T) {
 			t.Errorf("%q = %q, %v; want %q", in, got, ok, want)
 		}
 	}
-	for _, in := range []string{"https://gitlab.com/o/n", "git@ghe.corp:o/n", "https://github.com/o", "https://github.com/o/n/extra", ""} {
+	for _, in := range []string{"https://gitlab.com/o/n", "git@ghe.corp:o/n", "https://github.com/o", "https://github.com/o/n/extra", "", "https://github.com/o/n%3Fx", "https://github.com/o/..", "https://github.com/o/n%1b"} {
 		if got, ok := ParseGitHubRemote(in); ok {
 			t.Errorf("%q matched %q", in, got)
 		}

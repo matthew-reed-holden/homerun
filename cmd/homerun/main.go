@@ -210,6 +210,9 @@ func addRepo(ctx context.Context, cfgPath, name string) error {
 }
 
 func addRepoReload(ctx context.Context, cfgPath, name string) (reload error, err error) {
+	if !config.ValidRepo(name) {
+		return nil, fmt.Errorf("%q is not a valid OWNER/NAME", name)
+	}
 	_, client, err := loadClient(ctx, cfgPath, true)
 	if err != nil {
 		return nil, err

@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/url"
 	"strings"
+
+	"github.com/matthew-reed-holden/homerun/internal/config"
 )
 
 // ParseGitHubRemote returns OWNER/NAME for a github.com remote URL.
@@ -27,6 +29,10 @@ func ParseGitHubRemote(raw string) (string, bool) {
 	path = strings.TrimSuffix(strings.Trim(path, "/"), ".git")
 	owner, name, ok := strings.Cut(path, "/")
 	if !ok || owner == "" || name == "" || strings.Contains(name, "/") {
+		return "", false
+	}
+	// The remote comes from an untrusted .git/config and ends up in API paths.
+	if !config.ValidRepo(path) {
 		return "", false
 	}
 	return path, true

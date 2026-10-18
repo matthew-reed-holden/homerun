@@ -56,7 +56,17 @@ type User struct {
 
 var repoName = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
 
-func ValidRepo(name string) bool { return repoName.MatchString(name) }
+func ValidRepo(name string) bool {
+	if !repoName.MatchString(name) {
+		return false
+	}
+	for _, p := range strings.Split(name, "/") {
+		if p == "." || p == ".." {
+			return false
+		}
+	}
+	return true
+}
 
 func DefaultUserPath() string {
 	dir, err := os.UserConfigDir()

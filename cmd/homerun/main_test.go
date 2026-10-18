@@ -109,3 +109,10 @@ func TestLoadClientDetailIsLocalOnly(t *testing.T) {
 		t.Fatalf("daemon error carries the detail: %v", err)
 	}
 }
+
+func TestAddRepoRejectsInvalidNameBeforeConfig(t *testing.T) {
+	err := addRepo(context.Background(), "/nonexistent/config.yaml", "o/../x")
+	if err == nil || !strings.Contains(err.Error(), "not a valid OWNER/NAME") {
+		t.Fatalf("got %v", err)
+	}
+}
