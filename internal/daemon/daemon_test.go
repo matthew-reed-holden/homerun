@@ -486,3 +486,25 @@ func TestSetupFailureAcceptedLeavesNothingPending(t *testing.T) {
 		t.Fatalf("pending: %+v %v", st, err)
 	}
 }
+
+func TestSameNameJobsInOneWorkflowGetDistinctChecks(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": `name: CI
+on: [push]
+jobs:
+  a: {name: build, runs-on: ubuntu-latest, steps: [{run: "true"}]}
+  b: {name: build, runs-on: ubuntu-latest, steps: [{run: "true"}]}
+`})
+	h.poll()
+	sha := h.push(map[string]string{"a.txt": "a"})
+	h.poll()
+	got := h.waitDone(sha)
+	want := []string{"homerun / .github/workflows/ci.yml / a", "homerun / .github/workflows/ci.yml / b"}
+	if len(got) != len(want) {
+		t.Fatalf("want checks %v, got %v", want, got)
+	}
+	for _, n := range want {
+		if c := got[n]; c == nil || c.Status != "completed" {
+			t.Errorf("missing or incomplete check %q: %v", n, got)
+		}
+	}
+}

@@ -568,6 +568,18 @@ func (d *Daemon) plan(ctx context.Context, m *git.Mirror, run *store.Run) (*plan
 			}
 		}
 	}
+	// Jobs sharing name: within one workflow are still duplicated; the job ID is unique.
+	count = map[string]int{}
+	for _, c := range run.Checks {
+		count[c.Name]++
+	}
+	for _, w := range p.workflows {
+		for _, j := range w.Jobs {
+			if c := d.findCheck(run, w.Path, j.ID); c != nil && count[c.Name] > 1 {
+				c.Name = CheckName(w.Path, j.ID)
+			}
+		}
+	}
 	d.mu.Lock()
 	d.unhandled[ev.Repo] = unhandled
 	d.mu.Unlock()
