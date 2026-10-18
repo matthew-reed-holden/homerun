@@ -399,7 +399,7 @@ func (t *tracker) finish(actErr error) {
 				// rest get the generic summary below.
 				if !t.d.completed(c) && (conclusion == "skipped" || t.labels[leg] != "") {
 					msg := "homerun error: act never finished this job; its runs-on label may not be mapped; add it under platforms: in your user config"
-					if l := t.labels[leg]; l != "" {
+					if l := t.labels[leg]; l != "" && !strings.HasPrefix(l, "🏁") {
 						msg = "homerun error: runs-on label " + l + " is not mapped; add it under platforms: in your user config"
 					}
 					t.setLastLine(c, "failure", t.tails[leg])
@@ -521,7 +521,6 @@ func (d *Daemon) runExtra(ctx, rctx context.Context, run *store.Run, c *store.Ch
 	d.complete(rctx, run, c, conclusion, title, summary, codeBlock(tail))
 }
 
-// codeBlock fences the last lines that fit in maxText.
 // setLastLine records why a check failed for the check rows.
 func (t *tracker) setLastLine(c *store.Check, conclusion string, tail []string) {
 	if conclusion == "failure" {
@@ -529,16 +528,18 @@ func (t *tracker) setLastLine(c *store.Check, conclusion string, tail []string) 
 	}
 }
 
-// lastLine is the last non-empty line of a tail.
+// lastLine is the last non-empty line of a tail, ignoring act's own
+// "🏁  Job failed" verdict, which says nothing about why.
 func lastLine(tail []string) string {
 	for i := len(tail) - 1; i >= 0; i-- {
-		if l := strings.TrimSpace(tail[i]); l != "" {
+		if l := strings.TrimSpace(tail[i]); l != "" && !strings.HasPrefix(l, "🏁") {
 			return l
 		}
 	}
 	return ""
 }
 
+// codeBlock fences the last lines that fit in maxText.
 func codeBlock(lines []string) string {
 	if len(lines) == 0 {
 		return ""

@@ -859,7 +859,7 @@ func TestMatrixLegsOfCollidingWorkflowsUseFilePaths(t *testing.T) {
 	}
 }
 
-func lastLineOf(h *harness, sha, job string) (string, string) {
+func lastLineOf(h *harness, job string) (string, string) {
 	var stored, viewed string
 	h.d.mutate(func() {
 		for _, r := range h.d.runs {
@@ -886,16 +886,16 @@ func TestFailedCheckCarriesLastLine(t *testing.T) {
 	h.output(`{"jobID":"build","matrix":{},"msg":"ok"}
 {"jobID":"build","matrix":{},"msg":"FAIL: TestX"}
 {"jobID":"build","matrix":{},"msg":""}
-{"jobID":"build","matrix":{},"jobResult":"failure","msg":""}
+{"jobID":"build","matrix":{},"jobResult":"failure","msg":"🏁  Job failed"}
 {"jobID":"docker","matrix":{},"jobResult":"success","msg":"ok"}
 `)
 	sha := h.push(map[string]string{"b.txt": "b"})
 	h.poll()
 	h.waitDone(sha)
-	if got, view := lastLineOf(h, sha, "build"); got != "FAIL: TestX" || view != "FAIL: TestX" {
+	if got, view := lastLineOf(h, "build"); got != "FAIL: TestX" || view != "FAIL: TestX" {
 		t.Fatalf("build LastLine = %q, view %q", got, view)
 	}
-	if got, view := lastLineOf(h, sha, "docker"); got != "" || view != "" {
+	if got, view := lastLineOf(h, "docker"); got != "" || view != "" {
 		t.Fatalf("passing check has LastLine %q / %q", got, view)
 	}
 }
@@ -904,12 +904,12 @@ func TestLastLineIsMasked(t *testing.T) {
 	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
 	h.poll()
 	h.output(`{"jobID":"build","matrix":{},"msg":"leak s3cr3t-value"}
-{"jobID":"build","matrix":{},"jobResult":"failure","msg":""}
+{"jobID":"build","matrix":{},"jobResult":"failure","msg":"🏁  Job failed"}
 `)
 	head := h.pr(7, repo, map[string]string{".github/homerun.yml": repoCfg})
 	h.poll()
 	h.waitDone(head)
-	got, view := lastLineOf(h, head, "build")
+	got, view := lastLineOf(h, "build")
 	if !strings.Contains(got, "***") || strings.Contains(got+view, "s3cr3t-value") {
 		t.Fatalf("LastLine = %q / %q", got, view)
 	}
