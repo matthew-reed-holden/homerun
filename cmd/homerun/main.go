@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -178,11 +179,16 @@ func cmdTUI() error {
 }
 
 // userPRs builds the PR client from the user's own token; the error says why
-// PR pages are off. The token stays in this process.
+// PR pages are off. The token stays in this process. Only a missing config
+// falls back to gh: a broken one must not act as a different account.
 func userPRs(cfgPath string) (pr.API, error) {
 	sec := config.Secret{Cmd: "gh auth token"}
-	if cfg, _, err := config.LoadUser(cfgPath); err == nil {
+	cfg, _, err := config.LoadUser(cfgPath)
+	switch {
+	case err == nil:
 		sec = cfg.UserTokenSecret()
+	case !errors.Is(err, fs.ErrNotExist):
+		return nil, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

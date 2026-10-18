@@ -172,3 +172,22 @@ func TestCheckInstalled(t *testing.T) {
 		t.Errorf("installed: %v", err)
 	}
 }
+
+func TestUserPRsBrokenConfigTurnsPRPagesOff(t *testing.T) {
+	t.Setenv("PATH", t.TempDir()) // no gh: a fallback to it would fail differently
+	p := filepath.Join(t.TempDir(), "config.yml")
+	if err := os.WriteFile(p, []byte("user_token: [not a secret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	api, err := userPRs(p)
+	if api != nil || err == nil || !strings.Contains(err.Error(), p) {
+		t.Fatalf("api %v err %v", api, err)
+	}
+	if err := os.WriteFile(p, []byte("user_token: {env: HOMERUN_TEST_TOKEN}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOMERUN_TEST_TOKEN", "tok")
+	if api, err := userPRs(p); api == nil || err != nil {
+		t.Fatalf("configured token: api %v err %v", api, err)
+	}
+}
