@@ -1,0 +1,24 @@
+╭─#1 e2e PR──────────────────────╮╭─Description────────────────────────────────╮
+│  Description                   ││#1 e2e PR  @matt · feat → main              │
+│✘ Checks 1/2                    ││✔ no conflicts                              │
+│                                ││Checks ✔ 1 passed · ◌ 1 pending             │
+│                                ││Reviews: approved · Files 3 (+40 −7) · 💬 1 │
+│                                ││Open                                        │
+│                                ││────────────────────────────────────────────│
+│                                ││                                            │
+│     ╭─────────────────────────────────────────────────────────────────╮      │
+│     │ Merge #1 into main?                                             │      │
+│     │                                                                 │      │
+│     │ ○ Create a merge commit  ● Squash and merge  ○ Rebase and merge │      │
+│     │                                                                 │      │
+│     │ [tab] switch · [y] merge · any other key cancels                │      │
+│     ╰─────────────────────────────────────────────────────────────────╯      │
+│                                ││  looks good                                │
+│                                ││✔ @bob approved · 1h ago                    │
+│                                ││◆ @matt merged · 5m ago                     │
+│                                ││                                            │
+│                                ││Checks                                      │
+│                                ││✔ lint required                             │
+│                                ││⟳ build                                     │
+╰────────────────────────────────╯╰────────────────────────────────────────────╯
+j/k up/down • m merge • u update branch • o open • esc back

@@ -19,6 +19,8 @@ type dialog struct {
 	title, body string
 	confirm     tea.Cmd // run on y; nil for an information box
 	open        string  // an information box's URL, opened by o
+	// onKey, when set, sees each key first; true keeps the dialog open.
+	onKey func(tea.KeyPressMsg) bool
 }
 
 // key closes the dialog on any key; only y on a confirmation runs it.

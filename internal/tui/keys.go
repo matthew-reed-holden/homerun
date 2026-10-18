@@ -9,6 +9,7 @@ type keyMap struct {
 	Up, Down, Top, Bottom, Fold, Enter, Esc, Move        key.Binding
 	Search, NextMatch, PrevMatch, NextFail, Follow, Zoom key.Binding
 	Rerun, Cancel, Open, Copy, Reload, Help, Quit        key.Binding
+	Merge, Update                                        key.Binding
 }
 
 func bind(help, desc string, ks ...string) key.Binding {
@@ -41,6 +42,8 @@ var keys = keyMap{
 	Cancel:    bind("c", "cancel", "c"),
 	Open:      bind("o", "open", "o"),
 	Copy:      bind("y", "copy sha", "y"),
+	Merge:     bind("m", "merge", "m"),
+	Update:    bind("u", "update branch", "u"),
 	Reload:    bind("R", "reload config", "R"),
 	Help:      bind("?", "help", "?"),
 	Quit:      bind("q", "quit", "q", "ctrl+c"),
@@ -54,6 +57,7 @@ const (
 	inLog
 	inPRSections
 	inPRDesc
+	inPRRow // a dashboard PR row, with PR pages on
 )
 
 func (k keyMap) bar(c barCtx) []key.Binding {
@@ -65,7 +69,9 @@ func (k keyMap) bar(c barCtx) []key.Binding {
 	case inPRSections:
 		return []key.Binding{k.Move, k.Into, k.Esc, k.Open, k.Help, k.Quit}
 	case inPRDesc:
-		return []key.Binding{k.Move, k.Open, k.Esc}
+		return []key.Binding{k.Move, k.Merge, k.Update, k.Open, k.Esc}
+	case inPRRow:
+		return []key.Binding{k.Panel1, k.Into, k.Rerun, k.Cancel, k.Open, k.Merge, k.Update, k.Help, k.Quit}
 	}
 	return []key.Binding{k.Panel1, k.Into, k.Rerun, k.Cancel, k.Open, k.Help, k.Quit}
 }
@@ -75,6 +81,6 @@ func (k keyMap) groups() [][]key.Binding {
 		{k.Panel1, k.Next, k.Prev, k.Into, k.Back, k.Reload, k.Help, k.Quit},
 		{k.Up, k.Down, k.Move, k.Top, k.Bottom, k.Fold, k.Enter},
 		{k.Search, k.NextMatch, k.PrevMatch, k.NextFail, k.Follow, k.Zoom, k.Esc},
-		{k.Rerun, k.Cancel, k.Open, k.Copy},
+		{k.Rerun, k.Cancel, k.Open, k.Copy, k.Merge, k.Update},
 	}
 }

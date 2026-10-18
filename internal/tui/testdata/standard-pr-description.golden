@@ -21,4 +21,4 @@
 │                                ││✔ lint required                             │
 │                                ││⟳ build                                     │
 ╰────────────────────────────────╯╰────────────────────────────────────────────╯
-j/k up/down • o open • esc back
+j/k up/down • m merge • u update branch • o open • esc back

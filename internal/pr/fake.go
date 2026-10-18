@@ -27,7 +27,9 @@ type Fake struct {
 	Merges      []MergeCall
 	Lists       []ListCall
 	DetailCalls []string // "repo#n", one per Detail call
-	Err         error
+	Err         error    // fails every method
+	MergeErr    error
+	UpdateErr   error
 	Low         bool
 }
 
@@ -81,6 +83,9 @@ func (f *Fake) UpdateBranch(_ context.Context, prID, headSHA string, rebase bool
 	if f.Err != nil {
 		return f.Err
 	}
+	if f.UpdateErr != nil {
+		return f.UpdateErr
+	}
 	f.Updates = append(f.Updates, UpdateCall{prID, headSHA, rebase})
 	return nil
 }
@@ -90,6 +95,9 @@ func (f *Fake) Merge(_ context.Context, prID, method, headSHA string) error {
 	defer f.Unlock()
 	if f.Err != nil {
 		return f.Err
+	}
+	if f.MergeErr != nil {
+		return f.MergeErr
 	}
 	f.Merges = append(f.Merges, MergeCall{prID, method, headSHA})
 	return nil

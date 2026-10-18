@@ -1,0 +1,40 @@
+╭─#1 e2e PR──────────────────────╮╭─Description────────────────────────────────────────────────────────────────────────╮
+│  Description                   ││#1 e2e PR  @matt · feat → main                                                      │
+│✘ Checks 1/2                    ││✔ no conflicts                                                                      │
+│                                ││Checks ✔ 1 passed · ◌ 1 pending                                                     │
+│                                ││Reviews: approved · Files 3 (+40 −7) · 💬 1                                         │
+│                                ││Open                                                                                │
+│                                ││────────────────────────────────────────────────────────────────────────────────────│
+│                                ││                                                                                    │
+│                                ││ Heading                                                                            │
+│                                ││                                                                                    │
+│                                ││Makes the thing b optional.                                                         │
+│                                ││                                                                                    │
+│                                ││Timeline                                                                            │
+│                                ││● abc1234 headline · @matt · 2h ago                                                 │
+│                                ││💬 @bob · 1h ago                                                                    │
+│                                ││  looks good                                                                        │
+│                         ╭─────────────────────────────────────────────────────────────────╮                          │
+│                         │ Merge #1 into main?                                             │                          │
+│                         │                                                                 │                          │
+│                         │ ○ Create a merge commit  ● Squash and merge  ○ Rebase and merge │                          │
+│                         │                                                                 │                          │
+│                         │ [tab] switch · [y] merge · any other key cancels                │                          │
+│                         ╰─────────────────────────────────────────────────────────────────╯                          │
+│                                ││Merge                                                                               │
+│                                ││✔ Ready to merge                                                                    │
+│                                ││                                                                                    │
+│                                ││                                                                                    │
+│                                ││                                                                                    │
+│                                ││                                                                                    │
+│                                ││                                                                                    │
+│                                ││                                                                                    │
+│                                ││                                                                                    │
+│                                ││                                                                                    │
+│                                ││                                                                                    │
+│                                ││                                                                                    │
+│                                ││                                                                                    │
+│                                ││                                                                                    │
+│                                ││                                                                                    │
+╰────────────────────────────────╯╰────────────────────────────────────────────────────────────────────────────────────╯
+j/k up/down • m merge • u update branch • o open • esc back

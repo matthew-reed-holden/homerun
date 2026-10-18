@@ -307,6 +307,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.onDetail(msg)
 	case detailTickMsg:
 		return m, m.onDetailTick(msg)
+	case mutatedMsg:
+		return m, m.onMutated(msg)
+	case rowDetailMsg:
+		m.onRowDetail(msg)
 	case addedMsg:
 		if msg.err != nil {
 			m.dlg = addFailedDialog(msg.name, msg.err)
@@ -419,6 +423,9 @@ func (m *model) moved(p pane, before int) tea.Cmd {
 func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 	if m.dlg != nil {
 		d := m.dlg
+		if d.onKey != nil && d.onKey(k) {
+			return nil
+		}
 		m.dlg = nil
 		return d.key(k)
 	}
@@ -461,6 +468,10 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 		return m.open()
 	case key.Matches(k, keys.Copy):
 		return m.copySHA()
+	case key.Matches(k, keys.Merge) && m.log == nil:
+		return m.rowMutate(true)
+	case key.Matches(k, keys.Update) && m.log == nil:
+		return m.rowMutate(false)
 	case m.focus == paneMain:
 		return m.mainKey(k)
 	default:
@@ -742,6 +753,10 @@ func (m *model) bar() string {
 		ctx = inLog
 	case m.focus == paneMain:
 		ctx = inTree
+	case m.o.PRs != nil:
+		if it := m.selectedItem(); it != nil && it.PR > 0 {
+			ctx = inPRRow
+		}
 	}
 	s := m.help.ShortHelpView(keys.bar(ctx))
 	if off := m.prOff(); off != "" {

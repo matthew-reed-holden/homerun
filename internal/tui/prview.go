@@ -32,6 +32,8 @@ type prView struct {
 	pageW   int // the width vp's content was built for; 0 forces a rebuild
 	secs    list
 	delay   time.Duration // the next detail poll interval
+	seq     int           // numbers detail fetches in the order issued
+	shown   int           // the seq of the detail result applied last
 	back    pane          // the focus esc restores
 }
 
@@ -39,6 +41,7 @@ type (
 	// detailMsg carries a detail fetch's result; gen drops one for a PR since closed.
 	detailMsg struct {
 		gen  int
+		seq  int // only a result newer than the one shown is applied
 		d    *pr.Detail
 		err  error
 		low  bool
@@ -84,12 +87,14 @@ func (m *model) fetchDetail(tick bool) tea.Cmd {
 	if api == nil {
 		return nil
 	}
+	m.pr.seq++
+	seq := m.pr.seq
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), prTimeout)
 		defer cancel()
 		d, err := api.Detail(ctx, repo, n)
 		var rl *pr.RateLimitError
-		return detailMsg{gen: gen, d: d, err: err, low: api.RateLow() || errors.As(err, &rl), tick: tick}
+		return detailMsg{gen: gen, seq: seq, d: d, err: err, low: api.RateLow() || errors.As(err, &rl), tick: tick}
 	}
 }
 
@@ -98,19 +103,24 @@ func (m *model) onDetail(msg detailMsg) tea.Cmd {
 	if p == nil || msg.gen != m.prGen {
 		return nil
 	}
-	p.err = msg.err
-	if msg.err == nil {
-		p.d = msg.d
-		if p.d.Behind >= 0 {
-			if m.behind == nil {
-				m.behind = map[string]int{}
+	// A slow poll must not undo a newer refetch, as after a mutation;
+	// it still schedules the next poll.
+	if msg.seq > p.shown {
+		p.shown = msg.seq
+		p.err = msg.err
+		if msg.err == nil {
+			p.d = msg.d
+			if p.d.Behind >= 0 {
+				if m.behind == nil {
+					m.behind = map[string]int{}
+				}
+				m.behind[m.prRef()] = p.d.Behind
+				m.items.set(m.itemRows())
 			}
-			m.behind[m.prRef()] = p.d.Behind
-			m.items.set(m.itemRows())
 		}
+		p.pageW = 0
+		m.syncSections()
 	}
-	p.pageW = 0
-	m.syncSections()
 	if !msg.tick {
 		return nil
 	}
@@ -229,6 +239,10 @@ func (m *model) sectionsKey(k tea.KeyPressMsg) tea.Cmd {
 		return m.rerun()
 	case key.Matches(k, keys.Cancel) && m.pr.section == 1:
 		m.cancel()
+	case key.Matches(k, keys.Merge):
+		m.prMutate(true)
+	case key.Matches(k, keys.Update):
+		m.prMutate(false)
 	}
 	if m.pr != nil {
 		m.pickSection()
@@ -251,6 +265,10 @@ func (m *model) descKey(k tea.KeyPressMsg) tea.Cmd {
 		vp.GotoBottom()
 	case key.Matches(k, keys.Esc), key.Matches(k, keys.Back):
 		m.focus = paneSections
+	case key.Matches(k, keys.Merge):
+		m.prMutate(true)
+	case key.Matches(k, keys.Update):
+		m.prMutate(false)
 	}
 	return nil
 }
@@ -382,8 +400,10 @@ func (m *model) prPage(w int) []string {
 		}
 		out = append(out, wrapLines(l, w)...)
 	}
-	// ponytail: placeholder until the merge box lands (Task 6).
-	out = append(out, "", bold.Render("Merge"), dim.Render("Merging from here is not available yet."))
+	out = append(out, "", bold.Render("Merge"))
+	for _, l := range mergeLines(d) {
+		out = append(out, wrapLines(paintMerge(l), w)...)
+	}
 	return out
 }
 

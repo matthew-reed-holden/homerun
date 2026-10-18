@@ -22,7 +22,7 @@
 │                                ││⟳ build                                                                             │
 │                                ││                                                                                    │
 │                                ││Merge                                                                               │
-│                                ││Merging from here is not available yet.                                             │
+│                                ││Merged                                                                              │
 │                                ││                                                                                    │
 │                                ││                                                                                    │
 │                                ││                                                                                    │
@@ -37,4 +37,4 @@
 │                                ││                                                                                    │
 │                                ││                                                                                    │
 ╰────────────────────────────────╯╰────────────────────────────────────────────────────────────────────────────────────╯
-j/k up/down • o open • esc back
+j/k up/down • m merge • u update branch • o open • esc back
