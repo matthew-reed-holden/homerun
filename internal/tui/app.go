@@ -55,6 +55,7 @@ type Options struct {
 	Hosting func() bool
 	HostErr error  // the first Host attempt's error, made before Run
 	Launch  string // OWNER/NAME or ""
+	// AddRepo registers a repo; an error that is an InstallLinker offers its link.
 	AddRepo func(ctx context.Context, name string) error
 	Quit    <-chan struct{} // closed on a signal that must quit at once (SIGHUP)
 }

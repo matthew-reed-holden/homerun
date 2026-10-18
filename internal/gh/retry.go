@@ -104,6 +104,21 @@ func Permanent(err error) bool {
 	return false
 }
 
+// NoAccess reports whether GitHub answered 404 or 403 (not a rate limit): the
+// App cannot see the repo, usually because it is not installed there.
+func NoAccess(err error) bool {
+	code := 0
+	var he *ghinstallation.HTTPError
+	var e *github.ErrorResponse
+	switch {
+	case errors.As(err, &he) && he.Response != nil:
+		code = he.Response.StatusCode
+	case errors.As(err, &e) && e.Response != nil:
+		code = e.Response.StatusCode
+	}
+	return code == http.StatusNotFound || code == http.StatusForbidden
+}
+
 func permanentStatus(code int) bool {
 	switch code {
 	case http.StatusForbidden, http.StatusNotFound, http.StatusGone, http.StatusUnprocessableEntity:

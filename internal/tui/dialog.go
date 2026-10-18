@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -95,12 +96,17 @@ func addDialog(name string, add func(string) tea.Cmd) *dialog {
 	}
 }
 
-// addFailedDialog offers the first https URL in the error, usually the App's install page.
+// InstallLinker is an AddRepo error that knows the App's install page.
+type InstallLinker interface{ InstallLink() string }
+
+// addFailedDialog offers the App's install page when the error carries one;
+// a URL in the error's text (an API request, say) is never offered.
 func addFailedDialog(name string, err error) *dialog {
 	msg := termsafe.Line(err.Error())
 	d := &dialog{title: "Could not add " + termsafe.Line(name), body: msg + "\n\nany key closes"}
-	if i := strings.Index(msg, "https://"); i >= 0 {
-		d.open = strings.TrimRight(strings.Fields(msg[i:])[0], ".,;:)")
+	var il InstallLinker
+	if errors.As(err, &il) && httpURL(il.InstallLink()) {
+		d.open = il.InstallLink()
 		d.body = msg + "\n\n[o] open · any other key closes"
 	}
 	return d

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -979,10 +980,27 @@ func TestUnregisteredLaunchOffersAdd(t *testing.T) {
 	}
 }
 
+type installErr struct{ link string }
+
+func (e installErr) Error() string {
+	return "the homerun App is not installed on o/new: install it at " + e.link
+}
+func (e installErr) InstallLink() string { return e.link }
+
+func TestAddFailureWithoutInstallLinkOpensNothing(t *testing.T) {
+	m := launchModel(t, "o/new", func(context.Context, string) error {
+		return errors.New("GET https://api.github.com/repos/o/new: dial tcp: connection refused")
+	}, "o/a")
+	m.Update(keysIn(m, "y")())
+	if m.dlg == nil || m.dlg.open != "" || strings.Contains(m.dlg.body, "[o] open") || !strings.Contains(m.dlg.body, "connection refused") {
+		t.Fatalf("%+v", m.dlg)
+	}
+}
+
 func TestAddFailureShowsInstallLink(t *testing.T) {
 	const link = "https://github.com/apps/homerun/installations/new"
 	m := launchModel(t, "o/new", func(context.Context, string) error {
-		return errors.New("the homerun App is not installed on o/new: install it at " + link)
+		return fmt.Errorf("add: %w", installErr{link})
 	}, "o/a")
 	m.Update(keysIn(m, "y")())
 	if m.dlg == nil || !strings.Contains(m.dlg.body, link) || m.dlg.open != link {

@@ -3,12 +3,16 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/google/go-github/v92/github"
 	"github.com/matthew-reed-holden/homerun/internal/api"
 )
 
@@ -114,5 +118,57 @@ func TestAddRepoRejectsInvalidNameBeforeConfig(t *testing.T) {
 	err := addRepo(context.Background(), "/nonexistent/config.yaml", "o/../x")
 	if err == nil || !strings.Contains(err.Error(), "not a valid OWNER/NAME") {
 		t.Fatalf("got %v", err)
+	}
+}
+
+type fakeRepoAPI struct {
+	err  error
+	urls int
+}
+
+func (f *fakeRepoAPI) DefaultBranch(context.Context, string) (string, error) { return "main", f.err }
+func (f *fakeRepoAPI) AppURL(context.Context) (string, error) {
+	f.urls++
+	return "https://github.com/apps/homerun", nil
+}
+
+func TestCheckInstalled(t *testing.T) {
+	status := func(code int) error {
+		return fmt.Errorf("the homerun GitHub App is not installed on o/r (or cannot see it): %w",
+			&github.ErrorResponse{Response: &http.Response{StatusCode: code, Request: &http.Request{Method: "GET",
+				URL: &url.URL{Scheme: "https", Host: "api.github.com", Path: "/repos/o/r/installation"}}}})
+	}
+	network := &url.Error{Op: "Get", URL: "https://api.github.com/repos/o/r", Err: errors.New("dial tcp: connection refused")}
+	for _, tc := range []struct {
+		name string
+		err  error
+		link string
+	}{
+		{"404", status(404), "https://github.com/apps/homerun/installations/new"},
+		{"403", status(403), "https://github.com/apps/homerun/installations/new"},
+		{"network", network, ""},
+		{"500", status(500), ""},
+	} {
+		f := &fakeRepoAPI{err: tc.err}
+		err := checkInstalled(context.Background(), f, "o/r")
+		var ni *notInstalledError
+		switch {
+		case err == nil:
+			t.Errorf("%s: no error", tc.name)
+		case tc.link == "":
+			if errors.As(err, &ni) || !errors.Is(err, tc.err) && !strings.Contains(err.Error(), tc.err.Error()) {
+				t.Errorf("%s: got %v (%T), want the real error", tc.name, err, err)
+			}
+			if strings.Contains(err.Error(), "is not installed on o/r: install it at") || f.urls != 0 {
+				t.Errorf("%s: claims the App is not installed: %v", tc.name, err)
+			}
+		default:
+			if !errors.As(err, &ni) || ni.InstallURL != tc.link || ni.InstallLink() != tc.link || ni.Repo != "o/r" {
+				t.Errorf("%s: got %#v", tc.name, err)
+			}
+		}
+	}
+	if err := checkInstalled(context.Background(), &fakeRepoAPI{}, "o/r"); err != nil {
+		t.Errorf("installed: %v", err)
 	}
 }

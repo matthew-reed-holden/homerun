@@ -225,16 +225,43 @@ func addRepoReload(ctx context.Context, cfgPath, name string) (reload error, err
 	if err != nil {
 		return nil, err
 	}
-	if _, err := client.DefaultBranch(ctx, name); err != nil {
-		if u, uerr := client.AppURL(ctx); uerr == nil && u != "" {
-			return nil, fmt.Errorf("the homerun App is not installed on %s: install it at %s/installations/new", name, u)
-		}
-		return nil, fmt.Errorf("%w\nInstall the homerun App on %s, then try again", err, name)
+	if err := checkInstalled(ctx, client, name); err != nil {
+		return nil, err
 	}
 	if err := config.AddRepo(cfgPath, name); err != nil {
 		return nil, err
 	}
 	return api.NewClient(api.SocketPath()).Reload(ctx), nil
+}
+
+type repoAPI interface {
+	DefaultBranch(ctx context.Context, repo string) (string, error)
+	AppURL(ctx context.Context) (string, error)
+}
+
+// notInstalledError carries the App's install page, so the TUI offers that
+// link and never one scraped from an error's text.
+type notInstalledError struct{ Repo, InstallURL string }
+
+func (e *notInstalledError) Error() string {
+	return fmt.Sprintf("the homerun App is not installed on %s: install it at %s", e.Repo, e.InstallURL)
+}
+
+func (e *notInstalledError) InstallLink() string { return e.InstallURL }
+
+// checkInstalled says the App is not installed only when GitHub refused to
+// show the repo (404 or 403); any other failure is reported as itself.
+func checkInstalled(ctx context.Context, c repoAPI, name string) error {
+	_, err := c.DefaultBranch(ctx, name)
+	if err == nil {
+		return nil
+	}
+	if gh.NoAccess(err) {
+		if u, uerr := c.AppURL(ctx); uerr == nil && u != "" {
+			return &notInstalledError{Repo: name, InstallURL: u + "/installations/new"}
+		}
+	}
+	return fmt.Errorf("%w\nInstall the homerun App on %s, then try again", err, name)
 }
 
 func cmdRun(args []string) error {

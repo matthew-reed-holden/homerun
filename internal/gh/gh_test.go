@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -223,6 +224,28 @@ func TestPermanent(t *testing.T) {
 	} {
 		if got := Permanent(c.err); got != c.want {
 			t.Errorf("%s: Permanent = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestNoAccess(t *testing.T) {
+	er := func(code int) error { return &github.ErrorResponse{Response: &http.Response{StatusCode: code}} }
+	for _, c := range []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"404", er(404), true},
+		{"403", er(403), true},
+		{"wrapped 404", fmt.Errorf("not installed: %w", er(404)), true},
+		{"token 404", &url.Error{Op: "Post", URL: "x", Err: &ghinstallation.HTTPError{Response: &http.Response{StatusCode: 404}}}, true},
+		{"401", er(401), false},
+		{"500", er(500), false},
+		{"rate limit", &github.RateLimitError{Response: &http.Response{StatusCode: 403}}, false},
+		{"transport", errors.New("connection reset"), false},
+	} {
+		if got := NoAccess(c.err); got != c.want {
+			t.Errorf("%s: NoAccess = %v, want %v", c.name, got, c.want)
 		}
 	}
 }
