@@ -2,6 +2,7 @@ package pr
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -167,5 +168,178 @@ func TestListMissingRepoFails(t *testing.T) {
 	_, err := c.List(context.Background(), "o/r", []int{1})
 	if err == nil || !strings.Contains(err.Error(), "Could not resolve to a Repository") {
 		t.Fatalf("err %v", err)
+	}
+}
+
+func gqlVars(t *testing.T, body string) map[string]any {
+	t.Helper()
+	var req struct {
+		Query     string
+		Variables map[string]any
+	}
+	if err := json.Unmarshal([]byte(body), &req); err != nil {
+		t.Fatal(err)
+	}
+	return req.Variables
+}
+
+const detailHead = `"id":"PR1","number":7,"title":"t","body":"b","author":{"login":"me"},"headRefName":"f","baseRefName":"main","headRefOid":"sha1",
+"url":"https://x/7","state":"OPEN","viewerDidAuthor":true,"viewerCanUpdateBranch":true`
+
+func detailPage(timeline, pageInfo string) string {
+	return `{"data":{"repository":{"mergeCommitAllowed":false,"squashMergeAllowed":true,"rebaseMergeAllowed":true,"viewerDefaultMergeMethod":"SQUASH",
+"pullRequest":{` + detailHead + `,"timelineItems":{"pageInfo":` + pageInfo + `,"nodes":[` + timeline + `]}}}}}`
+}
+
+func TestDetailParse(t *testing.T) {
+	var comparePath string
+	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			comparePath = r.URL.Path
+			io.WriteString(w, `{"behind_by":3}`)
+			return
+		}
+		io.WriteString(w, detailPage(`
+{"__typename":"PullRequestCommit","commit":{"oid":"c1","messageHeadline":"fix it","committedDate":"2026-01-01T10:00:00Z","author":{"user":{"login":"me"},"name":"Me"}}},
+{"__typename":"IssueComment","author":{"login":"bob"},"body":"hi","createdAt":"2026-01-01T11:00:00Z"},
+{"__typename":"PullRequestReview","author":{"login":"amy"},"body":"ok","state":"APPROVED","submittedAt":"2026-01-01T12:00:00Z"},
+{"__typename":"PullRequestReview","author":{"login":"zed"},"body":"","state":"PENDING","submittedAt":null},
+{"__typename":"MergedEvent","actor":{"login":"me"},"createdAt":"2026-01-01T13:00:00Z"}`, `{"hasNextPage":false,"endCursor":""}`))
+	})
+	d, err := c.Detail(context.Background(), "o/r", 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if comparePath != "/repos/o/r/compare/main...sha1" {
+		t.Fatalf("compare %q", comparePath)
+	}
+	if !reflect.DeepEqual(d.MergeMethods, []string{"SQUASH", "REBASE"}) || d.DefaultMethod != "SQUASH" || d.Behind != 3 {
+		t.Fatalf("%+v", d)
+	}
+	if d.ID != "PR1" || d.URL != "https://x/7" || d.State != "OPEN" || !d.ViewerDidAuthor || !d.ViewerCanUpdateBranch || d.Number != 7 || d.HeadSHA != "sha1" {
+		t.Fatalf("%+v", d)
+	}
+	var kinds []string
+	for _, e := range d.Timeline {
+		kinds = append(kinds, e.Kind)
+	}
+	if !reflect.DeepEqual(kinds, []string{"commit", "comment", "review", "merged"}) {
+		t.Fatalf("kinds %v", kinds)
+	}
+	if d.Timeline[2].State != "APPROVED" || d.Timeline[0].SHA != "c1" || d.Timeline[0].Text != "fix it" || d.Timeline[1].Author != "bob" {
+		t.Fatalf("timeline %+v", d.Timeline)
+	}
+}
+
+func TestDetailTimelinePaginates(t *testing.T) {
+	var posts int
+	var afters []any
+	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			io.WriteString(w, `{"behind_by":0}`)
+			return
+		}
+		b, _ := io.ReadAll(r.Body)
+		afters = append(afters, gqlVars(t, string(b))["after"])
+		posts++
+		if posts == 1 {
+			io.WriteString(w, detailPage(`{"__typename":"ClosedEvent","actor":{"login":"a"},"createdAt":"2026-01-01T10:00:00Z"}`, `{"hasNextPage":true,"endCursor":"c1"}`))
+			return
+		}
+		io.WriteString(w, `{"data":{"repository":{"pullRequest":{"timelineItems":{"pageInfo":{"hasNextPage":false,"endCursor":""},"nodes":[
+{"__typename":"ReopenedEvent","actor":{"login":"a"},"createdAt":"2026-01-01T11:00:00Z"}]}}}}}`)
+	})
+	d, err := c.Detail(context.Background(), "o/r", 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if posts != 2 || afters[1] != "c1" {
+		t.Fatalf("posts %d afters %v", posts, afters)
+	}
+	if len(d.Timeline) != 2 || d.Timeline[0].Kind != "closed" || d.Timeline[1].Kind != "reopened" {
+		t.Fatalf("%+v", d.Timeline)
+	}
+}
+
+func TestDetailUnknownPR(t *testing.T) {
+	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, `{"data":{"repository":{"pullRequest":null}},"errors":[{"type":"NOT_FOUND","path":["repository","pullRequest"],"message":"nope"}]}`)
+	})
+	if d, err := c.Detail(context.Background(), "o/r", 7); err == nil || d != nil {
+		t.Fatalf("%v %v", d, err)
+	}
+}
+
+func TestDetailCompareFailureIsUnknown(t *testing.T) {
+	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			http.NotFound(w, r)
+			return
+		}
+		io.WriteString(w, detailPage(``, `{"hasNextPage":false,"endCursor":""}`))
+	})
+	d, err := c.Detail(context.Background(), "o/r", 7)
+	if err != nil || d.Behind != -1 {
+		t.Fatalf("%v %+v", err, d)
+	}
+}
+
+func TestCompareEscapesBaseRef(t *testing.T) {
+	var path string
+	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		path = r.URL.EscapedPath()
+		io.WriteString(w, `{"behind_by":1}`)
+	})
+	if n := c.behind(context.Background(), "o", "r", "release/2.x", "sha"); n != 1 {
+		t.Fatal(n)
+	}
+	if path != "/repos/o/r/compare/release/2.x...sha" {
+		t.Fatal(path)
+	}
+	c.behind(context.Background(), "o", "r", "a b/c", "sha")
+	if path != "/repos/o/r/compare/a%20b/c...sha" {
+		t.Fatal(path)
+	}
+}
+
+func TestMutations(t *testing.T) {
+	var body string
+	fail := false
+	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		body = string(b)
+		if fail {
+			io.WriteString(w, `{"errors":[{"message":"Head branch was modified"}]}`)
+			return
+		}
+		io.WriteString(w, `{"data":{}}`)
+	})
+	ctx := context.Background()
+	check := func(name string, want map[string]any) {
+		t.Helper()
+		if !strings.Contains(body, name+"(input:$input)") {
+			t.Fatalf("%s missing in %s", name, body)
+		}
+		if got := gqlVars(t, body)["input"]; !reflect.DeepEqual(got, want) {
+			t.Fatalf("%s input %v want %v", name, got, want)
+		}
+	}
+	if err := c.Comment(ctx, "PR1", "hello"); err != nil {
+		t.Fatal(err)
+	}
+	check("addComment", map[string]any{"subjectId": "PR1", "body": "hello"})
+	for rebase, m := range map[bool]string{true: "REBASE", false: "MERGE"} {
+		if err := c.UpdateBranch(ctx, "PR1", "sha1", rebase); err != nil {
+			t.Fatal(err)
+		}
+		check("updatePullRequestBranch", map[string]any{"pullRequestId": "PR1", "expectedHeadOid": "sha1", "updateMethod": m})
+	}
+	if err := c.Merge(ctx, "PR1", "SQUASH", "sha1"); err != nil {
+		t.Fatal(err)
+	}
+	check("mergePullRequest", map[string]any{"pullRequestId": "PR1", "mergeMethod": "SQUASH", "expectedHeadOid": "sha1"})
+	fail = true
+	if err := c.Merge(ctx, "PR1", "SQUASH", "sha1"); err == nil || !strings.Contains(err.Error(), "Head branch was modified") {
+		t.Fatal(err)
 	}
 }

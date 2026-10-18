@@ -40,17 +40,6 @@ func (c *Client) resetTime() time.Time { c.mu.Lock(); defer c.mu.Unlock(); retur
 
 func (c *Client) setLow(v bool) { c.mu.Lock(); c.low = v; c.mu.Unlock() }
 
-func (c *Client) Detail(context.Context, string, int) (*Detail, error) {
-	return nil, errors.New("not implemented")
-}
-func (c *Client) Comment(context.Context, string, string) error { return errors.New("not implemented") }
-func (c *Client) UpdateBranch(context.Context, string, string, bool) error {
-	return errors.New("not implemented")
-}
-func (c *Client) Merge(context.Context, string, string, string) error {
-	return errors.New("not implemented")
-}
-
 // do sends one request and decodes the JSON body into out (if non-nil).
 func (c *Client) do(ctx context.Context, method, url string, body any, out any) (gqlErrs []gqlError, err error) {
 	var rd *bytes.Reader
