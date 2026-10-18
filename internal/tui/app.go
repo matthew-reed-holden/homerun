@@ -406,8 +406,11 @@ func (m *model) openLog() tea.Cmd {
 	if step >= 0 {
 		stage, name = c.Steps[step].Stage, c.Steps[step].Name
 		// A job can repeat a step; the log's markers come in step order.
+		// The marker carries only the first line of the name.
+		first, _, _ := strings.Cut(name, "\n")
 		for _, s := range c.Steps[:step] {
-			if s.Stage == stage && s.Name == name {
+			sf, _, _ := strings.Cut(s.Name, "\n")
+			if s.Stage == stage && sf == first {
 				nth++
 			}
 		}

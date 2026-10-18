@@ -694,3 +694,22 @@ func TestRerunShowsTheDaemonsMessageForAnActiveRun(t *testing.T) {
 		t.Fatalf("status %q", m.status)
 	}
 }
+
+func TestRepeatedStepCountUsesFirstLine(t *testing.T) {
+	st := fixture()
+	chk := &st.Repos[0].Items[1].Checks[1]
+	chk.Steps = []api.Step{
+		{Name: "make\nfoo", Stage: "Main", Status: "completed", Conclusion: "success"},
+		{Name: "make\nbar", Stage: "Main", Status: "completed", Conclusion: "success"},
+	}
+	f, c := newFake(t, st)
+	f.logs["r1"] = "[CI / fail] ⭐ Run Main make\n[CI / fail] ⭐ Run Main make"
+	m := newModel(c, func() time.Time { return now })
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m.Update(stateMsg{&st})
+	keysIn(m, "j", "l", "j", "j", "j") // #1 → main: pass, fail, make foo, make bar
+	keysIn(m, "enter")
+	if m.log == nil || m.log.skip != 1 {
+		t.Fatalf("log: %+v", m.log)
+	}
+}

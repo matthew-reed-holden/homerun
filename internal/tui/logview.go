@@ -65,7 +65,7 @@ func (l *logView) add(raw string) {
 			}
 		}
 	}
-	if l.marker != "" && !l.jumped && strings.Contains(line, l.marker) {
+	if l.marker != "" && !l.jumped && strings.HasSuffix(line, l.marker) {
 		if l.skip > 0 {
 			l.skip--
 		} else {

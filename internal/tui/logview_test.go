@@ -140,3 +140,11 @@ func TestLogJumpsToNthStepOfSameName(t *testing.T) {
 		t.Fatalf("first: top %d jumped %v", first.top, first.jumped)
 	}
 }
+
+func TestJumpIgnoresLongerStepWithSamePrefix(t *testing.T) {
+	l := newLogView("r", "", "Main", "make", 0, false)
+	feed(l, "⭐ Run Main make test\n⭐ Run Main make")
+	if l.top != 1 {
+		t.Fatalf("top %d, want the exact make step", l.top)
+	}
+}
