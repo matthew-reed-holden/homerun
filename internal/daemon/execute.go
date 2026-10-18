@@ -399,7 +399,7 @@ func (t *tracker) finish(actErr error) {
 				// rest get the generic summary below.
 				if !t.d.completed(c) && (conclusion == "skipped" || t.labels[leg] != "") {
 					msg := "homerun error: act never finished this job; its runs-on label may not be mapped; add it under platforms: in your user config"
-					if l := t.labels[leg]; l != "" && !strings.HasPrefix(l, "🏁") {
+					if l := t.labels[leg]; l != "" {
 						msg = "homerun error: runs-on label " + l + " is not mapped; add it under platforms: in your user config"
 					}
 					t.setLastLine(c, "failure", t.tails[leg])
