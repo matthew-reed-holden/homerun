@@ -239,3 +239,96 @@ func TestLateListResultKeyedByRepo(t *testing.T) {
 		t.Fatalf("badges not shown at once:\n%s", ansi.Strip(m.render()))
 	}
 }
+
+func sumFixture() pr.Summary {
+	return pr.Summary{Number: 1, Title: "Make the daemon optional", Author: "matt", HeadRef: "feat", BaseRef: "main",
+		Mergeable: "MERGEABLE", ReviewDecision: "REVIEW_REQUIRED", ChangedFiles: 12, Additions: 302, Deletions: 88, Comments: 3,
+		Body: "Moves the engine\nbehind a flag\n\nthird\nfourth",
+		Checks: []pr.Check{
+			{Name: "lint", Status: "completed", Conclusion: "failure", Required: true},
+			{Name: "a", Status: "completed", Conclusion: "success"}, {Name: "b", Status: "completed", Conclusion: "success"},
+			{Name: "c", Status: "completed", Conclusion: "success"}, {Name: "d", Status: "completed", Conclusion: "success"},
+		}}
+}
+
+func strip(ls []string) []string {
+	out := make([]string, len(ls))
+	for i, l := range ls {
+		out[i] = ansi.Strip(l)
+	}
+	return out
+}
+
+func TestSummaryLines(t *testing.T) {
+	s := sumFixture()
+	want := []string{
+		"#1 Make the daemon optional  @matt · feat → main",
+		"⚠ 3 commits behind main · ✔ no conflicts",
+		"Checks ✘ 1 failing (1 required) · ✔ 4 passed",
+		"Reviews: review required · Files 12 (+302 −88) · 💬 3",
+		"",
+		"Moves the engine", "behind a flag", "",
+	}
+	if got := strip(summaryLines(s, 3, true, 80)); !slices.Equal(got, want) {
+		t.Fatalf("got %q", got)
+	}
+	s.Mergeable = "CONFLICTING"
+	if got := strip(summaryLines(s, 0, true, 80)); got[1] != "✘ conflicts" {
+		t.Fatalf("conflicts: %q", got)
+	}
+	s.MergeState = "BEHIND"
+	if got := strip(summaryLines(s, 0, false, 80)); got[1] != "⚠ behind main · ✘ conflicts" {
+		t.Fatalf("unknown behind: %q", got)
+	}
+	s.Checks = nil
+	if got := strip(summaryLines(s, 0, false, 80)); got[2] != "Checks none" {
+		t.Fatalf("no checks: %q", got)
+	}
+}
+
+func summaryModel(t *testing.T) *model {
+	m := prModel(t, &pr.Fake{})
+	m.Update(listMsg{repo: "o/e2e", sums: map[int]pr.Summary{1: sumFixture()}})
+	keysIn(m, "j")
+	return m
+}
+
+func TestSummaryFallsBackWithoutListData(t *testing.T) {
+	m := prModel(t, &pr.Fake{})
+	keysIn(m, "j")
+	out := ansi.Strip(m.render())
+	if strings.Contains(out, "Checks ✘") || strings.Contains(out, "Reviews:") {
+		t.Fatalf("summary without data:\n%s", out)
+	}
+	if len(m.summaryBlock(80)) != 0 {
+		t.Fatal("block without data")
+	}
+}
+
+func TestSummaryKeepsTreeFocus(t *testing.T) {
+	m := summaryModel(t)
+	if out := ansi.Strip(m.render()); !strings.Contains(out, "Checks ✘ 1 failing (1 required)") {
+		t.Fatalf("no summary:\n%s", out)
+	}
+	keysIn(m, "l")
+	if m.focus != paneMain {
+		t.Fatal("l did not focus main")
+	}
+	keysIn(m, "j")
+	if m.tree.cur != 1 {
+		t.Fatalf("cur %d", m.tree.cur)
+	}
+	keysIn(m, "enter")
+	if m.log == nil {
+		t.Fatal("enter did not open the log")
+	}
+}
+
+func TestSummaryClickOffsetsTree(t *testing.T) {
+	m := summaryModel(t)
+	h := len(m.summaryBlock(m.layout().mainW - 2))
+	m.click(tea.Mouse{X: 60, Y: h + 3, Button: tea.MouseLeft}) // second tree row
+	if m.tree.cur != 1 {
+		t.Fatalf("cur %d", m.tree.cur)
+	}
+}

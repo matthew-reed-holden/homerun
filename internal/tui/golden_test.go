@@ -47,6 +47,8 @@ func TestGolden(t *testing.T) {
 	}{
 		{"wide-items", 120, 40, []string{"j"}},
 		{"wide-items-badges", 120, 40, []string{"j"}},
+		{"wide-pr-summary", 120, 40, []string{"j"}},
+		{"standard-pr-summary", 80, 24, []string{"j"}},
 		{"wide-runs", 120, 40, []string{"3"}},
 		{"wide-fork-dialog", 120, 40, []string{"j", "j", "r"}},
 		{"standard-tree", 80, 24, []string{"j", "l"}},
@@ -59,6 +61,12 @@ func TestGolden(t *testing.T) {
 			if c.name == "wide-items-badges" {
 				m.o.PRs = &pr.Fake{}
 				m.Update(listMsg{repo: "o/e2e", sums: map[int]pr.Summary{1: {Number: 1, ReviewDecision: "APPROVED", Mergeable: "CONFLICTING", IsDraft: true}}})
+			}
+			if strings.HasSuffix(c.name, "-pr-summary") {
+				m.o.PRs = &pr.Fake{}
+				m.Update(listMsg{repo: "o/e2e", sums: map[int]pr.Summary{1: {Number: 1, Title: "e2e PR", Author: "matt", HeadRef: "feat", BaseRef: "main",
+					Mergeable: "MERGEABLE", MergeState: "BEHIND", ReviewDecision: "REVIEW_REQUIRED", ChangedFiles: 3, Additions: 40, Deletions: 7, Comments: 2,
+					Body: "Makes the thing\noptional.", Checks: []pr.Check{{Name: "pass", Status: "completed", Conclusion: "success"}, {Name: "fail", Status: "completed", Conclusion: "failure", Required: true}}}}})
 			}
 			m.Update(tea.WindowSizeMsg{Width: c.w, Height: c.h})
 			keysIn(m, c.keys...)

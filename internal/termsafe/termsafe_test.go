@@ -22,3 +22,10 @@ func TestCopy(t *testing.T) {
 		t.Fatalf("got %q", b.String())
 	}
 }
+
+func TestText(t *testing.T) {
+	got := Text("a\x1b]52;c;aGk=\x07b\r\n\tc\x1b[2Jd\ne")
+	if got != "ab\n    cd\ne" {
+		t.Fatalf("got %q", got)
+	}
+}

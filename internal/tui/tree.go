@@ -182,7 +182,11 @@ func (t *tree) toggle() {
 const timeW = 9
 
 func (t *tree) view(title string, w, h int, now time.Time, focused bool) string {
-	inner := max(0, h-2)
+	return frame(title, t.rows(w, max(0, h-2), now, focused), w, h, focused)
+}
+
+// rows are the tree's lines for inner rows of room.
+func (t *tree) rows(w, inner int, now time.Time, focused bool) []string {
 	ns := t.nodes()
 	t.scroll(ns, inner)
 	var lines []string
@@ -220,7 +224,7 @@ func (t *tree) view(title string, w, h int, now time.Time, focused bool) string 
 	if len(ns) == 0 {
 		lines = []string{dim.Render("no checks yet")}
 	}
-	return frame(title, lines, w, h, focused)
+	return lines
 }
 
 // failReason is the first line of the first failed step, as safe text. The

@@ -1,0 +1,24 @@
+╭─1 Repos────────────────────────╮╭─#1 e2e PR · d954af8 · @matt · 5m ago───────╮
+│✘ o/e2e                         ││#1 e2e PR  @matt · feat → main              │
+│· o/backend                     ││⚠ behind main · ✔ no conflicts              │
+╰────────────────────────────────╯│Checks ✘ 1 failing (1 required) · ✔ 1 passed│
+╭─2 Branches & PRs───────────────╮│Reviews: review required · Files 3 (+40 −7)…│
+│✔ main  fd387ab                 ││                                            │
+│✘ #1 e2e PR @matt 5m ↓ ○ !      ││Makes the thing                             │
+│◇ #2 typo fix @bob awaiting     ││optional.                                   │
+│                                ││────────────────────────────────────────────│
+│                                ││✔ CI / pass                               4s│
+│                                ││✘ CI / fail — echo bad; exit 1            3s│
+│                                ││  exit status 1                             │
+│                                ││  ✔ Set up job                            1s│
+│                                ││  ✘ echo bad; exit 1                      0s│
+│                                ││                                            │
+╰────────────────────────────────╯│                                            │
+╭─3 Runs─────────────────────────╮│                                            │
+│⟳ e2e #1 1m12s…                 ││                                            │
+│· e2e #2 0s 3h                  ││                                            │
+│✔ e2e main 1m00s 10m            ││                                            │
+│                                ││                                            │
+│                                ││                                            │
+╰────────────────────────────────╯╰────────────────────────────────────────────╯
+1-3 panel • l/enter details • r rerun • c cancel • o open • ? help • q quit

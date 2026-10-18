@@ -8,6 +8,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/matthew-reed-holden/homerun/internal/api"
 	"github.com/matthew-reed-holden/homerun/internal/pr"
 	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 )
@@ -170,4 +172,120 @@ func requiredFailing(s pr.Summary) bool {
 		}
 	}
 	return false
+}
+
+// summaryBlock is the PR summary and its rule for the main pane, inner wide;
+// nil unless the pane shows a PR row with list data.
+func (m *model) summaryBlock(inner int) []string {
+	if _, _, _, errText := m.source(); m.log != nil || errText != "" {
+		return nil
+	}
+	var it *api.Item
+	switch m.left {
+	case paneRepos:
+		if r := m.repo(); len(r.Items) > 0 {
+			it = &r.Items[0]
+		}
+	case paneItems:
+		it = m.item()
+	}
+	if it == nil || it.PR == 0 {
+		return nil
+	}
+	s, ok := m.summary(m.repo().Name, it.PR)
+	if !ok {
+		return nil
+	}
+	behind, known := m.behindOf(it.PR)
+	return append(summaryLines(s, behind, known, inner), dim.Render(strings.Repeat("─", max(0, inner))))
+}
+
+// summaryLines is the PR's headline, merge state, checks, reviews and the start
+// of its body, each at most w wide. The Description header reuses it.
+func summaryLines(s pr.Summary, behind int, known bool, w int) []string {
+	line := func(parts ...string) string { return truncate(strings.Join(parts, " · "), w) }
+	out := []string{line(
+		fmt.Sprintf("#%d %s", s.Number, termsafe.Line(s.Title))+"  @"+termsafe.Line(s.Author),
+		termsafe.Line(s.HeadRef)+" → "+termsafe.Line(s.BaseRef))}
+	base := termsafe.Line(s.BaseRef)
+	var merge []string
+	switch {
+	case known && behind == 1:
+		merge = append(merge, yellow.Render("⚠ 1 commit behind "+base))
+	case known && behind > 1:
+		merge = append(merge, yellow.Render(fmt.Sprintf("⚠ %d commits behind %s", behind, base)))
+	case !known && s.MergeState == "BEHIND":
+		merge = append(merge, yellow.Render("⚠ behind "+base))
+	}
+	switch s.Mergeable {
+	case "CONFLICTING":
+		merge = append(merge, red.Render("✘ conflicts"))
+	case "MERGEABLE":
+		merge = append(merge, green.Render("✔ no conflicts"))
+	}
+	if len(merge) > 0 {
+		out = append(out, line(merge...))
+	}
+	out = append(out, line(checksPart(s)...))
+	out = append(out, line("Reviews: "+reviewWord(s.ReviewDecision), fmt.Sprintf("Files %d (+%d −%d)", s.ChangedFiles, s.Additions, s.Deletions), fmt.Sprintf("💬 %d", s.Comments)))
+	var body []string
+	for _, l := range strings.Split(termsafe.Text(s.Body), "\n") {
+		body = append(body, strings.Split(ansi.Wrap(l, max(1, w), ""), "\n")...)
+	}
+	for len(body) > 0 && strings.TrimSpace(body[len(body)-1]) == "" {
+		body = body[:len(body)-1]
+	}
+	if len(body) > 0 {
+		out = append(out, "")
+		out = append(out, body[:min(3, len(body))]...)
+	}
+	return out
+}
+
+func checksPart(s pr.Summary) []string {
+	var fail, req, pass, wait int
+	for _, c := range s.Checks {
+		switch {
+		case c.Status != "completed":
+			wait++
+		case c.Conclusion == "success" || c.Conclusion == "neutral" || c.Conclusion == "skipped":
+			pass++
+		default:
+			fail++
+			if c.Required {
+				req++
+			}
+		}
+	}
+	if len(s.Checks) == 0 {
+		return []string{"Checks none"}
+	}
+	var parts []string
+	if fail > 0 {
+		p := fmt.Sprintf("%d failing", fail)
+		if req > 0 {
+			p += fmt.Sprintf(" (%d required)", req)
+		}
+		parts = append(parts, red.Render("✘ "+p))
+	}
+	if pass > 0 {
+		parts = append(parts, green.Render(fmt.Sprintf("✔ %d passed", pass)))
+	}
+	if wait > 0 {
+		parts = append(parts, yellow.Render(fmt.Sprintf("◌ %d pending", wait)))
+	}
+	parts[0] = "Checks " + parts[0]
+	return parts
+}
+
+func reviewWord(d string) string {
+	switch d {
+	case "REVIEW_REQUIRED":
+		return "review required"
+	case "APPROVED":
+		return "approved"
+	case "CHANGES_REQUESTED":
+		return "changes requested"
+	}
+	return "none"
 }

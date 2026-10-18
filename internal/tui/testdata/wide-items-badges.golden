@@ -1,14 +1,14 @@
 ╭─1 Repos────────────────────────╮╭─#1 e2e PR · d954af8 · @matt · 5m ago───────────────────────────────────────────────╮
-│✘ o/e2e                         ││✔ CI / pass                                                                       4s│
-│· o/backend                     ││✘ CI / fail — echo bad; exit 1                                                    3s│
-╰────────────────────────────────╯│  exit status 1                                                                     │
-╭─2 Branches & PRs───────────────╮│  ✔ Set up job                                                                    1s│
-│✔ main  fd387ab                 ││  ✘ echo bad; exit 1                                                              0s│
-│✘ #1 e2e PR @matt 5m ⚔ ✔ draft  ││                                                                                    │
-│◇ #2 typo fix @bob awaiting     ││                                                                                    │
-│                                ││                                                                                    │
-│                                ││                                                                                    │
-│                                ││                                                                                    │
+│✘ o/e2e                         ││#1   @ ·  →                                                                         │
+│· o/backend                     ││✘ conflicts                                                                         │
+╰────────────────────────────────╯│Checks none                                                                         │
+╭─2 Branches & PRs───────────────╮│Reviews: approved · Files 0 (+0 −0) · 💬 0                                          │
+│✔ main  fd387ab                 ││────────────────────────────────────────────────────────────────────────────────────│
+│✘ #1 e2e PR @matt 5m ⚔ ✔ draft  ││✔ CI / pass                                                                       4s│
+│◇ #2 typo fix @bob awaiting     ││✘ CI / fail — echo bad; exit 1                                                    3s│
+│                                ││  exit status 1                                                                     │
+│                                ││  ✔ Set up job                                                                    1s│
+│                                ││  ✘ echo bad; exit 1                                                              0s│
 │                                ││                                                                                    │
 │                                ││                                                                                    │
 │                                ││                                                                                    │

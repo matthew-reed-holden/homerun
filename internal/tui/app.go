@@ -690,7 +690,12 @@ func (m *model) mainView(w, h int) string {
 	case m.log != nil:
 		return m.log.view(title+" · log", w, h, focused)
 	}
-	return m.tree.view(title, w, h, m.now(), focused)
+	sum := m.summaryBlock(w - 2)
+	if len(sum) == 0 {
+		return m.tree.view(title, w, h, m.now(), focused)
+	}
+	inner := max(0, h-2-len(sum))
+	return frame(title, append(sum, m.tree.rows(w, inner, m.now(), focused)...), w, h, focused)
 }
 
 func (m *model) bar() string {
@@ -744,7 +749,7 @@ func (m *model) click(mo tea.Mouse) tea.Cmd {
 	}
 	m.focus = paneMain
 	if m.log == nil && mo.Y < lay.bodyH-1 {
-		m.tree.click(mo.Y)
+		m.tree.click(mo.Y - len(m.summaryBlock(lay.mainW-2)))
 	}
 	return nil
 }

@@ -27,6 +27,16 @@ func Log(s string) string {
 	return Line(strings.ReplaceAll(s, "\t", "    "))
 }
 
+// Text is Line for multi-line text: each line cleaned, newlines kept, tabs
+// shown as four spaces.
+func Text(s string) string {
+	ls := strings.Split(strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\t", "    "), "\n")
+	for i, l := range ls {
+		ls[i] = Line(l)
+	}
+	return strings.Join(ls, "\n")
+}
+
 // Copy writes r to w one cleaned line at a time. Escapes are stripped per
 // line, so one split across a line break cannot survive.
 func Copy(w io.Writer, r io.Reader) error {
