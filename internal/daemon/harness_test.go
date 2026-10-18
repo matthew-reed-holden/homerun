@@ -53,6 +53,13 @@ type reporter struct {
 	failOn  int               // fail this CreateCheck (1-based) with an error retries cannot fix
 	after   func(creates int) // runs after each successful CreateCheck
 	failUps int               // fail this many of the next UpdateChecks, as during an outage
+	upErr   error             // what those fail with; transient() when nil
+}
+
+func (r *reporter) failUpdatesWith(n int, err error) {
+	r.mu.Lock()
+	r.failUps, r.upErr = n, err
+	r.mu.Unlock()
 }
 
 func (r *reporter) failUpdates(n int) {
@@ -61,7 +68,12 @@ func (r *reporter) failUpdates(n int) {
 	r.mu.Unlock()
 }
 
-// unprocessable is an error gh.Retry does not retry, so tests need not wait out its backoff.
+// transient is a temporary rejection: the daemon keeps the update and re-sends it later.
+func transient() error {
+	return &github.ErrorResponse{Response: &http.Response{StatusCode: http.StatusBadGateway}, Message: "boom"}
+}
+
+// unprocessable is a rejection GitHub will repeat: gh.Permanent is true for it.
 func unprocessable() error {
 	return &github.ErrorResponse{Response: &http.Response{StatusCode: http.StatusUnprocessableEntity}, Message: "boom"}
 }
@@ -95,13 +107,16 @@ func (r *reporter) UpdateCheck(ctx context.Context, repo string, id int64, u gh.
 		return err
 	}
 	r.mu.Lock()
-	fail := r.failUps > 0
+	fail, upErr := r.failUps > 0, r.upErr
 	if fail {
 		r.failUps--
 	}
 	r.mu.Unlock()
 	if fail {
-		return unprocessable()
+		if upErr != nil {
+			return upErr
+		}
+		return transient()
 	}
 	return r.Fake.UpdateCheck(ctx, repo, id, u)
 }
@@ -129,6 +144,8 @@ func newHarness(t *testing.T, files map[string]string) *harness {
 		t.Fatal(err)
 	}
 	h.d = d
+	// One attempt per call, so a transient failure does not sleep through gh.Retry's backoff.
+	d.retry = func(_ context.Context, fn func() error) error { return fn() }
 	// Cleanups are LIFO, so every run goroutine has finished before TempDir is removed.
 	t.Cleanup(d.close)
 	return h

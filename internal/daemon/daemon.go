@@ -628,7 +628,10 @@ func (d *Daemon) singleCheck(ctx context.Context, ev event.Event, conclusion, ti
 	// Once created, the check must not be left queued by a cancelled caller.
 	uctx := context.WithoutCancel(ctx)
 	u := gh.Update{Name: "homerun", Status: "completed", Conclusion: conclusion, Title: title, Summary: summary}
-	err = gh.Retry(uctx, func() error { return d.opts.Reporter.UpdateCheck(uctx, ev.Repo, id, u) })
+	d.mu.Lock()
+	retry := d.retry
+	d.mu.Unlock()
+	err = retry(uctx, func() error { return d.opts.Reporter.UpdateCheck(uctx, ev.Repo, id, u) })
 	if err != nil {
 		// The check exists and no run owns it: keep the update so a later poll
 		// can finish it instead of leaving it queued forever.
@@ -654,8 +657,11 @@ func (d *Daemon) flushSetupChecks(ctx context.Context) {
 	d.mu.Unlock()
 	for _, p := range todo {
 		if err := d.opts.Reporter.UpdateCheck(ctx, p.Repo, p.ID, p.Update); err != nil {
-			slog.Warn("flush setup check", "repo", p.Repo, "err", err)
-			continue
+			if !gh.Permanent(err) {
+				slog.Warn("flush setup check", "repo", p.Repo, "err", err)
+				continue
+			}
+			slog.Warn("dropping setup check update GitHub rejected", "repo", p.Repo, "check", p.ID, "err", err)
 		}
 		d.mu.Lock()
 		d.state.Pending = slices.DeleteFunc(d.state.Pending, func(q store.PendingCheck) bool { return q.Repo == p.Repo && q.ID == p.ID })

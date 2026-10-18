@@ -202,6 +202,30 @@ func TestTokenErrorsNotRetried(t *testing.T) {
 	}
 }
 
+func TestPermanent(t *testing.T) {
+	er := func(code int) error { return &github.ErrorResponse{Response: &http.Response{StatusCode: code}} }
+	for _, c := range []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"404", er(404), true},
+		{"410", er(410), true},
+		{"422", er(422), true},
+		{"401", er(401), true},
+		{"403", er(403), true},
+		{"token 404", &url.Error{Op: "Post", URL: "x", Err: &ghinstallation.HTTPError{Response: &http.Response{StatusCode: 404}}}, true},
+		{"500", er(500), false},
+		{"502", er(502), false},
+		{"rate limit", &github.RateLimitError{Response: &http.Response{StatusCode: 403}}, false},
+		{"transport", errors.New("connection reset"), false},
+	} {
+		if got := Permanent(c.err); got != c.want {
+			t.Errorf("%s: Permanent = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
 func TestTruncateTinyLimit(t *testing.T) {
 	for _, n := range []int{-1, 0, 1, 2, 3} {
 		if got := Truncate("héllo wörld", n); len(got) > max(n, 0) || !utf8.ValidString(got) {

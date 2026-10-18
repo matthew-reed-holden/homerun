@@ -83,6 +83,33 @@ func retryable(err error) bool {
 	return true // transport errors
 }
 
+// Permanent reports whether GitHub rejected a request in a way that resending
+// the same request will never fix (bad credentials, or the object is gone or invalid).
+func Permanent(err error) bool {
+	var rl *github.RateLimitError
+	var abuse *github.AbuseRateLimitError
+	if errors.As(err, &rl) || errors.As(err, &abuse) {
+		return false
+	}
+	var he *ghinstallation.HTTPError
+	if errors.As(err, &he) && he.Response != nil {
+		return permanentStatus(he.Response.StatusCode)
+	}
+	var e *github.ErrorResponse
+	if errors.As(err, &e) && e.Response != nil {
+		return permanentStatus(e.Response.StatusCode)
+	}
+	return false
+}
+
+func permanentStatus(code int) bool {
+	switch code {
+	case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusGone, http.StatusUnprocessableEntity:
+		return true
+	}
+	return false
+}
+
 func Truncate(s string, n int) string {
 	if len(s) <= n {
 		return s

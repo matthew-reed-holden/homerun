@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/go-github/v92/github"
 
 	"github.com/matthew-reed-holden/homerun/internal/event"
 	"github.com/matthew-reed-holden/homerun/internal/gh"
@@ -473,6 +476,29 @@ func TestSetupFailurePendingSurvivesRestart(t *testing.T) {
 	}
 	if st, err := d2.store.LoadState(); err != nil || len(st.Pending) != 0 {
 		t.Fatalf("pending left: %+v %v", st, err)
+	}
+}
+
+func TestSetupFailurePendingDroppedWhenRejectedPermanently(t *testing.T) {
+	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
+	h.poll()
+	h.rep.failUpdates(1)
+	sha := h.push(map[string]string{".github/workflows/ci.yml": "on: [push\n"})
+	h.poll()
+	if st, err := h.d.store.LoadState(); err != nil || len(st.Pending) != 1 {
+		t.Fatalf("want one pending update: %+v %v", st, err)
+	}
+	notFound := &github.ErrorResponse{Response: &http.Response{StatusCode: http.StatusNotFound}, Message: "gone"}
+	h.rep.failUpdatesWith(1<<30, notFound)
+	h.poll()
+	h.d.mu.Lock()
+	inMem := len(h.d.state.Pending)
+	h.d.mu.Unlock()
+	if st, err := h.d.store.LoadState(); err != nil || inMem != 0 || len(st.Pending) != 0 {
+		t.Fatalf("pending kept after a 404: memory %d, disk %+v %v", inMem, st, err)
+	}
+	if n := countChecks(h, sha, "homerun"); n != 1 {
+		t.Fatalf("want one homerun check, got %d", n)
 	}
 }
 
