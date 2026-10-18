@@ -29,7 +29,7 @@ func TestListQueryAndParse(t *testing.T) {
 	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
 		gotAuth, gotPath, gotBody = r.Header.Get("Authorization"), r.Method+" "+r.URL.Path, string(b)
-		io.WriteString(w, `{"data":{"repository":{"p15":null,"p14":{"number":14,"title":"t","author":{"login":"a"},
+		io.WriteString(w, `{"data":{"repository":{"p15":null,"p14":{"number":14,"state":"OPEN","title":"t","author":{"login":"a"},
 "headRefOid":"abc","commits":{"nodes":[{"commit":{"statusCheckRollup":{"contexts":{"nodes":[
 {"__typename":"CheckRun","name":"lint","status":"COMPLETED","conclusion":"FAILURE","detailsUrl":"https://x/1","isRequired":true},
 {"__typename":"StatusContext","context":"ci/x","state":"PENDING","targetUrl":""}]}}}}]}}}}}`)
@@ -133,6 +133,22 @@ func TestTokenNeverInError(t *testing.T) {
 	}
 }
 
+func TestListOmitsClosedAndMerged(t *testing.T) {
+	var body string
+	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		body = string(b)
+		io.WriteString(w, `{"data":{"repository":{"p1":{"state":"OPEN","title":"o"},"p2":{"state":"CLOSED","title":"c"},"p3":{"state":"MERGED","title":"m"}}}}`)
+	})
+	got, err := c.List(context.Background(), "o/r", []int{1, 2, 3})
+	if err != nil || len(got) != 1 || got[1].Title != "o" {
+		t.Fatalf("got %v err %v", got, err)
+	}
+	if !strings.Contains(body, " state ") {
+		t.Fatalf("query does not select state: %s", body)
+	}
+}
+
 func TestListChunksOver50(t *testing.T) {
 	var n atomic.Int32
 	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
@@ -149,7 +165,7 @@ func TestListChunksOver50(t *testing.T) {
 }
 
 func TestListNotFoundIsNotFatal(t *testing.T) {
-	body := `{"data":{"repository":{"p14":{"number":14,"title":"t"},"p15":null}},"errors":[{"type":"NOT_FOUND","message":"Could not resolve to a PullRequest"}]}`
+	body := `{"data":{"repository":{"p14":{"number":14,"state":"OPEN","title":"t"},"p15":null}},"errors":[{"type":"NOT_FOUND","message":"Could not resolve to a PullRequest"}]}`
 	c := newTest(t, func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, body) })
 	got, err := c.List(context.Background(), "o/r", []int{14, 15})
 	if err != nil || len(got) != 1 || got[14].Title != "t" {

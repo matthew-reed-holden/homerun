@@ -167,7 +167,7 @@ func (c *Client) rest(ctx context.Context, path string, out any) error {
 	return err
 }
 
-const fields = `id number title body isDraft author{login} headRefName baseRefName headRefOid
+const fields = `id number state title body isDraft author{login} headRefName baseRefName headRefOid
 mergeable mergeStateStatus reviewDecision additions deletions changedFiles comments{totalCount}
 commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100){nodes{__typename
 ... on CheckRun{name status conclusion detailsUrl isRequired(pullRequestNumber: %[1]d)}
@@ -175,6 +175,7 @@ commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100){nodes{__typen
 
 type gqlPR struct {
 	Number           int
+	State            string
 	Title, Body      string
 	IsDraft          bool
 	Author           struct{ Login string }
@@ -243,7 +244,7 @@ func statusContext(state string) (status, conclusion string) {
 }
 
 // List fetches the given PRs of owner/name, 50 per request. Numbers GitHub
-// does not know are absent from the result.
+// does not know, and PRs no longer open, are absent from the result.
 func (c *Client) List(ctx context.Context, repo string, numbers []int) (map[int]Summary, error) {
 	owner, name, ok := strings.Cut(repo, "/")
 	if !ok {
@@ -266,7 +267,8 @@ func (c *Client) List(ctx context.Context, repo string, numbers []int) (map[int]
 			return nil, err
 		}
 		for _, n := range chunk {
-			if p := data.Repository["p"+strconv.Itoa(n)]; p != nil {
+			// pullRequest(number:) resolves closed and merged PRs too; they get no row data.
+			if p := data.Repository["p"+strconv.Itoa(n)]; p != nil && p.State == "OPEN" {
 				p.Number = n
 				out[n] = p.summary()
 			}

@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// maxTimelinePages caps timeline paging; ponytail: 1000 events, older ones are dropped.
+// maxTimelinePages caps timeline paging; ponytail: 1000 events, paging is oldest first so the newest past the cap are dropped.
 const maxTimelinePages = 10
 
 const timelineSel = `timelineItems(first:100,after:$after,itemTypes:[PULL_REQUEST_COMMIT,ISSUE_COMMENT,PULL_REQUEST_REVIEW,MERGED_EVENT,CLOSED_EVENT,REOPENED_EVENT,HEAD_REF_FORCE_PUSHED_EVENT]){
@@ -24,7 +24,7 @@ nodes{__typename
 
 const detailQuery = `query($owner:String!,$name:String!,$after:String){repository(owner:$owner,name:$name){
 mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed viewerDefaultMergeMethod
-pullRequest(number: %[1]d){` + fields + ` url state viewerDidAuthor viewerCanUpdateBranch ` + timelineSel + `}}}`
+pullRequest(number: %[1]d){` + fields + ` url viewerDidAuthor viewerCanUpdateBranch ` + timelineSel + `}}}`
 
 const timelineQuery = `query($owner:String!,$name:String!,$after:String){repository(owner:$owner,name:$name){
 pullRequest(number: %d){` + timelineSel + `}}}`
@@ -102,7 +102,7 @@ func (c *Client) Detail(ctx context.Context, repo string, number int) (*Detail, 
 			ViewerDefaultMergeMethod                                   string
 			PullRequest                                                *struct {
 				gqlPR
-				ID, URL, State                         string
+				ID, URL                                string
 				ViewerDidAuthor, ViewerCanUpdateBranch bool
 				TimelineItems                          gqlTimeline
 			}
