@@ -1,6 +1,6 @@
 ╭─1 Repos────────────────────────╮╭─#1 e2e PR · d954af8 · @matt · 5m ago───────╮
 │✘ o/e2e                         ││✔ CI / pass                               4s│
-│· o/backend                     ││✘ CI / fail                               3s│
+│· o/backend                     ││✘ CI / fail — echo bad; exit 1            3s│
 ╰────────────────────────────────╯│  ✔ Set up job                            1s│
 ╭─2 Branches & PRs───────────────╮│  ✘ echo bad; exit 1                      0s│
 │✔ main  fd387ab                 ││                                            │

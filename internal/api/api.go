@@ -37,6 +37,7 @@ type Check struct {
 	Completed  time.Time `json:"completed,omitzero"`
 	Steps      []Step    `json:"steps,omitempty"`
 	LogPrefix  string    `json:"log_prefix,omitempty"`
+	LastLine   string    `json:"last_line,omitempty"`
 }
 
 type Item struct {

@@ -153,7 +153,18 @@ func (t *tree) view(title string, w, h int, now time.Time, focused bool) string 
 			indent, icon, name = "  ", Icon(s.Status, s.Conclusion), termsafe.Line(first)
 			tm = timing(s.Status, s.Started, s.Completed, now)
 		}
+		why := ""
+		if n.step < 0 && c.Status == "completed" && c.Conclusion == "failure" {
+			why = failReason(c)
+		}
 		line := fit(indent+paint(icon)+" "+name, w-2-timeW) + rfit(tm, timeW)
+		if why != "" {
+			// The reason takes the room the name leaves free in the row.
+			room := w - 2 - timeW - ansi.StringWidth(indent+icon+" "+name) - 1
+			if room > 3 {
+				line = fit(indent+paint(icon)+" "+name+" "+dim.Render(truncate("— "+why, room)), w-2-timeW) + rfit(tm, timeW)
+			}
+		}
 		if i == t.cur && focused {
 			line = sel.Render(ansi.Strip(line))
 		}
@@ -163,4 +174,16 @@ func (t *tree) view(title string, w, h int, now time.Time, focused bool) string 
 		lines = []string{dim.Render("no checks yet")}
 	}
 	return frame(title, lines, w, h, focused)
+}
+
+// failReason is the first line of the first failed step, else the check's last
+// log line, as safe text.
+func failReason(c api.Check) string {
+	for _, s := range c.Steps {
+		if s.Status == "completed" && s.Conclusion == "failure" {
+			first, _, _ := strings.Cut(s.Name, "\n")
+			return termsafe.Line(first)
+		}
+	}
+	return termsafe.Line(c.LastLine)
 }

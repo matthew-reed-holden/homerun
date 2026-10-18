@@ -42,6 +42,8 @@ type Check struct {
 	Steps      []Step    `json:"steps,omitempty"`
 	// LogPrefix is the [tag] this check's lines carry in the shared run log.
 	LogPrefix string `json:"log_prefix,omitempty"`
+	// LastLine is the last non-empty (masked) output line of a failed check.
+	LastLine string `json:"last_line,omitempty"`
 	// Pending is the last update GitHub did not accept; it is re-sent until it is.
 	Pending *gh.Update `json:"pending,omitempty"`
 }

@@ -128,3 +128,27 @@ func TestTreeCursorStaysWhenAutoOpenMoves(t *testing.T) {
 		t.Fatalf("step cursor on %s step %d", got.Name, step)
 	}
 }
+
+func TestFailedJobRowNamesStep(t *testing.T) {
+	render := func(c api.Check) string {
+		var tr tree
+		tr.reset([]api.Check{c})
+		return ansi.Strip(tr.view("t", 80, 6, now, false))
+	}
+	failed := func(c api.Check) api.Check { c.Status, c.Conclusion = "completed", "failure"; return c }
+	out := render(failed(api.Check{Name: "j", Steps: []api.Step{
+		{Name: "ok", Status: "completed", Conclusion: "success"},
+		{Name: "go test ./...\n-v", Status: "completed", Conclusion: "failure"}}}))
+	if !strings.Contains(strings.SplitN(out, "\n", 3)[1], "— go test ./...") || strings.Contains(out, "-v") {
+		t.Fatalf("step suffix:\n%s", out)
+	}
+	if out := render(failed(api.Check{Name: "j", LastLine: "boom"})); !strings.Contains(out, "— boom") {
+		t.Fatalf("last line suffix:\n%s", out)
+	}
+	if out := render(failed(api.Check{Name: "j", LastLine: "a\x1b[2Jb"})); strings.Contains(out, "\x1b") {
+		t.Fatalf("escape not inert: %q", out)
+	}
+	if out := render(api.Check{Name: "j", Status: "completed", Conclusion: "success", LastLine: "boom"}); strings.Contains(out, "boom") {
+		t.Fatalf("passing job shows suffix:\n%s", out)
+	}
+}

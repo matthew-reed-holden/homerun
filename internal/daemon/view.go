@@ -82,7 +82,7 @@ func (d *Daemon) finished(id string) bool {
 
 func apiCheck(c *store.Check, runID string) api.Check {
 	ac := api.Check{Name: c.Name, Status: c.Status, Conclusion: c.Conclusion, RunID: runID,
-		Started: c.Started, Completed: c.Completed, LogPrefix: c.LogPrefix}
+		Started: c.Started, Completed: c.Completed, LogPrefix: c.LogPrefix, LastLine: c.LastLine}
 	for _, s := range c.Steps {
 		ac.Steps = append(ac.Steps, api.Step(s))
 	}

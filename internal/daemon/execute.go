@@ -314,6 +314,7 @@ func (t *tracker) handle(e actlog.Event) {
 				summary = "Failed step:\n```\n" + head(e.FailedStep, maxStep) + "\n```"
 			}
 		}
+		t.setLastLine(c, e.Conclusion, t.tails[e.Leg])
 		t.d.complete(t.ctx, t.run, c, e.Conclusion, title, summary, codeBlock(t.tails[e.Leg]))
 	}
 }
@@ -401,13 +402,22 @@ func (t *tracker) finish(actErr error) {
 					if l := t.labels[leg]; l != "" {
 						msg = "homerun error: runs-on label " + l + " is not mapped; add it under platforms: in your user config"
 					}
+					t.setLastLine(c, "failure", t.tails[leg])
 					t.d.complete(t.ctx, t.run, c, "failure", head(msg, maxTitle), msg, codeBlock(t.tails[leg]))
 				}
 			}
 		}
 	}
 	isParent := func(c *store.Check) bool { return c.Leg == "" && (len(t.matrix[c.JobID]) > 0 || t.lost[c.JobID]) }
-	t.d.closeWhere(t.ctx, t.run, func(c *store.Check) bool { return c.Workflow == t.wf.Path && !isParent(c) },
+	t.d.closeWhere(t.ctx, t.run, func(c *store.Check) bool {
+		if c.Workflow != t.wf.Path || isParent(c) {
+			return false
+		}
+		if conclusion == "failure" && c.Status != "completed" { // closeWhere holds d.mu
+			c.LastLine = lastLine(t.tails[""])
+		}
+		return true
+	},
 		conclusion, summary, codeBlock(t.tails[""]))
 	for jobID := range t.lost {
 		if len(t.matrix[jobID]) == 0 {
@@ -512,6 +522,23 @@ func (d *Daemon) runExtra(ctx, rctx context.Context, run *store.Run, c *store.Ch
 }
 
 // codeBlock fences the last lines that fit in maxText.
+// setLastLine records why a check failed for the check rows.
+func (t *tracker) setLastLine(c *store.Check, conclusion string, tail []string) {
+	if conclusion == "failure" {
+		t.d.mutate(func() { c.LastLine = lastLine(tail) })
+	}
+}
+
+// lastLine is the last non-empty line of a tail.
+func lastLine(tail []string) string {
+	for i := len(tail) - 1; i >= 0; i-- {
+		if l := strings.TrimSpace(tail[i]); l != "" {
+			return l
+		}
+	}
+	return ""
+}
+
 func codeBlock(lines []string) string {
 	if len(lines) == 0 {
 		return ""
