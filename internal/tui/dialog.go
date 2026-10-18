@@ -73,3 +73,12 @@ func cancelDialog(runID, label string, cancel func(string) tea.Cmd) *dialog {
 func helpDialog() *dialog {
 	return &dialog{title: "Keys", body: help.New().FullHelpView(keys.groups())}
 }
+
+// quitDialog asks before a hosting TUI quits, which cancels its n active runs.
+func quitDialog(n int) *dialog {
+	return &dialog{
+		title:   "Quit homerun?",
+		body:    fmt.Sprintf("%d runs in progress will be cancelled.\n\n[y] quit · any other key stays", n),
+		confirm: tea.Quit,
+	}
+}

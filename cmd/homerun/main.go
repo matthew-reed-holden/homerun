@@ -24,7 +24,7 @@ import (
 )
 
 const usage = `usage:
-  homerun                                   open the dashboard
+  homerun                                   open the dashboard (runs checks while open, unless a daemon is running)
   homerun daemon [--config F] [--install]   run the daemon, or install it as a systemd user service
   homerun setup [--org ORG] [--public] [--key-file PATH]
                                             create the homerun GitHub App. Without --key-file the
@@ -42,7 +42,7 @@ func main() {
 	var err error
 	switch {
 	case len(args) == 0:
-		err = tui.Run(api.NewClient(api.SocketPath()))
+		err = cmdTUI()
 	case args[0] == "daemon":
 		err = cmdDaemon(args[1:])
 	case args[0] == "setup":
@@ -142,6 +142,26 @@ func cmdDaemon(args []string) error {
 	return runErr
 }
 
+// cmdTUI opens the dashboard, hosting the engine while it is open when no
+// other process serves the API.
+func cmdTUI() error {
+	// The TUI owns the terminal, so the engine logs to a file meanwhile.
+	if err := os.MkdirAll(stateDir(), 0o700); err != nil {
+		return err
+	}
+	logf, err := os.OpenFile(filepath.Join(stateDir(), "homerun.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		return err
+	}
+	defer logf.Close()
+	slog.SetDefault(slog.New(slog.NewTextHandler(logf, nil)))
+	e := &engine{cfgPath: config.DefaultUserPath(), owner: "tui", poll: true}
+	_, hostErr := e.tryHost()
+	err = tui.Run(api.NewClient(api.SocketPath()), tui.Options{Host: e.tryHost, Hosting: e.hosting, HostErr: hostErr})
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	return errors.Join(err, e.shutdown())
+}
+
 func cmdSetup(args []string) error {
 	fs, cfgPath := flags("setup")
 	org := fs.String("org", "", "create the App under this organization")
@@ -192,9 +212,20 @@ func cmdRun(args []string) error {
 	if fs.NArg() < 1 || fs.NArg() > 2 || !config.ValidRepo(fs.Arg(0)) {
 		return errors.New("usage: homerun run [--pr N] OWNER/NAME [BRANCH] (flags go before the repo)")
 	}
-	ctx := context.Background()
-	c := api.NewClient(api.SocketPath())
-	resp, err := c.Start(ctx, api.StartRequest{Repo: fs.Arg(0), Ref: fs.Arg(1), PR: *pr})
+	e := &engine{cfgPath: config.DefaultUserPath(), owner: "run", poll: false}
+	if _, err := e.tryHost(); err != nil {
+		return err
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	err := runOnce(ctx, e, api.NewClient(api.SocketPath()), api.StartRequest{Repo: fs.Arg(0), Ref: fs.Arg(1), PR: *pr})
+	return errors.Join(err, e.shutdown())
+}
+
+// runOnce starts a run and follows it to its end. On a signal, a hosting
+// engine's shutdown cancels the run and closes its checks.
+func runOnce(ctx context.Context, e *engine, c *api.Client, req api.StartRequest) error {
+	resp, err := c.Start(ctx, req)
 	if err != nil {
 		return err
 	}
@@ -203,10 +234,23 @@ func cmdRun(args []string) error {
 		return nil
 	}
 	fmt.Println(startLine(resp))
-	if err := streamLog(ctx, c, resp.RunID); err != nil {
-		return err
+	err = streamLog(ctx, c, resp.RunID)
+	var run *api.Run
+	if err == nil {
+		run, err = waitRun(ctx, c, resp.RunID)
 	}
-	run, err := waitRun(ctx, c, resp.RunID)
+	if ctx.Err() != nil {
+		if e.hosting() {
+			// The engine and its socket go away with this process.
+			if err := e.shutdown(); err != nil {
+				return err
+			}
+			return fmt.Errorf("run %s cancelled: homerun was closed", resp.RunID)
+		}
+		wctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		run, err = waitRun(wctx, c, resp.RunID)
+	}
 	if err != nil {
 		return err
 	}

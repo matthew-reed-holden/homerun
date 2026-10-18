@@ -126,7 +126,7 @@ func newTestModel(t *testing.T) (*model, *fakeDaemon) {
 	t.Helper()
 	st := fixture()
 	f, c := newFake(t, st)
-	m := newModel(c, func() time.Time { return now })
+	m := newModel(c, func() time.Time { return now }, Options{})
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m.Update(stateMsg{&st})
 	return m, f
@@ -153,7 +153,7 @@ func drain(m *model, cmd tea.Cmd) {
 
 func TestScreensBeforeData(t *testing.T) {
 	_, c := newFake(t, api.State{})
-	m := newModel(c, func() time.Time { return now })
+	m := newModel(c, func() time.Time { return now }, Options{})
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	if !strings.Contains(m.render(), "Start the daemon") {
 		t.Fatal("never-connected screen")
@@ -673,7 +673,7 @@ func TestFetchTimesOut(t *testing.T) {
 	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { <-release })}
 	go func() { _ = srv.Serve(ln) }()
 	t.Cleanup(func() { close(release); _ = srv.Close() })
-	m := newModel(api.NewClient(sock), func() time.Time { return now })
+	m := newModel(api.NewClient(sock), func() time.Time { return now }, Options{})
 	done := make(chan tea.Msg, 1)
 	go func() { done <- m.fetch()() }()
 	select {
@@ -704,12 +704,159 @@ func TestRepeatedStepCountUsesFirstLine(t *testing.T) {
 	}
 	f, c := newFake(t, st)
 	f.logs["r1"] = "[CI / fail] ⭐ Run Main make\n[CI / fail] ⭐ Run Main make"
-	m := newModel(c, func() time.Time { return now })
+	m := newModel(c, func() time.Time { return now }, Options{})
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m.Update(stateMsg{&st})
 	keysIn(m, "j", "l", "j", "j", "j") // #1 → main: pass, fail, make foo, make bar
 	keysIn(m, "enter")
 	if m.log == nil || m.log.skip != 1 {
 		t.Fatalf("log: %+v", m.log)
+	}
+}
+
+// hostModel is a connected model whose state has the given runs.
+func hostModel(t *testing.T, o Options, runs ...api.Run) *model {
+	t.Helper()
+	st := fixture()
+	st.Runs = runs
+	_, c := newFake(t, st)
+	m := newModel(c, func() time.Time { return now }, o)
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m.Update(stateMsg{&st})
+	return m
+}
+
+func hosting(b bool) func() bool { return func() bool { return b } }
+
+func TestHostQuitWithActiveRunsAsks(t *testing.T) {
+	m := hostModel(t, Options{Hosting: hosting(true)},
+		api.Run{ID: "r2", Repo: "o/e2e", Label: "#1", Status: "running"},
+		api.Run{ID: "r1", Repo: "o/e2e", Label: "main", Status: "done"})
+	if cmd := keysIn(m, "q"); cmd != nil {
+		t.Fatal("q quit at once with a run in progress")
+	}
+	if m.dlg == nil || !strings.Contains(m.dlg.body, "1 runs in progress will be cancelled.") ||
+		!strings.Contains(m.dlg.body, "[y] quit · any other key stays") {
+		t.Fatalf("dialog %+v", m.dlg)
+	}
+	if cmd := keysIn(m, "n"); cmd != nil || m.dlg != nil {
+		t.Fatal("n should close the dialog and stay")
+	}
+	keysIn(m, "q")
+	cmd := keysIn(m, "y")
+	if cmd == nil {
+		t.Fatal("y did not quit")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatal("y did not quit")
+	}
+}
+
+func TestHostQuitIdleQuits(t *testing.T) {
+	m := hostModel(t, Options{Hosting: hosting(true)}, api.Run{ID: "r1", Status: "done"})
+	cmd := keysIn(m, "q")
+	if cmd == nil || m.dlg != nil {
+		t.Fatal("idle host should quit at once")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatal("not a quit")
+	}
+}
+
+func TestClientQuitDoesNotPrompt(t *testing.T) {
+	m := hostModel(t, Options{Hosting: hosting(false)}, api.Run{ID: "r2", Status: "queued"})
+	cmd := keysIn(m, "q")
+	if cmd == nil || m.dlg != nil {
+		t.Fatal("a client should quit at once")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatal("not a quit")
+	}
+}
+
+// hostAttempt runs the commands a tick returned, and feeds the host attempt's
+// result back. It reports whether there was one. Ticks never fire: their
+// commands sleep for two seconds.
+func hostAttempt(t *testing.T, m *model, cmd tea.Cmd) bool {
+	t.Helper()
+	if cmd == nil {
+		return false
+	}
+	first := cmd()
+	cmds, ok := first.(tea.BatchMsg)
+	if !ok {
+		cmds = []tea.Cmd{func() tea.Msg { return first }}
+	}
+	msgs := make(chan tea.Msg, len(cmds))
+	for _, c := range cmds {
+		go func() { msgs <- c() }()
+	}
+	timeout := time.After(time.Second)
+	for {
+		select {
+		case msg := <-msgs:
+			if hm, ok := msg.(hostMsg); ok {
+				m.Update(hm)
+				return true
+			}
+		case <-timeout:
+			return false
+		}
+	}
+}
+
+func TestStaleClientTriesToHost(t *testing.T) {
+	calls, host := 0, false
+	m := hostModel(t, Options{
+		// The second attempt wins the engine.
+		Host:    func() (bool, error) { calls++; host = calls == 2; return host, nil },
+		Hosting: func() bool { return host },
+	})
+	m.Update(errMsg{errors.New("unreachable")})
+	_, cmd := m.Update(tickMsg{})
+	if !hostAttempt(t, m, cmd) || calls != 1 {
+		t.Fatalf("first stale tick: %d calls", calls)
+	}
+	m.Update(errMsg{errors.New("unreachable")})
+	_, cmd = m.Update(tickMsg{})
+	if !hostAttempt(t, m, cmd) || calls != 2 {
+		t.Fatalf("second stale tick: %d calls", calls)
+	}
+	m.Update(errMsg{errors.New("unreachable")})
+	_, cmd = m.Update(tickMsg{})
+	if hostAttempt(t, m, cmd) || calls != 2 {
+		t.Fatalf("tried to host while hosting: %d calls", calls)
+	}
+}
+
+func TestStaleClientHostsOneAttemptAtATime(t *testing.T) {
+	m := hostModel(t, Options{Host: func() (bool, error) { return false, nil }, Hosting: hosting(false)})
+	m.Update(errMsg{errors.New("unreachable")})
+	m.Update(tickMsg{})
+	if !m.hostBusy {
+		t.Fatal("no attempt in flight after a stale tick")
+	}
+	_, cmd := m.Update(tickMsg{})
+	if hostAttempt(t, m, cmd) {
+		t.Fatal("a second attempt started while one was in flight")
+	}
+}
+
+func TestHostErrorShownBeforeData(t *testing.T) {
+	_, c := newFake(t, api.State{})
+	m := newModel(c, func() time.Time { return now }, Options{
+		Host:    func() (bool, error) { return false, nil },
+		Hosting: hosting(false),
+		HostErr: errors.New("no GitHub App configured; run: homerun setup"),
+	})
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	s := ansi.Strip(m.render())
+	if !strings.Contains(s, "homerun could not start: no GitHub App configured; run: homerun setup") ||
+		!strings.Contains(s, "(q to quit)") || strings.Contains(s, "Start the daemon") {
+		t.Fatalf("screen:\n%s", s)
+	}
+	m.Update(hostMsg{err: errors.New("act not found on PATH (see: homerun doctor)")})
+	if s := ansi.Strip(m.render()); !strings.Contains(s, "homerun could not start: act not found on PATH") {
+		t.Fatalf("a later host error is not shown:\n%s", s)
 	}
 }

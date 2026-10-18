@@ -37,11 +37,28 @@ type (
 		gen int
 		err error
 	}
+	hostMsg struct {
+		ok  bool
+		err error
+	}
 )
+
+// Options connect the dashboard to an engine it may host itself.
+type Options struct {
+	Host    func() (bool, error) // nil: never host (tests, plain client)
+	Hosting func() bool
+	HostErr error                                        // the first Host attempt's error, made before Run
+	Launch  string                                       // OWNER/NAME or "" (Task 7)
+	AddRepo func(ctx context.Context, name string) error // Task 7
+}
 
 type model struct {
 	c   *api.Client
 	now func() time.Time
+	o   Options
+
+	hostErr  error // the last Host attempt's error
+	hostBusy bool  // a Host attempt is in flight
 
 	state     api.State
 	connected bool
@@ -66,13 +83,13 @@ type model struct {
 	stopLog  context.CancelFunc
 }
 
-func newModel(c *api.Client, now func() time.Time) *model {
-	return &model{c: c, now: now, w: 120, h: 40, focus: paneItems, left: paneItems, help: help.New(),
+func newModel(c *api.Client, now func() time.Time, o Options) *model {
+	return &model{c: c, now: now, o: o, hostErr: o.HostErr, w: 120, h: 40, focus: paneItems, left: paneItems, help: help.New(),
 		repos: list{n: 1, title: "Repos"}, items: list{n: 2, title: "Branches & PRs"}, runs: list{n: 3, title: "Runs"}}
 }
 
-func Run(c *api.Client) error {
-	m := newModel(c, time.Now)
+func Run(c *api.Client, o Options) error {
+	m := newModel(c, time.Now, o)
 	_, err := tea.NewProgram(m).Run()
 	m.closeLog()
 	return err
@@ -96,6 +113,33 @@ func (m *model) fetch() tea.Cmd {
 		}
 		return stateMsg{s}
 	}
+}
+
+// host starts the engine here when nobody serves the API: the daemon or the
+// TUI hosting it went away. Never more than one attempt at a time.
+func (m *model) host() tea.Cmd {
+	if m.o.Host == nil || m.hostBusy || (m.connected && m.err == nil) || m.hosting() {
+		return nil
+	}
+	m.hostBusy = true
+	h := m.o.Host
+	return func() tea.Msg {
+		ok, err := h()
+		return hostMsg{ok, err}
+	}
+}
+
+func (m *model) hosting() bool { return m.o.Hosting != nil && m.o.Hosting() }
+
+// activeRuns counts the runs a hosting TUI cancels when it quits.
+func (m *model) activeRuns() int {
+	n := 0
+	for _, r := range m.state.Runs {
+		if live(r.Status) {
+			n++
+		}
+	}
+	return n
 }
 
 func (m *model) say(s string) { m.status, m.statusAt = termsafe.Line(s), m.now() }
@@ -203,7 +247,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.err = msg.err
 	case tickMsg:
-		return m, tea.Batch(m.fetch(), tick())
+		return m, tea.Batch(m.fetch(), tick(), m.host())
+	case hostMsg:
+		m.hostBusy, m.hostErr = false, msg.err
+		if msg.ok {
+			return m, m.fetch()
+		}
 	case statusMsg:
 		// A confirmation whose prompt is covered must not stay armed.
 		m.dlg = nil
@@ -274,6 +323,10 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 	}
 	switch {
 	case key.Matches(k, keys.Quit):
+		if n := m.activeRuns(); n > 0 && m.hosting() {
+			m.dlg = quitDialog(n)
+			return nil
+		}
 		m.closeLog()
 		return tea.Quit
 	case key.Matches(k, keys.Help):
@@ -512,7 +565,10 @@ func (m *model) render() string {
 	}
 	if !m.connected {
 		msg := "Start the daemon: homerun daemon\n\n(q to quit)"
-		if m.err != nil {
+		switch {
+		case m.hostErr != nil:
+			msg = "homerun could not start: " + termsafe.Line(m.hostErr.Error()) + "\n\n(q to quit)"
+		case m.err != nil:
 			msg = termsafe.Line(m.err.Error()) + "\n\n" + msg
 		}
 		return lipgloss.Place(m.w, m.h, lipgloss.Center, lipgloss.Center, msg)
