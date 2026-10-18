@@ -9,3 +9,7 @@
 # Build output
 bin/
 dist/
+
+# Local agent scratch
+.superpowers/
+.worktrees/
