@@ -34,6 +34,12 @@ type Options struct {
 	StateDir   string
 	Act        string
 	GitURL     func(repo string) string // nil means https://github.com/<repo>.git
+	Owner      string                   // "tui", "run" or "daemon": written into daemon.lock
+	// Foreground engines live as long as a TUI or `homerun run`: closing one
+	// cancels its runs and closes their checks instead of leaving them to recovery.
+	Foreground bool
+	// NoPoll engines run only what Start is given: Run neither recovers nor polls.
+	NoPoll bool
 }
 
 type Daemon struct {
@@ -59,7 +65,14 @@ type Daemon struct {
 	repoLocks map[string]*sync.Mutex
 	sendLocks map[string]*sync.Mutex // run id -> held while sending that run's check updates
 	lastPrune time.Time
+	closing   bool // a foreground close is cancelling the runs
 }
+
+// ErrLocked is New's error when another process holds the state directory.
+var ErrLocked = errors.New("engine locked")
+
+// closedSummary closes the checks of runs a foreground engine cancels on close.
+const closedSummary = "Cancelled: homerun was closed."
 
 const supersededSummary = "Cancelled: superseded by a newer run or cancelled by the user."
 
@@ -72,7 +85,7 @@ func New(o Options) (*Daemon, error) {
 	if o.GitURL == nil {
 		o.GitURL = func(r string) string { return "https://github.com/" + r + ".git" }
 	}
-	lock, err := lockState(o.StateDir)
+	lock, err := lockState(o.StateDir, o.Owner)
 	if err != nil {
 		return nil, err
 	}
@@ -98,9 +111,10 @@ func New(o Options) (*Daemon, error) {
 	}, nil
 }
 
-// lockState makes sure only one daemon uses a state directory: two would
+// lockState makes sure only one engine uses a state directory: two would
 // claim and run the same commits, and race to replace each other's socket.
-func lockState(dir string) (*os.File, error) {
+// The holder writes its owner into the file so a refused process can say who.
+func lockState(dir, owner string) (*os.File, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
@@ -112,9 +126,21 @@ func lockState(dir string) (*os.File, error) {
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		f.Close()
 		if errors.Is(err, syscall.EWOULDBLOCK) {
-			return nil, fmt.Errorf("another homerun daemon is running (it holds %s)", path)
+			why := fmt.Sprintf("another homerun process is running the engine (it holds %s)", path)
+			if b, _ := os.ReadFile(path); string(b) == "tui" {
+				why = "a homerun TUI is running the engine; quit it first"
+			}
+			return nil, fmt.Errorf("%w: %s", ErrLocked, why)
 		}
 		return nil, fmt.Errorf("locking %s: %w", path, err)
+	}
+	if err := f.Truncate(0); err != nil {
+		f.Close()
+		return nil, err
+	}
+	if _, err := f.WriteAt([]byte(owner), 0); err != nil {
+		f.Close()
+		return nil, err
 	}
 	return f, nil
 }
@@ -149,8 +175,12 @@ func (d *Daemon) Reload() error {
 }
 
 // close cancels every run and waits for their goroutines, so nothing touches
-// the state directory after it returns.
+// the state directory after it returns. A foreground engine first cancels its
+// runs while base is live, so they close their checks as closedSummary.
 func (d *Daemon) close() {
+	if d.opts.Foreground {
+		d.closeForeground()
+	}
 	// Under mu so a concurrent Start either sees the cancellation or has
 	// already called wg.Add before Wait starts.
 	d.mu.Lock()
@@ -160,13 +190,53 @@ func (d *Daemon) close() {
 	d.lock.Close()
 }
 
+// closeForeground cancels every queued and running run and waits for them.
+// One attempt per GitHub update bounds how long quitting takes; an update that
+// fails stays Pending for the next engine to send.
+func (d *Daemon) closeForeground() {
+	d.mu.Lock()
+	d.closing = true
+	d.retry = func(_ context.Context, fn func() error) error { return fn() }
+	var ids []string
+	for id, r := range d.runs {
+		if r.Status == "queued" || r.Status == "running" {
+			ids = append(ids, id)
+		}
+	}
+	d.mu.Unlock()
+	for _, id := range ids {
+		d.sched.Cancel(id)
+	}
+	d.wg.Wait()
+}
+
+func (d *Daemon) isClosing() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.closing
+}
+
+// cancelledSummary is why a cancelled run's checks were closed.
+func (d *Daemon) cancelledSummary() string {
+	if d.isClosing() {
+		return closedSummary
+	}
+	return supersededSummary
+}
+
 func (d *Daemon) Run(ctx context.Context) error {
 	defer d.close()
-	d.recover(ctx)
+	if !d.opts.NoPoll {
+		d.recover(ctx)
+	}
 	t := time.NewTicker(time.Duration(d.config().PollInterval))
 	defer t.Stop()
 	for {
-		d.PollAll(ctx)
+		if d.opts.NoPoll {
+			d.flushReports(ctx)
+		} else {
+			d.PollAll(ctx)
+		}
 		select {
 		case <-ctx.Done():
 			return nil
@@ -424,6 +494,10 @@ func (d *Daemon) start(ctx context.Context, ev event.Event, handover func(tracke
 		d.mu.Unlock()
 		return nil, fmt.Errorf("daemon is shutting down: %w", err)
 	}
+	if d.closing {
+		d.mu.Unlock()
+		return nil, errors.New("daemon is shutting down")
+	}
 	d.wg.Add(1)
 	d.mu.Unlock()
 	handedOff := false
@@ -520,6 +594,11 @@ func (d *Daemon) start(ctx context.Context, ev event.Event, handover func(tracke
 		defer d.wg.Done()
 		d.execute(ctx, run, p, slot)
 	})
+	// A foreground close that began while this run was claiming may have
+	// missed it in the scheduler; cancelling twice is harmless.
+	if d.isClosing() {
+		d.sched.Cancel(run.ID)
+	}
 	return run, nil
 }
 
@@ -828,7 +907,8 @@ func (d *Daemon) sendLock(runID string) *sync.Mutex {
 // retryFor returns how a run's calls to GitHub are retried. Once one of its
 // updates is pending, GitHub is likely down: a full backoff per report would
 // block the act event callback for minutes and stall act's output, so each
-// call gets one attempt and the poll loop retries.
+// call gets one attempt and the poll loop retries. A foreground close makes
+// d.retry itself a single attempt.
 func (d *Daemon) retryFor(run *store.Run) func(context.Context, func() error) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()

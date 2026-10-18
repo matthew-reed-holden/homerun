@@ -120,7 +120,7 @@ func cmdDaemon(args []string) error {
 	}
 	// New takes the state-dir lock, so a second daemon fails here before it can touch the socket.
 	d, err := daemon.New(daemon.Options{Config: cfg, ConfigPath: *cfgPath, Source: client, Reporter: client,
-		AppID: client.AppID(), StateDir: stateDir(), Act: act})
+		AppID: client.AppID(), StateDir: stateDir(), Act: act, Owner: "daemon"})
 	if err != nil {
 		return err
 	}

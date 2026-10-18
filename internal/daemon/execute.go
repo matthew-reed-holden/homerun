@@ -137,13 +137,13 @@ func (d *Daemon) execute(ctx context.Context, run *store.Run, p *plan, slot int)
 }
 
 // stopped ends a run whose context was cancelled. On shutdown the run is left
-// as it is, so restart recovery closes and re-queues it; a superseded or
-// user-cancelled run is closed here.
+// as it is, so restart recovery closes and re-queues it; a superseded,
+// user-cancelled or foreground-closed run is closed here.
 func (d *Daemon) stopped(rctx context.Context, run *store.Run) {
 	if d.base.Err() != nil {
 		return
 	}
-	d.closeOpen(rctx, run, "cancelled", supersededSummary)
+	d.closeOpen(rctx, run, "cancelled", d.cancelledSummary())
 	d.setStatus(run, "cancelled")
 }
 
@@ -381,7 +381,7 @@ func (t *tracker) finish(actErr error) {
 	conclusion, summary := "skipped", "Did not run: a job it needs failed, or its if: condition was false."
 	switch {
 	case t.runCtx.Err() != nil:
-		conclusion, summary = "cancelled", supersededSummary
+		conclusion, summary = "cancelled", t.d.cancelledSummary()
 	case t.unmapped:
 		// Never "skipped" here: GitHub counts skipped as passing, and the failure may be these jobs'.
 		conclusion, summary = "failure", "homerun error: a job homerun could not map to a check failed or has an unmapped runs-on label, so this job's result is unknown."
@@ -440,6 +440,9 @@ func (t *tracker) finish(actErr error) {
 			worst = "failure"
 			title, summary = "homerun error: a matrix leg could not be reported", "homerun error: a matrix leg's check run could not be created, so its result is unknown."
 		}
+		if t.runCtx.Err() != nil && t.d.isClosing() {
+			summary = closedSummary
+		}
 		t.d.complete(t.ctx, t.run, parent, worst, title, summary, "")
 	}
 }
@@ -491,6 +494,9 @@ func (d *Daemon) runExtra(ctx, rctx context.Context, run *store.Run, c *store.Ch
 			return
 		}
 		conclusion, title = "cancelled", "Cancelled"
+		if d.isClosing() {
+			summary = closedSummary
+		}
 	case errors.As(err, &exit):
 		conclusion, title = "failure", "Failed: "+err.Error()
 	case err != nil:

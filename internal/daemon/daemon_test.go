@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/go-github/v92/github"
 
+	"github.com/matthew-reed-holden/homerun/internal/config"
 	"github.com/matthew-reed-holden/homerun/internal/event"
 	"github.com/matthew-reed-holden/homerun/internal/gh"
 	"github.com/matthew-reed-holden/homerun/internal/store"
@@ -239,6 +241,227 @@ func TestShutdownLeavesQueuedRunForRecovery(t *testing.T) {
 	for _, c := range runs[0].Checks {
 		if c.ID == 0 {
 			t.Errorf("check %s saved without its id", c.Name)
+		}
+	}
+}
+
+func foreground(o *Options) { o.Foreground = true }
+
+// runningAndQueued leaves one push running in act and a second one queued
+// behind a full scheduler.
+func runningAndQueued(t *testing.T, h *harness) (running, queued string) {
+	t.Helper()
+	h.poll()
+	t.Setenv("FAKE_ACT_SLEEP", "30")
+	h.output(`{"jobID":"build","matrix":{},"msg":"started"}` + "\n")
+	running = h.push(map[string]string{"a.txt": "1"})
+	h.poll()
+	h.waitStatus(running, "homerun / CI / build", "in_progress")
+	h.occupyN(h.d.config().MaxParallel - 1)
+	queued = h.push(map[string]string{"a.txt": "2"})
+	h.poll()
+	h.waitRun(queued, "queued")
+	h.waitRun(running, "running")
+	return running, queued
+}
+
+// assertClosed checks that every check on shas ended cancelled by the close.
+func assertClosed(t *testing.T, h *harness, shas ...string) {
+	t.Helper()
+	for _, sha := range shas {
+		cs := h.fake.Checks(repo, sha)
+		if len(cs) != 2 {
+			t.Errorf("%s: want 2 checks, got %d", sha[:7], len(cs))
+		}
+		for _, c := range cs {
+			if c.Status != "completed" || c.Conclusion != "cancelled" || lastSummary(c) != closedSummary {
+				t.Errorf("%s %s: %s/%s %q", sha[:7], c.Name, c.Status, c.Conclusion, lastSummary(c))
+			}
+		}
+	}
+}
+
+// restartAndPoll starts a fresh engine on the same state, as the next launch would.
+func restartAndPoll(t *testing.T, h *harness) {
+	t.Helper()
+	d, err := New(h.d.opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(d.close)
+	d.retry = h.d.retry
+	d.recover(context.Background())
+	d.PollAll(context.Background())
+}
+
+func TestForegroundCloseCancelsRunsAndClosesChecks(t *testing.T) {
+	h := newHarnessWith(t, map[string]string{".github/workflows/ci.yml": ciYML}, foreground)
+	running, queued := runningAndQueued(t, h)
+
+	h.d.close()
+
+	assertClosed(t, h, running, queued)
+	st := storedStatuses(t, h)
+	if len(st) != 2 {
+		t.Fatalf("runs: %v", st)
+	}
+	for id, s := range st {
+		if s != "cancelled" {
+			t.Errorf("run %s: %s", id, s)
+		}
+	}
+	before := map[string]int{running: len(h.fake.Checks(repo, running)), queued: len(h.fake.Checks(repo, queued))}
+	restartAndPoll(t, h)
+	for sha, n := range before {
+		if got := len(h.fake.Checks(repo, sha)); got != n {
+			t.Errorf("%s: %d checks after restart, want %d", sha[:7], got, n)
+		}
+	}
+}
+
+func TestForegroundCloseKeepsFailedUpdatePending(t *testing.T) {
+	h := newHarnessWith(t, map[string]string{".github/workflows/ci.yml": ciYML}, foreground)
+	running, queued := runningAndQueued(t, h)
+	h.rep.failUpdates(100)
+
+	h.d.close()
+
+	runs, err := h.d.store.List()
+	if err != nil || len(runs) != 2 {
+		t.Fatalf("runs: %+v err=%v", runs, err)
+	}
+	for _, r := range runs {
+		if r.Status != "cancelled" {
+			t.Errorf("run %s: %s", r.ID, r.Status)
+		}
+		for _, c := range r.Checks {
+			if c.Pending == nil || c.Pending.Conclusion != "cancelled" || c.Pending.Summary != closedSummary {
+				t.Errorf("run %s %s: pending %+v", r.ID, c.Name, c.Pending)
+			}
+		}
+	}
+	for _, sha := range []string{running, queued} {
+		for _, c := range h.fake.Checks(repo, sha) {
+			if c.Status == "completed" {
+				t.Errorf("%s %s completed although every update failed", sha[:7], c.Name)
+			}
+		}
+	}
+
+	h.rep.failUpdates(0)
+	restartAndPoll(t, h)
+
+	assertClosed(t, h, running, queued)
+	for _, sha := range []string{running, queued} {
+		for _, name := range []string{"homerun / CI / build", "homerun / CI / docker"} {
+			if n := countChecks(h, sha, name); n != 1 {
+				t.Errorf("%s %s: %d checks, want 1 (not requeued)", sha[:7], name, n)
+			}
+		}
+	}
+}
+
+// A matrix parent and an extra checks: command are closed by their own code
+// paths, which must say the same.
+func TestForegroundCloseSummarizesMatrixAndExtraChecks(t *testing.T) {
+	h := newHarnessWith(t, map[string]string{
+		".github/workflows/ci.yml": matrixYML,
+		".github/homerun.yml":      "checks:\n  slow: sleep 30\n",
+	}, foreground)
+	h.poll()
+	t.Setenv("FAKE_ACT_SLEEP", "30")
+	h.output(`{"jobID":"test","matrix":{"n":1},"msg":"started"}` + "\n")
+	sha := h.push(nil)
+	h.poll()
+	h.waitStatus(sha, "homerun / CI / test (1)", "in_progress")
+	h.d.close()
+	for _, c := range h.fake.Checks(repo, sha) {
+		if c.Status != "completed" || c.Conclusion != "cancelled" || lastSummary(c) != closedSummary {
+			t.Errorf("%s: %s/%s %q", c.Name, c.Status, c.Conclusion, lastSummary(c))
+		}
+	}
+
+	h2 := newHarnessWith(t, map[string]string{".github/homerun.yml": "checks:\n  slow: sleep 30\n"}, foreground)
+	h2.poll()
+	sha = h2.push(map[string]string{"a.txt": "a"})
+	h2.poll()
+	h2.waitStatus(sha, "homerun / checks / slow", "in_progress")
+	h2.d.close()
+	for _, c := range h2.fake.Checks(repo, sha) {
+		if c.Status != "completed" || c.Conclusion != "cancelled" || lastSummary(c) != closedSummary {
+			t.Errorf("%s: %s/%s %q", c.Name, c.Status, c.Conclusion, lastSummary(c))
+		}
+	}
+}
+
+func TestStartRefusedWhileClosing(t *testing.T) {
+	h := newHarnessWith(t, map[string]string{".github/workflows/ci.yml": ciYML}, foreground)
+	h.poll()
+	sha := h.push(map[string]string{"a.txt": "a"})
+	// A run that has not finished yet holds close in its wait.
+	h.d.wg.Add(1)
+	var release sync.Once
+	t.Cleanup(func() { release.Do(h.d.wg.Done) })
+	closed := make(chan struct{})
+	go func() {
+		h.d.close()
+		close(closed)
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		h.d.mu.Lock()
+		closing := h.d.closing
+		h.d.mu.Unlock()
+		if closing {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("close never started")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	ev := event.Event{Name: "push", Repo: repo, DefaultBranch: "main", SHA: sha, Ref: "refs/heads/main", Before: event.Zero}
+	_, err := h.d.Start(context.Background(), ev)
+	if err == nil || !strings.Contains(err.Error(), "shutting down") {
+		t.Errorf("Start while closing: %v", err)
+	}
+	if h.d.base.Err() != nil {
+		t.Error("base was cancelled before the runs finished")
+	}
+	release.Do(h.d.wg.Done)
+	<-closed
+	if cs := h.fake.Checks(repo, sha); len(cs) != 0 {
+		t.Errorf("a refused start claimed the commit: %+v", cs)
+	}
+}
+
+func TestNoPollRunsOnlyWhatItIsAsked(t *testing.T) {
+	h := newHarnessWith(t, map[string]string{".github/workflows/ci.yml": ciYML}, func(o *Options) {
+		o.NoPoll = true
+		o.Config.PollInterval = config.Duration(10 * time.Millisecond)
+	})
+	h.poll() // baseline, so a polling engine would run the next push
+	sha := h.push(map[string]string{"a.txt": "a"})
+	ctx, cancel := context.WithCancel(context.Background())
+	ran := make(chan error, 1)
+	go func() { ran <- h.d.Run(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		<-ran
+	})
+	time.Sleep(50 * time.Millisecond)
+	if cs := h.fake.Checks(repo, sha); len(cs) != 0 {
+		t.Fatalf("a no-poll engine claimed a pushed commit: %+v", cs)
+	}
+	ev := event.Event{Name: "push", Repo: repo, DefaultBranch: "main", SHA: sha, Ref: "refs/heads/main", Before: event.Zero}
+	run, err := h.d.Start(ctx, ev)
+	if err != nil || run == nil {
+		t.Fatalf("Start: %v %v", run, err)
+	}
+	h.waitRun(sha, "done")
+	for name, c := range h.waitDone(sha) {
+		if c.Conclusion != "success" {
+			t.Errorf("%s: %s", name, c.Conclusion)
 		}
 	}
 }

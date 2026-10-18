@@ -123,6 +123,12 @@ func (r *reporter) UpdateCheck(ctx context.Context, repo string, id int64, u gh.
 
 func newHarness(t *testing.T, files map[string]string) *harness {
 	t.Helper()
+	return newHarnessWith(t, files, nil)
+}
+
+// newHarnessWith is newHarness with mod applied to the engine's options before New.
+func newHarnessWith(t *testing.T, files map[string]string, mod func(*Options)) *harness {
+	t.Helper()
 	tmp := t.TempDir()
 	h := &harness{t: t, tmp: tmp, src: filepath.Join(tmp, "src"), act: filepath.Join(tmp, "act"), fake: gh.NewFake(1)}
 	h.rep = &reporter{Fake: h.fake}
@@ -138,8 +144,12 @@ func newHarness(t *testing.T, files map[string]string) *harness {
 		Repos:     map[string]config.UserRepo{repo: {Secrets: map[string]config.Secret{"MYSEC": {Value: "s3cr3t-value"}}}},
 	}
 	// file:// so the mirror gets only reachable objects, as from GitHub.
-	d, err := New(Options{Config: cfg, Source: h.fake, Reporter: h.rep, AppID: 1,
-		StateDir: filepath.Join(tmp, "state"), Act: h.act, GitURL: func(string) string { return "file://" + h.src }})
+	opts := Options{Config: cfg, Source: h.fake, Reporter: h.rep, AppID: 1,
+		StateDir: filepath.Join(tmp, "state"), Act: h.act, GitURL: func(string) string { return "file://" + h.src }}
+	if mod != nil {
+		mod(&opts)
+	}
+	d, err := New(opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +254,12 @@ func (h *harness) poll() {
 // stay queued until the returned release is called.
 func (h *harness) occupySlots() (release func()) {
 	h.t.Helper()
-	n := h.d.config().MaxParallel
+	return h.occupyN(h.d.config().MaxParallel)
+}
+
+// occupyN fills n global scheduler slots until the returned release is called.
+func (h *harness) occupyN(n int) (release func()) {
+	h.t.Helper()
 	gate := make(chan struct{})
 	var started sync.WaitGroup
 	started.Add(n)

@@ -314,7 +314,7 @@ func TestRecoverDoesNotRerunAFinishedRun(t *testing.T) {
 
 func TestSecondDaemonIsRefused(t *testing.T) {
 	h := newHarness(t, map[string]string{".github/workflows/ci.yml": ciYML})
-	if _, err := New(h.d.opts); err == nil || !strings.Contains(err.Error(), "another homerun daemon is running") {
+	if _, err := New(h.d.opts); !errors.Is(err, ErrLocked) || !strings.Contains(err.Error(), "another homerun process is running the engine") {
 		t.Fatalf("err = %v", err)
 	}
 	h.d.close()
@@ -323,6 +323,19 @@ func TestSecondDaemonIsRefused(t *testing.T) {
 		t.Fatalf("after the first daemon stopped: %v", err)
 	}
 	d.close()
+}
+
+func TestLockNamesTUIOwner(t *testing.T) {
+	h := newHarnessWith(t, map[string]string{".github/workflows/ci.yml": ciYML}, func(o *Options) { o.Owner = "tui" })
+	if b, err := os.ReadFile(filepath.Join(h.d.opts.StateDir, "daemon.lock")); err != nil || string(b) != "tui" {
+		t.Fatalf("lock file = %q, %v", b, err)
+	}
+	opts := h.d.opts
+	opts.Owner = "run"
+	_, err := New(opts)
+	if !errors.Is(err, ErrLocked) || !strings.Contains(err.Error(), "a homerun TUI is running the engine; quit it first") {
+		t.Fatalf("err = %v", err)
+	}
 }
 
 // A stranded run that never claimed its commit: while its requeue keeps
