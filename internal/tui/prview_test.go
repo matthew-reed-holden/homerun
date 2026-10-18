@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/matthew-reed-holden/homerun/internal/api"
 	"github.com/matthew-reed-holden/homerun/internal/pr"
 )
 
@@ -83,7 +84,7 @@ func TestEnterOpensPR(t *testing.T) {
 	if !strings.HasPrefix(lines[0], "╭─#1 e2e PR─") {
 		t.Fatalf("sections title:\n%s", out)
 	}
-	if !strings.Contains(lines[1], "Description") || !strings.Contains(lines[2], "✘ Checks 1/2") {
+	if !strings.Contains(lines[1], "Description") || !strings.Contains(lines[2], "✘ Checks 2/4") {
 		t.Fatalf("section rows:\n%s", out)
 	}
 	if strings.Contains(out, "Branches & PRs") || strings.Contains(out, "Runs") {
@@ -454,4 +455,105 @@ func sgrAt(s string) bool {
 		}
 	}
 	return false
+}
+
+// checksModel opens PR #1 on its Checks section with a rollup of one required
+// daemon-named check, one GitHub-only required check and one GitHub-only plain check.
+func checksModel(t *testing.T) (*model, *fakeDaemon) {
+	t.Helper()
+	recordTicks(t)
+	recordDetailTicks(t)
+	st := fixture()
+	st.Repos[0].Items[0], st.Repos[0].Items[1] = st.Repos[0].Items[1], st.Repos[0].Items[0]
+	st.Repos[0].Items[0].Checks = append(st.Repos[0].Items[0].Checks,
+		api.Check{Name: "homerun / CI / slow", Status: "in_progress", RunID: "r9", LogPrefix: "CI / slow"})
+	fd, c := newFake(t, st)
+	d := detailFixture()
+	d.Checks = []pr.Check{
+		{Name: "homerun / CI / pass", Status: "completed", Conclusion: "success", Required: true},
+		{Name: "ci/gh", Status: "completed", Conclusion: "failure", URL: "https://github.com/o/e2e/runs/9", Required: true},
+		{Name: "docs", Status: "in_progress"},
+	}
+	m := newModel(c, func() time.Time { return now }, Options{PRs: &pr.Fake{Details: map[string]*pr.Detail{"o/e2e#1": d}}})
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m.Update(stateMsg{&st})
+	keysIn(m, "1")
+	run(m, keysIn(m, "enter"))
+	keysIn(m, "j", "l")
+	return m, fd
+}
+
+func TestChecksSection(t *testing.T) {
+	m, _ := checksModel(t)
+	out := screen(m)
+	for _, want := range []string{"pass required", "ci/gh required", "✘ ci/gh", "docs", "Checks 1/5"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "docs required") || strings.Contains(out, "fail required") {
+		t.Fatalf("stray required:\n%s", out)
+	}
+	if strings.Count(out, "pass") > 3 {
+		t.Fatalf("daemon check duplicated:\n%s", out)
+	}
+	// A detail refresh keeps the cursor and fold state.
+	keysIn(m, "j", "j")
+	cur := m.tree.cur
+	run(m, m.refetchPR())
+	if m.tree.cur != cur {
+		t.Fatalf("cursor %d -> %d", cur, m.tree.cur)
+	}
+}
+
+func TestChecksSectionKeys(t *testing.T) {
+	m, fd := checksModel(t)
+	if bar := ansi.Strip(m.bar()); !strings.Contains(bar, "fold") || !strings.Contains(bar, "rerun") || !strings.Contains(bar, "cancel") {
+		t.Fatalf("bar %q", bar)
+	}
+	var opened []string
+	old := openURL
+	openURL = func(u string) error { opened = append(opened, u); return nil }
+	t.Cleanup(func() { openURL = old })
+	keysIn(m, "enter")
+	if m.log == nil {
+		t.Fatal("enter on a daemon check opens its log")
+	}
+	m.closeLog()
+	for m.tree.checks[m.tree.nodes()[m.tree.cur].check].Name != "ci/gh" {
+		keysIn(m, "j")
+	}
+	keysIn(m, "enter")
+	if m.log != nil || !strings.Contains(m.status, "no local log for this check (it did not run here)") {
+		t.Fatalf("rollup-only enter: log %v status %q", m.log, m.status)
+	}
+	m.Update(keysIn(m, "o")())
+	if !slices.Equal(opened, []string{"https://github.com/o/e2e/runs/9"}) {
+		t.Fatalf("opened %v", opened)
+	}
+	cmd := keysIn(m, "r")
+	if cmd == nil {
+		t.Fatalf("no rerun: %q", m.status)
+	}
+	m.Update(cmd())
+	if len(fd.starts) != 1 || fd.starts[0].Repo != "o/e2e" || fd.starts[0].PR != 1 {
+		t.Fatalf("starts %+v", fd.starts)
+	}
+	for m.tree.checks[m.tree.nodes()[m.tree.cur].check].Name != "homerun / CI / slow" {
+		keysIn(m, "k")
+	}
+	if keysIn(m, "c"); m.dlg == nil {
+		t.Fatal("c on a running check opens the cancel dialog")
+	}
+}
+
+func TestDescriptionCIsNotCancel(t *testing.T) {
+	m, _ := checksModel(t)
+	keysIn(m, "esc", "k", "l")
+	if m.pr.section != 0 || m.focus != paneMain {
+		t.Fatal("not in Description")
+	}
+	if keysIn(m, "c"); m.dlg != nil || m.status != "" {
+		t.Fatalf("c in Description: dlg %v status %q", m.dlg, m.status)
+	}
 }

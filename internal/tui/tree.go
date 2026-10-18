@@ -15,6 +15,7 @@ type tree struct {
 	open   map[string]bool // fold choices the user made, by check name
 	cur    int
 	off    int
+	req    map[string]bool // check names the rollup marks required
 }
 
 type node struct{ check, step int } // step -1 is the job row
@@ -200,6 +201,9 @@ func (t *tree) rows(w, inner int, now time.Time, focused bool) []string {
 			first, _, _ := strings.Cut(s.Name, "\n")
 			indent, icon, name = "  ", Icon(s.Status, s.Conclusion), termsafe.Line(first)
 			tm = timing(s.Status, s.Started, s.Completed, now)
+		}
+		if n.step < 0 && t.req[c.Name] {
+			name += " " + dim.Render("required")
 		}
 		why := ""
 		if n.step < 0 && c.Status == "completed" && c.Conclusion == "failure" {

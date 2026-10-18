@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -120,6 +121,7 @@ func (m *model) onDetail(msg detailMsg) tea.Cmd {
 		}
 		p.pageW = 0
 		m.syncSections()
+		m.syncMain()
 	}
 	if !msg.tick {
 		return nil
@@ -167,12 +169,36 @@ func (m *model) prTitle() string {
 	return termsafe.Line(fmt.Sprintf("#%d %s", m.pr.number, t))
 }
 
+// prChecks is the Checks section: the daemon's checks for the PR's head, then
+// each rollup check no daemon check shares a name with (it ran on GitHub, so it
+// has no RunID). req names the checks the rollup marks required.
+func (m *model) prChecks() (cs []api.Check, req map[string]bool) {
+	if _, it := m.prItem(); it != nil {
+		cs = slices.Clone(it.Checks)
+	}
+	if m.pr.d == nil {
+		return cs, nil
+	}
+	have := map[string]bool{}
+	for _, c := range cs {
+		have[c.Name] = true
+	}
+	req = map[string]bool{}
+	for _, c := range m.pr.d.Checks {
+		if c.Required {
+			req[c.Name] = true
+		}
+		if !have[c.Name] {
+			have[c.Name] = true
+			cs = append(cs, api.Check{Name: c.Name, Status: c.Status, Conclusion: c.Conclusion, URL: c.URL})
+		}
+	}
+	return cs, req
+}
+
 // syncSections rebuilds the sections rows; Checks counts the checks its page shows.
 func (m *model) syncSections() {
-	var cs []api.Check
-	if _, it := m.prItem(); it != nil {
-		cs = it.Checks
-	}
+	cs, _ := m.prChecks()
 	pass := 0
 	for _, c := range cs {
 		if c.Status == "completed" && passed(c.Conclusion) {

@@ -57,6 +57,7 @@ const (
 	inLog
 	inPRSections
 	inPRDesc
+	inPRChecks
 	inPRRow // a dashboard PR row, with PR pages on
 )
 
@@ -70,6 +71,8 @@ func (k keyMap) bar(c barCtx) []key.Binding {
 		return []key.Binding{k.Move, k.Into, k.Esc, k.Open, k.Help, k.Quit}
 	case inPRDesc:
 		return []key.Binding{k.Move, k.Merge, k.Update, k.Open, k.Esc}
+	case inPRChecks:
+		return []key.Binding{k.Move, k.Enter, k.Fold, k.Rerun, k.Cancel, k.Open, k.Esc, k.Help}
 	case inPRRow:
 		return []key.Binding{k.Panel1, k.Into, k.Rerun, k.Cancel, k.Open, k.Merge, k.Update, k.Help, k.Quit}
 	}

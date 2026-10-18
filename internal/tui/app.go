@@ -246,8 +246,13 @@ func itemSource(r api.Repo, it api.Item, now time.Time) (string, string, []api.C
 // fold state but a new selection resets it), a title, checks, or an error.
 func (m *model) source() (key, title string, cs []api.Check, errText string) {
 	if p := m.pr; p != nil {
-		if r, it := m.prItem(); it != nil && p.section == 1 {
-			return itemSource(r, *it, m.now())
+		if p.section == 1 {
+			cs, _ := m.prChecks()
+			if r, it := m.prItem(); it != nil {
+				k, t, _, e := itemSource(r, *it, m.now())
+				return k, t, cs, e
+			}
+			return fmt.Sprintf("pr:%s:%d", m.prRef(), p.section), m.prTitle(), cs, ""
 		}
 		return fmt.Sprintf("pr:%s:%d", m.prRef(), p.section), m.prTitle(), nil, ""
 	}
@@ -273,6 +278,10 @@ func (m *model) source() (key, title string, cs []api.Check, errText string) {
 }
 
 func (m *model) syncMain() {
+	m.tree.req = nil
+	if m.pr != nil {
+		_, m.tree.req = m.prChecks()
+	}
 	key, _, cs, _ := m.source()
 	if key != m.treeKey {
 		m.treeKey = key
@@ -751,6 +760,8 @@ func (m *model) bar() string {
 		ctx = inPRDesc
 	case m.focus == paneMain && m.log != nil:
 		ctx = inLog
+	case m.focus == paneMain && m.pr != nil:
+		ctx = inPRChecks
 	case m.focus == paneMain:
 		ctx = inTree
 	case m.o.PRs != nil:
