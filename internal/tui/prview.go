@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
@@ -469,12 +468,9 @@ var mdStyle = func() gansi.StyleConfig {
 	return s
 }()
 
-// hyperlink matches glamour's OSC 8 links: their targets are untrusted, so
-// links show as their text only.
-var hyperlink = regexp.MustCompile("\x1b\\]8;[^\x07\x1b]*(?:\x07|\x1b\\\\)")
-
 // renderMarkdown renders untrusted markdown w wide. Escapes are stripped
-// before glamour sees the text; on a glamour error the plain text is shown.
+// before glamour sees the text and from what it returns, keeping only SGR;
+// on a glamour error the plain text is shown.
 func renderMarkdown(s string, w int) string {
 	s = termsafe.Text(s)
 	r, err := glamour.NewTermRenderer(glamour.WithStyles(mdStyle), glamour.WithWordWrap(max(1, w)))
@@ -485,7 +481,9 @@ func renderMarkdown(s string, w int) string {
 	if err != nil {
 		return s
 	}
-	ls := strings.Split(hyperlink.ReplaceAllString(out, ""), "\n")
+	// Entities decode to escapes inside glamour, after Text ran; this also
+	// drops its OSC 8 links, whose targets are untrusted.
+	ls := strings.Split(termsafe.Styled(out), "\n")
 	blank := func(l string) bool { return strings.TrimSpace(ansi.Strip(l)) == "" }
 	for len(ls) > 0 && blank(ls[0]) {
 		ls = ls[1:]

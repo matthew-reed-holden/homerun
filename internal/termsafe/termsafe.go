@@ -4,6 +4,7 @@ package termsafe
 import (
 	"bufio"
 	"io"
+	"regexp"
 	"strings"
 	"unicode"
 
@@ -35,6 +36,28 @@ func Text(s string) string {
 		ls[i] = Line(l)
 	}
 	return strings.Join(ls, "\n")
+}
+
+var sgr = regexp.MustCompile(`^\x1b\[[0-9;:]*m$`)
+
+// Styled is for a renderer's output (markdown) built from untrusted text: it
+// keeps SGR styling, printable text and newlines, and drops every other escape
+// sequence (OSC, DCS, APC, cursor movement, C1 forms) and control character.
+// A renderer can decode entities such as &#27; into escapes after Text ran.
+func Styled(s string) string {
+	var b strings.Builder
+	var state byte
+	for len(s) > 0 {
+		seq, width, n, st := ansi.DecodeSequence(s, state, nil)
+		state, s = st, s[n:]
+		switch {
+		case seq == "\n", sgr.MatchString(seq):
+			b.WriteString(seq)
+		case width > 0:
+			b.WriteString(Line(seq))
+		}
+	}
+	return b.String()
 }
 
 // Copy writes r to w one cleaned line at a time. Escapes are stripped per

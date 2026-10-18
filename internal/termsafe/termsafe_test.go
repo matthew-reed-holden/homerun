@@ -32,3 +32,10 @@ func TestText(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestStyled(t *testing.T) {
+	in := "\x1b[1;38;5;2mok\x1b[m\n\x1b]52;c;aGk=\x07\x1b[2J\x1b]8;;http://x\x07l\x1b]8;;\x07\u009b2J\x1bPq\x1b\\\x1b_a\x1b\\\x07é"
+	if got, want := Styled(in), "\x1b[1;38;5;2mok\x1b[m\nl2Jé"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}

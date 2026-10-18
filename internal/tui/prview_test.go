@@ -351,3 +351,107 @@ func TestDescriptionLayoutHoldsWithHugeBody(t *testing.T) {
 		dims(t, strings.Join(lines, "\n"), 80, 24)
 	}
 }
+
+// prDaemonModel is prModel with the fake daemon, for actions that reach it.
+func prDaemonModel(t *testing.T) (*model, *fakeDaemon) {
+	t.Helper()
+	recordTicks(t)
+	recordDetailTicks(t)
+	st := fixture()
+	st.Repos[0].Items[0], st.Repos[0].Items[1] = st.Repos[0].Items[1], st.Repos[0].Items[0] // #1 first
+	fd, c := newFake(t, st)
+	f := &pr.Fake{Details: map[string]*pr.Detail{"o/e2e#1": detailFixture()}}
+	m := newModel(c, func() time.Time { return now }, Options{PRs: f})
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m.Update(stateMsg{&st})
+	keysIn(m, "1")
+	run(m, keysIn(m, "enter")) // from the repos panel: its first item, #1
+	if m.pr == nil || m.pr.number != 1 {
+		t.Fatal("not opened")
+	}
+	return m, fd
+}
+
+func TestPRActionsTargetTheOpenPR(t *testing.T) {
+	m, fd := prDaemonModel(t)
+	st := fixture() // main first again: the repos panel's first item is now main
+	m.Update(stateMsg{&st})
+	keysIn(m, "j") // Checks row
+	cmd := keysIn(m, "r")
+	if cmd == nil {
+		t.Fatalf("no rerun: %q", m.status)
+	}
+	m.Update(cmd())
+	if len(fd.starts) != 1 || fd.starts[0].Repo != "o/e2e" || fd.starts[0].PR != 1 {
+		t.Fatalf("starts %+v", fd.starts)
+	}
+	var opened []string
+	old := openURL
+	openURL = func(u string) error { opened = append(opened, u); return nil }
+	t.Cleanup(func() { openURL = old })
+	m.Update(keysIn(m, "o")())
+	if !slices.Equal(opened, []string{"https://github.com/o/e2e/pull/1"}) {
+		t.Fatalf("opened %v", opened)
+	}
+}
+
+// Once the daemon drops the PR's item, r refuses rather than guess: without
+// the item, homerun cannot know it is a fork that needs confirming.
+func TestPRActionsWithoutItemRefuse(t *testing.T) {
+	m, fd := prDaemonModel(t)
+	st := fixture()
+	st.Repos[0].Items = st.Repos[0].Items[:1] // main only
+	m.Update(stateMsg{&st})
+	keysIn(m, "j", "l")
+	if cmd := keysIn(m, "r"); cmd != nil || !strings.Contains(m.status, "nothing to run here") {
+		t.Fatalf("cmd %v status %q", cmd, m.status)
+	}
+	if keysIn(m, "c"); m.dlg != nil || !strings.Contains(m.status, "nothing to cancel here") {
+		t.Fatalf("cancel: %q", m.status)
+	}
+	var opened []string
+	old := openURL
+	openURL = func(u string) error { opened = append(opened, u); return nil }
+	t.Cleanup(func() { openURL = old })
+	m.Update(keysIn(m, "o")())
+	if len(fd.starts) != 0 || !slices.Equal(opened, []string{"https://github.com/o/e2e/pull/1"}) {
+		t.Fatalf("starts %+v opened %v", fd.starts, opened)
+	}
+}
+
+func TestPRMarkdownEntitiesRenderInert(t *testing.T) {
+	const bad = "x &#27;]52;c;aGk=&#7; &#x1b;[2J &#155;2J y"
+	d := detailFixture()
+	d.Body = bad
+	d.Timeline[1].Text = bad
+	m, _ := prOpenModel(t, d)
+	for _, ks := range [][]string{nil, {"l", "G"}} {
+		keysIn(m, ks...)
+		out := m.render()
+		for _, s := range []string{"]52;", "[2J", "\u009b", "\x07"} {
+			if strings.Contains(out, s) {
+				t.Fatalf("keys %v: %q reached the screen", ks, s)
+			}
+		}
+		for i := 0; i < len(out); i++ {
+			if out[i] == 0x1b && !sgrAt(out[i:]) {
+				t.Fatalf("non-SGR escape at %d: %q", i, out[i:min(len(out), i+12)])
+			}
+		}
+	}
+}
+
+func sgrAt(s string) bool {
+	if !strings.HasPrefix(s, "\x1b[") {
+		return false
+	}
+	for _, r := range s[2:] {
+		switch {
+		case r == 'm':
+			return true
+		case r != ';' && r != ':' && (r < '0' || r > '9'):
+			return false
+		}
+	}
+	return false
+}

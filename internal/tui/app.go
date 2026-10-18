@@ -830,8 +830,13 @@ func (m *model) wheel(mo tea.Mouse) tea.Cmd {
 }
 
 // selectedItem is the item the main pane shows, so actions never disagree with
-// it: the first item while the repos panel is focused (its cursor is stale then).
+// it: the open PR's own item inside a PR (nil once the daemon drops it), else
+// the first item while the repos panel is focused (its cursor is stale then).
 func (m *model) selectedItem() *api.Item {
+	if m.pr != nil {
+		_, it := m.prItem()
+		return it
+	}
 	switch m.left {
 	case paneRepos:
 		if r := m.repo(); len(r.Items) > 0 {
@@ -843,9 +848,17 @@ func (m *model) selectedItem() *api.Item {
 	return nil
 }
 
+// selectedRepo is the repo selectedItem belongs to.
+func (m *model) selectedRepo() string {
+	if m.pr != nil {
+		return m.pr.repo
+	}
+	return m.repo().Name
+}
+
 // target is what r reruns: the selected run, or the selected (or first) item.
 func (m *model) target() (req api.StartRequest, fork bool, author string, ok bool) {
-	if m.left == paneRuns {
+	if m.left == paneRuns && m.pr == nil {
 		r := m.run()
 		if r == nil {
 			return req, false, "", false
@@ -856,12 +869,11 @@ func (m *model) target() (req api.StartRequest, fork bool, author string, ok boo
 		}
 		return req, r.Fork, m.author(r.Repo, r.PR), true
 	}
-	repo := m.repo()
 	it := m.selectedItem()
 	if it == nil {
 		return req, false, "", false
 	}
-	req = api.StartRequest{Repo: repo.Name, PR: it.PR}
+	req = api.StartRequest{Repo: m.selectedRepo(), PR: it.PR}
 	if it.PR == 0 {
 		req.Ref = it.Ref
 	}
@@ -934,7 +946,7 @@ func (m *model) itemRun() (id, label string) {
 			return c.RunID, it.Label
 		}
 	}
-	repo := m.repo().Name
+	repo := m.selectedRepo()
 	for _, r := range m.state.Runs {
 		if r.Repo == repo && r.SHA == it.SHA && live(r.Status) {
 			return r.ID, it.Label
@@ -947,7 +959,7 @@ func (m *model) cancel() {
 	id, label, finished := "", "", false
 	if c, _, ok := m.tree.selected(); ok && m.focus == paneMain {
 		id, label, finished = c.RunID, displayName(c.Name), c.Status == "completed"
-	} else if m.left == paneRuns {
+	} else if m.left == paneRuns && m.pr == nil {
 		if r := m.run(); r != nil {
 			id, label, finished = r.ID, r.Label, !live(r.Status)
 		}
@@ -969,6 +981,8 @@ func (m *model) open() tea.Cmd {
 	if u == "" {
 		if it := m.selectedItem(); it != nil {
 			u = it.URL
+		} else if m.pr != nil && m.pr.d != nil {
+			u = m.pr.d.URL
 		}
 	}
 	if !httpURL(u) {
@@ -989,7 +1003,7 @@ func openCmd(u string) tea.Cmd {
 
 func (m *model) copySHA() tea.Cmd {
 	sha := ""
-	if m.left == paneRuns {
+	if m.left == paneRuns && m.pr == nil {
 		if r := m.run(); r != nil {
 			sha = r.SHA
 		}
