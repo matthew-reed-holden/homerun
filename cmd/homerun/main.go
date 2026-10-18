@@ -18,6 +18,7 @@ import (
 	"github.com/matthew-reed-holden/homerun/internal/config"
 	"github.com/matthew-reed-holden/homerun/internal/daemon"
 	"github.com/matthew-reed-holden/homerun/internal/gh"
+	"github.com/matthew-reed-holden/homerun/internal/git"
 	"github.com/matthew-reed-holden/homerun/internal/setup"
 	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 	"github.com/matthew-reed-holden/homerun/internal/tui"
@@ -157,7 +158,11 @@ func cmdTUI() error {
 	slog.SetDefault(slog.New(slog.NewTextHandler(logf, nil)))
 	e := &engine{cfgPath: config.DefaultUserPath(), owner: "tui", poll: true}
 	_, hostErr := e.tryHost()
-	err = tui.Run(api.NewClient(api.SocketPath()), tui.Options{Host: e.tryHost, Hosting: e.hosting, HostErr: hostErr})
+	cwd, _ := os.Getwd()
+	cfgPath := config.DefaultUserPath()
+	err = tui.Run(api.NewClient(api.SocketPath()), tui.Options{Host: e.tryHost, Hosting: e.hosting, HostErr: hostErr,
+		Launch:  git.OriginRepo(context.Background(), cwd),
+		AddRepo: func(ctx context.Context, n string) error { return addRepo(ctx, cfgPath, n) }})
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	return errors.Join(err, e.shutdown())
 }
@@ -180,28 +185,45 @@ func cmdRepoAdd(args []string) error {
 		return errors.New("usage: homerun repo add [--config F] OWNER/NAME (flags go before the repo)")
 	}
 	name := fs.Arg(0)
-	ctx := context.Background()
-	_, client, err := loadClient(ctx, *cfgPath, true)
+	reload, err := addRepoReload(context.Background(), *cfgPath, name)
 	if err != nil {
 		return err
 	}
-	if _, err := client.DefaultBranch(ctx, name); err != nil {
-		return fmt.Errorf("%w\nInstall the homerun App on %s, then try again", err, name)
-	}
-	if err := config.AddRepo(*cfgPath, name); err != nil {
-		return err
-	}
 	fmt.Printf("Added %s.\n", name)
-	switch err := api.NewClient(api.SocketPath()).Reload(ctx); {
-	case err == nil:
+	switch {
+	case reload == nil:
 		fmt.Println("The daemon reloaded its config.")
-	case errors.Is(err, api.ErrUnreachable):
+	case errors.Is(reload, api.ErrUnreachable):
 		fmt.Println("The daemon is not running; it will pick the repo up when it starts.")
 	default:
-		fmt.Println("The daemon did not reload its config:", err)
+		fmt.Println("The daemon did not reload its config:", reload)
 	}
 	fmt.Printf("Then: require homerun's checks in %s's branch protection, and stop hosted Actions running on push and pull_request.\n", name)
 	return nil
+}
+
+// addRepo checks the App can see name, registers it, and asks a running engine
+// to reload. A reload that fails is not an error: the repo is registered.
+func addRepo(ctx context.Context, cfgPath, name string) error {
+	_, err := addRepoReload(ctx, cfgPath, name)
+	return err
+}
+
+func addRepoReload(ctx context.Context, cfgPath, name string) (reload error, err error) {
+	_, client, err := loadClient(ctx, cfgPath, true)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := client.DefaultBranch(ctx, name); err != nil {
+		if u, uerr := client.AppURL(ctx); uerr == nil && u != "" {
+			return nil, fmt.Errorf("the homerun App is not installed on %s: install it at %s/installations/new", name, u)
+		}
+		return nil, fmt.Errorf("%w\nInstall the homerun App on %s, then try again", err, name)
+	}
+	if err := config.AddRepo(cfgPath, name); err != nil {
+		return nil, err
+	}
+	return api.NewClient(api.SocketPath()).Reload(ctx), nil
 }
 
 func cmdRun(args []string) error {

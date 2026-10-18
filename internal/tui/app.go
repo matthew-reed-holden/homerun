@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -29,7 +30,11 @@ type (
 	errMsg    struct{ err error }
 	tickMsg   struct{}
 	statusMsg string
-	logMsg    struct {
+	addedMsg  struct {
+		name string
+		err  error
+	}
+	logMsg struct {
 		gen  int
 		line string
 	}
@@ -47,9 +52,9 @@ type (
 type Options struct {
 	Host    func() (bool, error) // nil: never host (tests, plain client)
 	Hosting func() bool
-	HostErr error                                        // the first Host attempt's error, made before Run
-	Launch  string                                       // OWNER/NAME or "" (Task 7)
-	AddRepo func(ctx context.Context, name string) error // Task 7
+	HostErr error  // the first Host attempt's error, made before Run
+	Launch  string // OWNER/NAME or ""
+	AddRepo func(ctx context.Context, name string) error
 }
 
 type model struct {
@@ -59,6 +64,7 @@ type model struct {
 
 	hostErr  error // the last Host attempt's error; ticks do not retry after one, R does
 	hostBusy bool  // a Host attempt is in flight
+	offered  bool  // the add dialog for Launch has been shown
 
 	state     api.State
 	connected bool
@@ -241,7 +247,19 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.w, m.h = msg.Width, msg.Height
 	case stateMsg:
 		m.state, m.connected, m.err, m.hostErr = *msg.s, true, nil, nil
+		m.pinLaunch()
 		m.refresh()
+		if m.o.Launch != "" && !m.offered && m.o.AddRepo != nil && m.dlg == nil && !m.hasRepo(m.o.Launch) {
+			m.offered = true
+			m.dlg = addDialog(m.o.Launch, m.addRepo)
+		}
+	case addedMsg:
+		if msg.err != nil {
+			m.dlg = addFailedDialog(msg.name, msg.err)
+			break
+		}
+		m.dlg = nil
+		m.say("Added " + termsafe.Line(msg.name) + ".")
 	case errMsg:
 		if m.err == nil {
 			m.errSince = m.now()
@@ -278,6 +296,28 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.wheel(tea.Mouse(msg))
 	}
 	return m, nil
+}
+
+func (m *model) hasRepo(name string) bool {
+	return slices.ContainsFunc(m.state.Repos, func(r api.Repo) bool { return strings.EqualFold(r.Name, name) })
+}
+
+// pinLaunch moves the launch repo to the top, leaving the others in order.
+func (m *model) pinLaunch() {
+	i := slices.IndexFunc(m.state.Repos, func(r api.Repo) bool { return strings.EqualFold(r.Name, m.o.Launch) })
+	if m.o.Launch == "" || i <= 0 {
+		return
+	}
+	pinned := m.state.Repos[i]
+	m.state.Repos = append([]api.Repo{pinned}, slices.Delete(slices.Clone(m.state.Repos), i, i+1)...)
+}
+
+func (m *model) addRepo(name string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return addedMsg{name, m.o.AddRepo(ctx, name)}
+	}
 }
 
 func (m *model) focusLeft(p pane) {
@@ -832,6 +872,10 @@ func (m *model) open() tea.Cmd {
 		m.say("nothing to open on github.com here")
 		return nil
 	}
+	return openCmd(u)
+}
+
+func openCmd(u string) tea.Cmd {
 	return func() tea.Msg {
 		if err := openURL(u); err != nil {
 			return statusMsg("open: " + err.Error())

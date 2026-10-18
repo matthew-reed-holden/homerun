@@ -17,12 +17,16 @@ import (
 type dialog struct {
 	title, body string
 	confirm     tea.Cmd // run on y; nil for an information box
+	open        string  // an information box's URL, opened by o
 }
 
 // key closes the dialog on any key; only y on a confirmation runs it.
 func (d *dialog) key(k tea.KeyPressMsg) tea.Cmd {
 	if d.confirm != nil && k.String() == "y" {
 		return d.confirm
+	}
+	if d.confirm == nil && d.open != "" && httpURL(d.open) && k.String() == "o" {
+		return openCmd(d.open)
 	}
 	return nil
 }
@@ -81,4 +85,23 @@ func quitDialog(n int) *dialog {
 		body:    fmt.Sprintf("%d runs in progress will be cancelled.\n\n[y] quit · any other key stays", n),
 		confirm: tea.Quit,
 	}
+}
+
+func addDialog(name string, add func(string) tea.Cmd) *dialog {
+	return &dialog{
+		title:   "Add " + termsafe.Line(name) + " to homerun?",
+		body:    "[y] add · any other key skips",
+		confirm: add(name),
+	}
+}
+
+// addFailedDialog offers the first https URL in the error, usually the App's install page.
+func addFailedDialog(name string, err error) *dialog {
+	msg := termsafe.Line(err.Error())
+	d := &dialog{title: "Could not add " + termsafe.Line(name), body: msg + "\n\nany key closes"}
+	if i := strings.Index(msg, "https://"); i >= 0 {
+		d.open = strings.TrimRight(strings.Fields(msg[i:])[0], ".,;:)")
+		d.body = msg + "\n\n[o] open · any other key closes"
+	}
+	return d
 }

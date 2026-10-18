@@ -40,6 +40,19 @@ func New(appID int64, privateKey []byte) (*Client, error) {
 
 func (c *Client) AppID() int64 { return c.appID }
 
+// AppURL is the App's public page on github.com.
+func (c *Client) AppURL(ctx context.Context) (string, error) {
+	app, err := github.NewClient(github.WithTransport(c.apps))
+	if err != nil {
+		return "", err
+	}
+	a, _, err := app.Apps.Get(ctx, "")
+	if err != nil {
+		return "", err
+	}
+	return a.GetHTMLURL(), nil
+}
+
 func split(repo string) (string, string) {
 	owner, name, _ := strings.Cut(repo, "/")
 	return owner, name

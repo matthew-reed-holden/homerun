@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -898,5 +899,101 @@ func TestHostErrorFromLaunchIsNotRetriedOnTicks(t *testing.T) {
 	_, cmd := m.Update(tickMsg{})
 	if hostAttempt(t, m, cmd) || calls != 0 {
 		t.Fatalf("retried the launch's host error on a tick: %d calls", calls)
+	}
+}
+
+func launchModel(t *testing.T, launch string, add func(context.Context, string) error, names ...string) *model {
+	t.Helper()
+	var st api.State
+	for _, n := range names {
+		st.Repos = append(st.Repos, api.Repo{Name: n})
+	}
+	_, c := newFake(t, st)
+	m := newModel(c, func() time.Time { return now }, Options{Launch: launch, AddRepo: add})
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m.Update(stateMsg{&st})
+	return m
+}
+
+func repoOrder(m *model) []string {
+	var out []string
+	for _, r := range m.state.Repos {
+		out = append(out, r.Name)
+	}
+	return out
+}
+
+func TestLaunchRepoPinnedFirst(t *testing.T) {
+	m := launchModel(t, "o/b", nil, "o/a", "o/b", "o/c")
+	if got := strings.Join(repoOrder(m), ","); got != "o/b,o/a,o/c" {
+		t.Fatal(got)
+	}
+	if m.repo().Name != "o/b" || m.dlg != nil {
+		t.Fatalf("cursor %q dlg %v", m.repo().Name, m.dlg)
+	}
+	st := api.State{Repos: []api.Repo{{Name: "o/a"}, {Name: "o/b"}, {Name: "o/c"}}}
+	m.Update(stateMsg{&st})
+	if got := strings.Join(repoOrder(m), ","); got != "o/b,o/a,o/c" {
+		t.Fatal("repin", got)
+	}
+}
+
+func TestPinIsCaseInsensitive(t *testing.T) {
+	m := launchModel(t, "O/B", nil, "o/a", "o/b")
+	if repoOrder(m)[0] != "o/b" || m.dlg != nil {
+		t.Fatal(repoOrder(m), m.dlg)
+	}
+}
+
+func TestNoLaunchRepoUnchanged(t *testing.T) {
+	m := launchModel(t, "", nil, "o/a", "o/b")
+	if got := strings.Join(repoOrder(m), ","); got != "o/a,o/b" || m.dlg != nil {
+		t.Fatal(got, m.dlg)
+	}
+}
+
+func TestUnregisteredLaunchOffersAdd(t *testing.T) {
+	var added []string
+	m := launchModel(t, "o/new", func(_ context.Context, n string) error { added = append(added, n); return nil }, "o/a")
+	if m.dlg == nil || m.dlg.title != "Add o/new to homerun?" || !strings.Contains(m.dlg.body, "[y] add · any other key skips") {
+		t.Fatalf("%+v", m.dlg)
+	}
+	cmd := keysIn(m, "y")
+	if cmd == nil {
+		t.Fatal("no cmd")
+	}
+	m.Update(cmd())
+	if len(added) != 1 || added[0] != "o/new" || !strings.Contains(m.status, "Added o/new.") {
+		t.Fatal(added, m.status)
+	}
+
+	var n int
+	m = launchModel(t, "o/new", func(context.Context, string) error { n++; return nil }, "o/a")
+	if cmd := keysIn(m, "x"); cmd != nil {
+		m.Update(cmd())
+	}
+	st := api.State{Repos: []api.Repo{{Name: "o/a"}}}
+	m.Update(stateMsg{&st})
+	if m.dlg != nil || n != 0 {
+		t.Fatal("dialog came back or add ran", n)
+	}
+}
+
+func TestAddFailureShowsInstallLink(t *testing.T) {
+	const link = "https://github.com/apps/homerun/installations/new"
+	m := launchModel(t, "o/new", func(context.Context, string) error {
+		return errors.New("the homerun App is not installed on o/new: install it at " + link)
+	}, "o/a")
+	m.Update(keysIn(m, "y")())
+	if m.dlg == nil || !strings.Contains(m.dlg.body, link) || m.dlg.open != link {
+		t.Fatalf("%+v", m.dlg)
+	}
+	var opened []string
+	old := openURL
+	openURL = func(u string) error { opened = append(opened, u); return nil }
+	t.Cleanup(func() { openURL = old })
+	m.Update(keysIn(m, "o")())
+	if len(opened) != 1 || opened[0] != link || m.dlg != nil {
+		t.Fatal(opened, m.dlg)
 	}
 }
