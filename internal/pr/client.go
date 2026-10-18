@@ -142,6 +142,14 @@ func (c *Client) query(ctx context.Context, q string, vars map[string]any, out a
 	if err != nil {
 		return err
 	}
+	// A missing alias comes back as null data plus a NOT_FOUND error; that is not a failure.
+	fatal := errs[:0:0]
+	for _, e := range errs {
+		if e.Type != "NOT_FOUND" {
+			fatal = append(fatal, e)
+		}
+	}
+	errs = fatal
 	if len(errs) > 0 {
 		for _, e := range errs {
 			if e.Type == "RATE_LIMITED" {

@@ -146,3 +146,16 @@ func TestListChunksOver50(t *testing.T) {
 		t.Fatalf("requests %d err %v", n.Load(), err)
 	}
 }
+
+func TestListNotFoundIsNotFatal(t *testing.T) {
+	body := `{"data":{"repository":{"p14":{"number":14,"title":"t"},"p15":null}},"errors":[{"type":"NOT_FOUND","message":"Could not resolve to a PullRequest"}]}`
+	c := newTest(t, func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, body) })
+	got, err := c.List(context.Background(), "o/r", []int{14, 15})
+	if err != nil || len(got) != 1 || got[14].Title != "t" {
+		t.Fatalf("got %v err %v", got, err)
+	}
+	body = `{"data":{"repository":{"p14":{"number":14}}},"errors":[{"type":"NOT_FOUND","message":"x"},{"type":"FORBIDDEN","message":"nope"}]}`
+	if _, err := c.List(context.Background(), "o/r", []int{14}); err == nil || !strings.Contains(err.Error(), "nope") {
+		t.Fatalf("err %v", err)
+	}
+}
