@@ -142,13 +142,106 @@ func TestFailedJobRowNamesStep(t *testing.T) {
 	if !strings.Contains(strings.SplitN(out, "\n", 3)[1], "— go test ./...") || strings.Contains(out, "-v") {
 		t.Fatalf("step suffix:\n%s", out)
 	}
-	if out := render(failed(api.Check{Name: "j", LastLine: "boom"})); !strings.Contains(out, "— boom") {
-		t.Fatalf("last line suffix:\n%s", out)
+	if out := render(failed(api.Check{Name: "j", LastLine: "boom"})); strings.Contains(out, "— boom") {
+		t.Fatalf("the last line is not a suffix:\n%s", out)
 	}
-	if out := render(failed(api.Check{Name: "j", LastLine: "a\x1b[2Jb"})); strings.Contains(out, "\x1b") {
+	var tr tree
+	tr.reset([]api.Check{failed(api.Check{Name: "j", LastLine: "a\x1b[2Jb"})})
+	if out := tr.view("t", 80, 6, now, false); strings.Contains(out, "\x1b[2J") {
 		t.Fatalf("escape not inert: %q", out)
 	}
 	if out := render(api.Check{Name: "j", Status: "completed", Conclusion: "success", LastLine: "boom"}); strings.Contains(out, "boom") {
 		t.Fatalf("passing job shows suffix:\n%s", out)
+	}
+}
+
+// treeRows is the tree's inner lines, without the frame.
+func treeRows(out string) []string {
+	ls := strings.Split(ansi.Strip(out), "\n")
+	ls = ls[1 : len(ls)-1]
+	for i, l := range ls {
+		ls[i] = strings.TrimSpace(strings.Trim(l, "│"))
+	}
+	return ls
+}
+
+func TestFailedJobShowsLastLineBelow(t *testing.T) {
+	var tr tree
+	tr.reset([]api.Check{
+		{Name: "j", Status: "completed", Conclusion: "failure", LastLine: "FAIL TestX (0.01s)", Steps: []api.Step{
+			{Name: "go test", Status: "completed", Conclusion: "failure"}}},
+		{Name: "k", Status: "completed", Conclusion: "success", LastLine: "ok"},
+	})
+	tr.open["j"] = false
+	r := treeRows(tr.view("t", 60, 6, now, false))
+	if !strings.Contains(r[0], "j — go test") || r[1] != "FAIL TestX (0.01s)" || !strings.Contains(r[2], "k") || strings.Contains(r[2], "ok") {
+		t.Fatalf("rows: %q", r)
+	}
+	if len(tr.nodes()) != 2 {
+		t.Fatalf("the last line is selectable: %v", tr.nodes())
+	}
+	long := strings.Repeat("x", 200)
+	tr.reset([]api.Check{{Name: "j", Status: "completed", Conclusion: "failure", LastLine: long}})
+	out := tr.view("t", 40, 5, now, false)
+	dims(t, out, 40, 5)
+	if r := treeRows(out); !strings.HasPrefix(r[1], "xxx") {
+		t.Fatalf("rows: %q", r)
+	}
+}
+
+func TestClickBelowTwoLineJob(t *testing.T) {
+	var tr tree
+	tr.reset([]api.Check{
+		{Name: "a", Status: "completed", Conclusion: "failure", LastLine: "boom"},
+		{Name: "b", Status: "completed", Conclusion: "success"},
+	})
+	tr.view("t", 60, 8, now, true)
+	tr.click(3) // b's row, below a's last line
+	if c, _, _ := tr.selected(); c.Name != "b" {
+		t.Fatalf("click on b's row selected %s", c.Name)
+	}
+	tr.click(2) // a's last line belongs to a
+	if c, _, _ := tr.selected(); c.Name != "a" {
+		t.Fatalf("click on a's last line selected %s", c.Name)
+	}
+	tr.click(1)
+	tr.click(4) // below the last row
+	if c, _, _ := tr.selected(); c.Name != "a" {
+		t.Fatalf("click below the rows selected %s", c.Name)
+	}
+}
+
+func TestScrollCountsTwoLineJobs(t *testing.T) {
+	var cs []api.Check
+	for _, n := range []string{"j1", "j2", "j3", "j4", "j5"} {
+		cs = append(cs, api.Check{Name: n, Status: "completed", Conclusion: "failure", LastLine: "why " + n})
+	}
+	var tr tree
+	tr.reset(cs)
+	for n := range cs {
+		tr.open[cs[n].Name] = false
+	}
+	tr.end()
+	r := treeRows(tr.view("t", 40, 7, now, true)) // 5 lines: room for two whole jobs
+	if len(r) != 5 || !strings.Contains(r[0], "j4") || !strings.Contains(r[2], "j5") || r[3] != "why j5" {
+		t.Fatalf("cursor job not fully shown: %q", r)
+	}
+	tr.move(-1)
+	if r := treeRows(tr.view("t", 40, 7, now, true)); !strings.Contains(strings.Join(r, "\n"), "why j4") {
+		t.Fatalf("j4: %q", r)
+	}
+	tr.home()
+	if r := treeRows(tr.view("t", 40, 7, now, true)); !strings.Contains(r[0], "j1") || r[1] != "why j1" {
+		t.Fatalf("top: %q", r)
+	}
+	tr.end()
+	tr.view("t", 40, 7, now, true)
+	tr.click(3) // j5's row
+	if c, _, _ := tr.selected(); c.Name != "j5" {
+		t.Fatalf("scrolled click selected %s", c.Name)
+	}
+	tr.click(2) // j4's last line
+	if c, _, _ := tr.selected(); c.Name != "j4" {
+		t.Fatalf("scrolled click selected %s", c.Name)
 	}
 }

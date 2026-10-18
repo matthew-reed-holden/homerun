@@ -93,11 +93,61 @@ func (t *tree) move(d int) { t.cur = clampInt(t.cur+d, 0, len(t.nodes())-1) }
 func (t *tree) home()      { t.cur = 0 }
 func (t *tree) end()       { t.cur = max(0, len(t.nodes())-1) }
 
-// click selects the row y lines below the pane's top border.
+// click selects the row y lines below the pane's top border. A failed job's
+// last-line row belongs to that job.
 func (t *tree) click(y int) {
-	if i := t.off + y - 1; y >= 1 && i < len(t.nodes()) {
-		t.cur = i
+	if y < 1 {
+		return
 	}
+	ns := t.nodes()
+	line := 0
+	for i := t.off; i < len(ns); i++ {
+		line += t.height(ns[i])
+		if y <= line {
+			t.cur = i
+			return
+		}
+	}
+}
+
+// lastLine is what a failed job shows on a second, unselectable row; "" for none.
+func lastLine(c api.Check, n node) string {
+	if n.step < 0 && c.Status == "completed" && c.Conclusion == "failure" {
+		return termsafe.Line(c.LastLine)
+	}
+	return ""
+}
+
+// height is the screen rows node n takes: two for a failed job with a last line.
+func (t *tree) height(n node) int {
+	if lastLine(t.checks[n.check], n) != "" {
+		return 2
+	}
+	return 1
+}
+
+// span is the screen rows nodes ns[from..to] take.
+func (t *tree) span(ns []node, from, to int) int {
+	h := 0
+	for i := from; i <= to && i < len(ns); i++ {
+		h += t.height(ns[i])
+	}
+	return h
+}
+
+// scroll keeps the cursor's rows in view, without blank rows below the last
+// node while earlier ones are hidden.
+func (t *tree) scroll(ns []node, inner int) {
+	if t.cur < t.off {
+		t.off = t.cur
+	}
+	for t.off < t.cur && t.span(ns, t.off, t.cur) > inner {
+		t.off++
+	}
+	for t.off > 0 && t.span(ns, t.off-1, len(ns)-1) <= inner {
+		t.off--
+	}
+	t.off = clampInt(t.off, 0, max(0, len(ns)-1))
 }
 
 func (t *tree) selected() (api.Check, int, bool) {
@@ -134,15 +184,9 @@ const timeW = 9
 func (t *tree) view(title string, w, h int, now time.Time, focused bool) string {
 	inner := max(0, h-2)
 	ns := t.nodes()
-	if t.cur < t.off {
-		t.off = t.cur
-	}
-	if t.cur >= t.off+inner {
-		t.off = t.cur - inner + 1
-	}
-	t.off = clampInt(t.off, 0, len(ns)-inner)
+	t.scroll(ns, inner)
 	var lines []string
-	for i := t.off; i < len(ns) && i < t.off+inner; i++ {
+	for i := t.off; i < len(ns) && len(lines) < inner; i++ {
 		n := ns[i]
 		c := t.checks[n.check]
 		indent, icon, name := "", Icon(c.Status, c.Conclusion), displayName(c.Name)
@@ -169,6 +213,9 @@ func (t *tree) view(title string, w, h int, now time.Time, focused bool) string 
 			line = sel.Render(ansi.Strip(line))
 		}
 		lines = append(lines, line)
+		if l := lastLine(c, n); l != "" && len(lines) < inner {
+			lines = append(lines, dim.Render(truncate("  "+l, w-2)))
+		}
 	}
 	if len(ns) == 0 {
 		lines = []string{dim.Render("no checks yet")}
@@ -176,8 +223,8 @@ func (t *tree) view(title string, w, h int, now time.Time, focused bool) string 
 	return frame(title, lines, w, h, focused)
 }
 
-// failReason is the first line of the first failed step, else the check's last
-// log line, as safe text.
+// failReason is the first line of the first failed step, as safe text. The
+// check's last log line has a row of its own below the job.
 func failReason(c api.Check) string {
 	for _, s := range c.Steps {
 		if s.Status == "completed" && s.Conclusion == "failure" {
@@ -185,5 +232,5 @@ func failReason(c api.Check) string {
 			return termsafe.Line(first)
 		}
 	}
-	return termsafe.Line(c.LastLine)
+	return ""
 }

@@ -84,7 +84,7 @@ func fixture() api.State {
 	pass := api.Check{Name: "homerun / CI / pass", Status: "completed", Conclusion: "success", RunID: "r1", LogPrefix: "CI / pass",
 		Started: t0, Completed: t0.Add(4 * time.Second), URL: "https://github.com/o/e2e/runs/1"}
 	fail := api.Check{Name: "homerun / CI / fail", Status: "completed", Conclusion: "failure", RunID: "r1", LogPrefix: "CI / fail",
-		Started: t0, Completed: t0.Add(3 * time.Second), Steps: []api.Step{
+		LastLine: "exit status 1", Started: t0, Completed: t0.Add(3 * time.Second), Steps: []api.Step{
 			{Name: "Set up job", Status: "completed", Conclusion: "success", Started: t0, Completed: t0.Add(time.Second)},
 			{Name: "echo bad; exit 1", Stage: "Main", Status: "completed", Conclusion: "failure", Started: t0, Completed: t0},
 		}}
