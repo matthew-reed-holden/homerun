@@ -90,7 +90,7 @@ func TestItemEntries(t *testing.T) {
 		{Label: "#1", PR: 1, Title: "e2e \x1b]52;c;aGk=\x07PR", Author: "matt", Updated: now.Add(-5 * time.Minute), SHA: "d954af8"},
 		{Label: "#2", PR: 2, Title: "typo", Author: "bob", Fork: true, SHA: "abc"},
 	}}
-	es := itemEntries(r, now)
+	es := itemEntries(r, now, nil, nil)
 	if len(es) != 4 {
 		t.Fatalf("entries: %+v", es)
 	}

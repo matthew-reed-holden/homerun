@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/matthew-reed-holden/homerun/internal/pr"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
@@ -33,6 +34,11 @@ func golden(t *testing.T, name, got string) {
 	}
 }
 
+func readGolden(name string) (string, error) {
+	b, err := os.ReadFile(filepath.Join("testdata", name+".golden"))
+	return string(b), err
+}
+
 func TestGolden(t *testing.T) {
 	cases := []struct {
 		name string
@@ -40,6 +46,7 @@ func TestGolden(t *testing.T) {
 		keys []string
 	}{
 		{"wide-items", 120, 40, []string{"j"}},
+		{"wide-items-badges", 120, 40, []string{"j"}},
 		{"wide-runs", 120, 40, []string{"3"}},
 		{"wide-fork-dialog", 120, 40, []string{"j", "j", "r"}},
 		{"standard-tree", 80, 24, []string{"j", "l"}},
@@ -49,6 +56,10 @@ func TestGolden(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			m, _ := newTestModel(t)
+			if c.name == "wide-items-badges" {
+				m.o.PRs = &pr.Fake{}
+				m.Update(listMsg{repo: "o/e2e", sums: map[int]pr.Summary{1: {Number: 1, ReviewDecision: "APPROVED", Mergeable: "CONFLICTING", IsDraft: true}}})
+			}
 			m.Update(tea.WindowSizeMsg{Width: c.w, Height: c.h})
 			keysIn(m, c.keys...)
 			golden(t, c.name, ansi.Strip(m.render()))

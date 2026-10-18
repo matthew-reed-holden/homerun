@@ -47,11 +47,20 @@ type UserRepo struct {
 
 type User struct {
 	App          App                 `yaml:"app"`
+	UserToken    *Secret             `yaml:"user_token"`
 	MaxParallel  int                 `yaml:"max_parallel"`
 	PollInterval Duration            `yaml:"poll_interval"`
 	Retain       Duration            `yaml:"retain"`
 	Platforms    map[string]string   `yaml:"platforms"`
 	Repos        map[string]UserRepo `yaml:"repos"`
+}
+
+// UserTokenSecret is where the TUI gets the user's own GitHub token: the gh CLI unless configured.
+func (u *User) UserTokenSecret() Secret {
+	if u.UserToken == nil {
+		return Secret{Cmd: "gh auth token"}
+	}
+	return *u.UserToken
 }
 
 var repoName = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
@@ -107,6 +116,9 @@ func LoadUser(path string) (*User, []string, error) {
 	}
 	if u.App.PrivateKey.Plaintext() && u.App.PrivateKey.Value != "" {
 		warns = append(warns, "app.private_key is stored as plaintext; prefer {cmd: ...} or {env: ...}")
+	}
+	if u.UserToken != nil && u.UserToken.Plaintext() && u.UserToken.Value != "" {
+		warns = append(warns, "user_token is stored as plaintext; prefer {cmd: ...} or {env: ...}")
 	}
 	names := make([]string, 0, len(u.Repos))
 	for name := range u.Repos {

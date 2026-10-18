@@ -13,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/matthew-reed-holden/homerun/internal/api"
+	"github.com/matthew-reed-holden/homerun/internal/pr"
 	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 )
 
@@ -58,6 +59,8 @@ type Options struct {
 	// AddRepo registers a repo; an error that is an InstallLinker offers its link.
 	AddRepo func(ctx context.Context, name string) error
 	Quit    <-chan struct{} // closed on a signal that must quit at once (SIGHUP)
+	PRs     pr.API          // nil: PR pages off
+	PRsErr  error           // why they are off
 }
 
 type model struct {
@@ -87,13 +90,18 @@ type model struct {
 	w, h               int
 	help               help.Model
 
+	prs     map[string]map[int]pr.Summary // by repo
+	behind  map[string]int                // "repo#n" -> commits behind base
+	prRepo  string                        // the repo the list was last fetched for
+	prDelay time.Duration                 // the next list poll interval
+
 	gen      int // identifies the current log stream so a stale one is ignored
 	nextLine func() tea.Cmd
 	stopLog  context.CancelFunc
 }
 
 func newModel(c *api.Client, now func() time.Time, o Options) *model {
-	return &model{c: c, now: now, o: o, hostErr: o.HostErr, w: 120, h: 40, focus: paneItems, left: paneItems, help: help.New(),
+	return &model{c: c, now: now, o: o, hostErr: o.HostErr, prDelay: prPoll, w: 120, h: 40, focus: paneItems, left: paneItems, help: help.New(),
 		repos: list{n: 1, title: "Repos"}, items: list{n: 2, title: "Branches & PRs"}, runs: list{n: 3, title: "Runs"}}
 }
 
@@ -117,7 +125,7 @@ func (m *model) waitQuit() tea.Cmd {
 	}
 }
 
-func (m *model) Init() tea.Cmd { return tea.Batch(m.fetch(), tick(), m.waitQuit()) }
+func (m *model) Init() tea.Cmd { return tea.Batch(m.fetch(), tick(), m.waitQuit(), m.prStart()) }
 
 // fetchTimeout bounds a state request, so a wedged daemon cannot pile them up
 // behind the 2s tick.
@@ -202,9 +210,13 @@ func (m *model) list(p pane) *list {
 
 func (m *model) refresh() {
 	m.repos.set(repoEntries(m.state))
-	m.items.set(itemEntries(m.repo(), m.now()))
+	m.items.set(m.itemRows())
 	m.runs.set(runEntries(m.state.Runs, m.now()))
 	m.syncMain()
+}
+
+func (m *model) itemRows() []entry {
+	return itemEntries(m.repo(), m.now(), m.prs[m.repo().Name], m.behindOf)
 }
 
 func itemSource(r api.Repo, it api.Item, now time.Time) (string, string, []api.Check, string) {
@@ -269,6 +281,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.offered = true
 			m.dlg = addDialog(m.o.Launch, m.addRepo)
 		}
+		return m, m.prSync()
+	case listMsg:
+		m.onList(msg)
+	case listTickMsg:
+		return m, tea.Batch(m.fetchList(), listTick(m.prDelay))
 	case addedMsg:
 		if msg.err != nil {
 			m.dlg = addFailedDialog(msg.name, msg.err)
@@ -310,9 +327,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		return m, m.key(msg)
 	case tea.MouseClickMsg:
-		m.click(tea.Mouse(msg))
+		return m, m.click(tea.Mouse(msg))
 	case tea.MouseWheelMsg:
-		m.wheel(tea.Mouse(msg))
+		return m, m.wheel(tea.Mouse(msg))
 	}
 	return m, nil
 }
@@ -364,15 +381,18 @@ func (m *model) cycle(d int) {
 }
 
 // moved reacts to a cursor change in panel p: a new repo means new items.
-func (m *model) moved(p pane, before int) {
+func (m *model) moved(p pane, before int) tea.Cmd {
 	if p == paneRepos {
 		if m.repos.cur == before {
-			return
+			return nil
 		}
 		m.items.home()
-		m.items.set(itemEntries(m.repo(), m.now()))
+		m.items.set(m.itemRows())
+		m.syncMain()
+		return m.prSync()
 	}
 	m.syncMain()
+	return nil
 }
 
 func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
@@ -420,12 +440,12 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 	case m.focus == paneMain:
 		return m.mainKey(k)
 	default:
-		m.leftKey(k)
+		return m.leftKey(k)
 	}
 	return nil
 }
 
-func (m *model) leftKey(k tea.KeyPressMsg) {
+func (m *model) leftKey(k tea.KeyPressMsg) tea.Cmd {
 	l := m.list(m.focus)
 	before := l.cur
 	switch {
@@ -439,11 +459,11 @@ func (m *model) leftKey(k tea.KeyPressMsg) {
 		l.end()
 	case key.Matches(k, keys.Into):
 		m.focus = paneMain
-		return
+		return nil
 	default:
-		return
+		return nil
 	}
-	m.moved(m.focus, before)
+	return m.moved(m.focus, before)
 }
 
 func (m *model) mainKey(k tea.KeyPressMsg) tea.Cmd {
@@ -694,9 +714,9 @@ func (m *model) bar() string {
 }
 
 // click and wheel map a mouse position onto the layout.
-func (m *model) click(mo tea.Mouse) {
+func (m *model) click(mo tea.Mouse) tea.Cmd {
 	if m.dlg != nil || mo.Button != tea.MouseLeft {
-		return
+		return nil
 	}
 	lay := m.layout()
 	if mo.X < lay.leftW {
@@ -709,22 +729,22 @@ func (m *model) click(mo tea.Mouse) {
 				if y < lay.heights[i]-1 {
 					l.click(y)
 				}
-				m.moved(p, before)
-				return
+				return m.moved(p, before)
 			}
 			y -= lay.heights[i]
 		}
-		return
+		return nil
 	}
 	m.focus = paneMain
 	if m.log == nil && mo.Y < lay.bodyH-1 {
 		m.tree.click(mo.Y)
 	}
+	return nil
 }
 
-func (m *model) wheel(mo tea.Mouse) {
+func (m *model) wheel(mo tea.Mouse) tea.Cmd {
 	if m.dlg != nil {
-		return
+		return nil
 	}
 	d := 1
 	if mo.Button == tea.MouseWheelUp {
@@ -738,18 +758,18 @@ func (m *model) wheel(mo tea.Mouse) {
 				l := m.list(p)
 				before := l.cur
 				l.move(d)
-				m.moved(p, before)
-				return
+				return m.moved(p, before)
 			}
 			y -= lay.heights[i]
 		}
-		return
+		return nil
 	}
 	if m.log != nil {
 		m.log.scroll(3 * d)
-		return
+		return nil
 	}
 	m.tree.move(d)
+	return nil
 }
 
 // selectedItem is the item the main pane shows, so actions never disagree with

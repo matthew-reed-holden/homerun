@@ -189,3 +189,38 @@ func TestSecretDetailIsLocalOnly(t *testing.T) {
 		t.Error("want empty detail")
 	}
 }
+
+func TestUserTokenDefault(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "config.yml")
+	writeFile(t, p, "app:\n  id: 1\n", 0o600)
+	u, _, err := LoadUser(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := u.UserTokenSecret().Cmd; got != "gh auth token" {
+		t.Fatalf("default = %q", got)
+	}
+}
+
+func TestUserTokenForms(t *testing.T) {
+	load := func(body string) (*User, []string) {
+		p := filepath.Join(t.TempDir(), "config.yml")
+		writeFile(t, p, body, 0o600)
+		u, w, err := LoadUser(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return u, w
+	}
+	u, w := load("user_token: {env: GH_TOKEN}\n")
+	if s := u.UserTokenSecret(); s.Env != "GH_TOKEN" || len(w) != 0 {
+		t.Fatalf("env form: %+v %v", s, w)
+	}
+	u, w = load("user_token: ghp_plain\n")
+	if s := u.UserTokenSecret(); s.Value != "ghp_plain" {
+		t.Fatalf("plain form: %+v", s)
+	}
+	if len(w) != 1 || w[0] != "user_token is stored as plaintext; prefer {cmd: ...} or {env: ...}" {
+		t.Fatalf("warnings: %v", w)
+	}
+}

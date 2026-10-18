@@ -19,6 +19,7 @@ import (
 	"github.com/matthew-reed-holden/homerun/internal/daemon"
 	"github.com/matthew-reed-holden/homerun/internal/gh"
 	"github.com/matthew-reed-holden/homerun/internal/git"
+	"github.com/matthew-reed-holden/homerun/internal/pr"
 	"github.com/matthew-reed-holden/homerun/internal/setup"
 	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 	"github.com/matthew-reed-holden/homerun/internal/tui"
@@ -167,12 +168,35 @@ func cmdTUI() error {
 	defer signal.Stop(hup)
 	quit := make(chan struct{})
 	go func() { <-hup; close(quit) }()
+	prs, prsErr := userPRs(cfgPath)
 	err = tui.Run(api.NewClient(api.SocketPath()), tui.Options{Host: e.tryHost, Hosting: e.hosting, HostErr: hostErr,
 		Launch:  git.OriginRepo(context.Background(), cwd),
 		AddRepo: func(ctx context.Context, n string) error { return addRepo(ctx, cfgPath, n) },
-		Quit:    quit})
+		Quit:    quit, PRs: prs, PRsErr: prsErr})
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	return errors.Join(err, e.shutdown())
+}
+
+// userPRs builds the PR client from the user's own token; the error says why
+// PR pages are off. The token stays in this process.
+func userPRs(cfgPath string) (pr.API, error) {
+	sec := config.Secret{Cmd: "gh auth token"}
+	if cfg, _, err := config.LoadUser(cfgPath); err == nil {
+		sec = cfg.UserTokenSecret()
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	tok, err := sec.Resolve(ctx)
+	if err == nil && tok == "" {
+		err = errors.New("empty token")
+	}
+	if err != nil {
+		if d := config.Detail(err); d != "" {
+			err = fmt.Errorf("%w: %s", err, d)
+		}
+		return nil, err
+	}
+	return pr.New(tok), nil
 }
 
 func cmdSetup(args []string) error {

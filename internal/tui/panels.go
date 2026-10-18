@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/matthew-reed-holden/homerun/internal/api"
+	"github.com/matthew-reed-holden/homerun/internal/pr"
 	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 )
 
@@ -123,7 +124,8 @@ func awaiting(it api.Item) bool {
 	return true
 }
 
-func itemEntries(r api.Repo, now time.Time) []entry {
+// itemEntries builds the item rows; prs and behind (both may be nil) add PR badges.
+func itemEntries(r api.Repo, now time.Time, prs map[int]pr.Summary, behind func(n int) (int, bool)) []entry {
 	var out []entry
 	for _, it := range r.Items {
 		if it.PR == 0 {
@@ -138,6 +140,15 @@ func itemEntries(r api.Repo, now time.Time) []entry {
 			icon, text = "◇", text+" awaiting"
 		} else if a := age(it.Updated, now); a != "" {
 			text += " " + a
+		}
+		if s, ok := prs[it.PR]; ok {
+			b, known := 0, false
+			if behind != nil {
+				b, known = behind(it.PR)
+			}
+			if bs := badges(s, b, known); bs != "" {
+				text += " " + bs
+			}
 		}
 		out = append(out, entry{icon, text, r.Name + ":" + it.Label})
 	}

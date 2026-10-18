@@ -11,6 +11,10 @@ type UpdateCall struct {
 	PRID, HeadSHA string
 	Rebase        bool
 }
+type ListCall struct {
+	Repo    string
+	Numbers []int
+}
 type MergeCall struct{ PRID, Method, HeadSHA string }
 
 // Fake is an in-memory API for TUI tests. Fields are set before use or under Lock.
@@ -21,6 +25,7 @@ type Fake struct {
 	Comments []CommentCall
 	Updates  []UpdateCall
 	Merges   []MergeCall
+	Lists    []ListCall
 	Err      error
 	Low      bool
 }
@@ -30,6 +35,7 @@ var _ API = (*Fake)(nil)
 func (f *Fake) List(_ context.Context, repo string, numbers []int) (map[int]Summary, error) {
 	f.Lock()
 	defer f.Unlock()
+	f.Lists = append(f.Lists, ListCall{repo, append([]int(nil), numbers...)})
 	if f.Err != nil {
 		return nil, f.Err
 	}
