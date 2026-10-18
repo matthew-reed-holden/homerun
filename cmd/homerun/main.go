@@ -283,7 +283,8 @@ func cmdRun(args []string) error {
 }
 
 // runOnce starts a run and follows it to its end. On a signal, a hosting
-// engine's shutdown cancels the run and closes its checks.
+// engine's shutdown cancels the run and closes its checks; a client leaves
+// the run to the process that hosts it.
 func runOnce(ctx context.Context, e *engine, c *api.Client, req api.StartRequest) error {
 	resp, err := c.Start(ctx, req)
 	if err != nil {
@@ -307,9 +308,8 @@ func runOnce(ctx context.Context, e *engine, c *api.Client, req api.StartRequest
 			}
 			return fmt.Errorf("run %s cancelled: homerun was closed", resp.RunID)
 		}
-		wctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		run, err = waitRun(wctx, c, resp.RunID)
+		// Another process runs it; leaving does not stop it.
+		return fmt.Errorf("run %s continues in the daemon", resp.RunID)
 	}
 	if err != nil {
 		return err
