@@ -4,23 +4,23 @@
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
    is:pr repo:o/e2e is:open author:@me                          ╎  o/e2e · #1                                          
  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  e2e PR                                              
-   Title                         CI                        ╎   OPEN   main ← feat      by @matt · 5m ago ·  2    
- ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  ◆  Overview Checks 1/3 Reviews Files 3 Commits      
- ▌ #1 · feat …      0/1 github only              +40 −7    5m ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
- ▌  e2e PR                                                       ╎   CI / fail echo bad; exit 1 · 3s                   
-                                                                 ╎   approved                                          
-   #2 · @bob           · github only               +0 −0    3h ╎                                                      
-    typo fix                                                     ╎  SUMMARY                                             
-                                                                 ╎  Makes the thing optional.                           
-   #5 · @sam …         · github only                +0 −0    5d ╎                                                      
-    pr: GraphQL page cache                                       ╎  ACTIVITY                                            
-                                                                 ╎  loading…                                            
                                                                  ╎                                                      
-                                                                 ╎  MERGE                                               
+   Title                         CI                        ╎   OPEN   main ← feat      by @matt · 5m ago ·  2    
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎                                                      
+                                                                 ╎  ◆  Overview Checks 1/3 Reviews Files 3 Commits      
+ ▌                                                               ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+ ▌ #1 · feat …      0/1 github only              +40 −7    5m ╎   CI / fail echo bad; exit 1 · 3s                   
+ ▌  e2e PR                                                       ╎   approved                                          
+ ▌                                                               ╎                                                      
+                                                                 ╎  SUMMARY                                             
+   #2 · @bob           · github only               +0 −0    3h ╎  Makes the thing optional.                           
+    typo fix                                                     ╎                                                      
+                                                                 ╎  ACTIVITY                                            
+                                                                 ╎  loading…                                            
+   #5 · @sam …         · github only                +0 −0    5d ╎                                                      
+    pr: GraphQL page cache                                       ╎  MERGE                                               
                                                                  ╎   no conflicts                                      
                                                                  ╎  Checks  1 failing (1 required)                     
-                                                                 ╎                                                      
-                                                                 ╎                                                      
                                                                  ╎                                                      
                                                                  ╎                                                      
                                                                  ╎                                                      

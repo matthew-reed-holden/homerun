@@ -5,18 +5,18 @@
  RUNS, NEWEST FIRST                                              ╎  #1 · d954af8 · running                              
    Run                                 Status        Took      ╎  e2e PR                                              
  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎   no checks yet                                      
+                                                                 ╎                                                      
+ ▌                                                               ╎                                                      
  ▌ #1 · d954af8                        running     1m12s…       ╎                                                      
  ▌  pull_request                                                 ╎                                                      
+ ▌                                                               ╎                                                      
                                                                  ╎                                                      
    #2 · abc1234                        done            0s    3h ╎                                                      
     pull_request                                                 ╎                                                      
                                                                  ╎                                                      
+                                                                 ╎                                                      
    main · fd387ab                      passed       1m00s   10m ╎                                                      
     push · main                                                  ╎                                                      
-                                                                 ╎                                                      
-                                                                 ╎                                                      
-                                                                 ╎                                                      
-                                                                 ╎                                                      
                                                                  ╎                                                      
                                                                  ╎                                                      
                                                                  ╎                                                      

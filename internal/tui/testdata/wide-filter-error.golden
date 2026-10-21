@@ -4,18 +4,18 @@
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
    is:pr repo:o/e2e is:open author:@me                          ╎  o/e2e · #1                                          
  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  e2e PR                                              
-   GitHub rejected the query: github: Invalid search query. The…╎   OPEN   main ← feat            by @matt · 5m ago    
-   Title                         CI                        ╎  ◆  Overview Checks 1/2 Reviews Files 0 Commits      
- ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
- ▌ #1 · feat · @matt            1/2                +0 −0    5m ╎   CI / fail echo bad; exit 1 · 3s                   
- ▌  e2e PR                                                       ╎                                                      
-                                                                 ╎  SUMMARY                                             
-   #2 · typo · @bob           ◇ held                +0 −0    3h ╎  No description provided.                            
-    typo fix                                                     ╎                                                      
-                                                                 ╎  ACTIVITY                                            
-                                                                 ╎  loading…                                            
+   GitHub rejected the query: github: Invalid search query. The…╎                                                      
+                                                                 ╎   OPEN   main ← feat            by @matt · 5m ago    
+   Title                         CI                        ╎                                                      
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  ◆  Overview Checks 1/2 Reviews Files 0 Commits      
+                                                                 ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+ ▌                                                               ╎   CI / fail echo bad; exit 1 · 3s                   
+ ▌ #1 · feat · @matt            1/2                +0 −0    5m ╎                                                      
+ ▌  e2e PR                                                       ╎  SUMMARY                                             
+ ▌                                                               ╎  No description provided.                            
                                                                  ╎                                                      
-                                                                 ╎                                                      
+   #2 · typo · @bob           ◇ held                +0 −0    3h ╎  ACTIVITY                                            
+    typo fix                                                     ╎  loading…                                            
                                                                  ╎                                                      
                                                                  ╎                                                      
                                                                  ╎                                                      

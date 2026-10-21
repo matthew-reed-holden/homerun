@@ -4,18 +4,18 @@
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
    is:pr repo:o/e2e is:open label:bug                           ╎  o/e2e · #1                                          
  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  e2e PR                                              
+                                                                 ╎                                                      
    Title                         CI                        ╎   OPEN   main ← feat            by @matt · 5m ago    
- ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  ◆  Overview Checks 1/2 Reviews Files 0 Commits      
- ▌ #1 · feat · @matt            1/2                +0 −0    5m ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
- ▌  e2e PR                                                       ╎   CI / fail echo bad; exit 1 · 3s                   
-                                                                 ╎                                                      
-   #2 · typo · @bob           ◇ held                +0 −0    3h ╎  SUMMARY                                             
-    typo fix                                                     ╎  No description provided.                            
-                                                                 ╎                                                      
-                                                                 ╎  ACTIVITY                                            
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎                                                      
+                                                                 ╎  ◆  Overview Checks 1/2 Reviews Files 0 Commits      
+ ▌                                                               ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+ ▌ #1 · feat · @matt            1/2                +0 −0    5m ╎   CI / fail echo bad; exit 1 · 3s                   
+ ▌  e2e PR                                                       ╎                                                      
+ ▌                                                               ╎  SUMMARY                                             
+                                                                 ╎  No description provided.                            
+   #2 · typo · @bob           ◇ held                +0 −0    3h ╎                                                      
+    typo fix                                                     ╎  ACTIVITY                                            
                                                                  ╎  loading…                                            
-                                                                 ╎                                                      
-                                                                 ╎                                                      
                                                                  ╎                                                      
                                                                  ╎                                                      
                                                                  ╎                                                      

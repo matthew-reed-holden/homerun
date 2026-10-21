@@ -523,6 +523,10 @@ func (m *model) stacked() bool {
 // no tabs, so two whole PR rows still fit above it at 80×24.
 func (m *model) stackedHover() bool { return m.stacked() && !m.inPR() }
 
+// prRoomy is whether a PR's header has room for a blank line above its tile
+// row and under it: the wide layout on a terminal 30 rows or taller.
+func (m *model) prRoomy() bool { return m.h >= 30 && !m.stacked() }
+
 // prHeadH is the lines above a PR's tab body for a pane whose inner width
 // is w: the header, the tabs and the rule under them; while hovering, the
 // status rows and a blank row too (the stacked hover's status row and
@@ -585,7 +589,8 @@ func (m *model) prPreviewView(w, h int) string {
 // right-aligned on the tile row when it fits there, else on a row of its
 // own. Stacked under the table: #n and the title on one row, then the tile
 // row with the behind count. A merged PR's tile row says into base by @who
-// · sha instead of the branches.
+// · sha instead of the branches. Where prRoomy, a blank line sits between
+// the title and the tile row, and one under the tile row.
 func (m *model) prHeader(w int) []string {
 	s, ok := m.prSummary()
 	where := termsafe.Line(m.pr.repo) + fmt.Sprintf(" · #%d", m.pr.number)
@@ -597,6 +602,9 @@ func (m *model) prHeader(w int) []string {
 	if !ok {
 		if m.stacked() {
 			return []string{th.amber.Render(fmt.Sprintf("#%d", m.pr.number)), ""}
+		}
+		if m.prRoomy() {
+			return []string{crumb, "", "", "", ""}
 		}
 		return []string{crumb, "", ""}
 	}
@@ -634,7 +642,11 @@ func (m *model) prHeader(w int) []string {
 		}
 	}
 	who = dot(who, behind, comments)
+	roomy := m.prRoomy()
 	rows := []string{crumb, truncate(title, w)}
+	if roomy {
+		rows = append(rows, "")
+	}
 	switch tw, ww := ansi.StringWidth(tileRow), ansi.StringWidth(who); {
 	case who == "":
 		rows = append(rows, truncate(tileRow, w))
@@ -642,6 +654,9 @@ func (m *model) prHeader(w int) []string {
 		rows = append(rows, tileRow+strings.Repeat(" ", w-tw-ww)+who)
 	default:
 		rows = append(rows, truncate(tileRow, w), truncate(who, w))
+	}
+	if roomy {
+		rows = append(rows, "")
 	}
 	return rows
 }

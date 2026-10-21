@@ -303,7 +303,7 @@ func TestMergedViewSaysMerged(t *testing.T) {
 	step(m, keysIn(m, "y"))
 	page := strings.Join(strip(m.prPage(80)), "\n")
 	indexAll(t, page, "MERGE\n"+ic("pr-merged")+" Merged")
-	if h := ansi.Strip(m.prHeader(80)[2]); !strings.Contains(m.prHeader(80)[2], tile("MERGED")) || !strings.Contains(h, "into main") {
+	if h := ansi.Strip(m.prHeader(80)[3]); !strings.Contains(m.prHeader(80)[3], tile("MERGED")) || !strings.Contains(h, "into main") {
 		t.Fatalf("header %q", h)
 	}
 	if strings.Contains(page, "Ready to merge") {

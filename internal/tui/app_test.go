@@ -410,14 +410,20 @@ func TestClickBounds(t *testing.T) {
 		}
 	}
 	m.tableView(lay.tw, lay.th)
-	n := (lay.th - 3 + 1) / 3                                                     // whole two-line rows, a gap between, below the title, head and rule
-	m.click(tea.Mouse{X: 5, Y: lay.top + 3 + 3*(n-1) + 1, Button: tea.MouseLeft}) // the last row in view, its second line
-	if want := n - 1; m.at().rows.cur != want {
-		t.Fatalf("last row click selected %d, want %d", m.at().rows.cur, want)
+	l := &m.at().rows
+	last := l.off // the last whole row in view
+	for last+1 < len(l.rows) && l.span(l.off, last+1) <= l.inner {
+		last++
 	}
-	if lay.th-3 > 3*n-1 { // the leftover line selects nothing
-		m.click(tea.Mouse{X: 5, Y: lay.top + lay.th - 1, Button: tea.MouseLeft})
-		if m.at().rows.cur != n-1 {
+	end := lay.top + l.first() + l.span(l.off, last)            // the line under the last whole row
+	m.click(tea.Mouse{X: 5, Y: end - 1, Button: tea.MouseLeft}) // its last line
+	if m.at().rows.cur != last {
+		t.Fatalf("last row click selected %d, want %d", m.at().rows.cur, last)
+	}
+	if end < lay.top+lay.th { // the leftover line selects nothing
+		m.at().rows.home()
+		m.click(tea.Mouse{X: 5, Y: end, Button: tea.MouseLeft})
+		if m.at().rows.cur != 0 {
 			t.Fatalf("leftover line selected %d", m.at().rows.cur)
 		}
 	}

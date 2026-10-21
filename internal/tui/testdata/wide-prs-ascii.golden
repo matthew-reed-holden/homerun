@@ -4,24 +4,24 @@
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
   / is:pr repo:o/e2e is:open author:@me                          ╎  o/e2e · #1                                          
  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  e2e PR                                              
+                                                                 ╎                                                      
   o Title                        # CI  A    v            ~     t ╎   OPEN   main ← feat                                 
  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  by @matt · 5m ago · 3 behind · = 2                  
- ▌o #1 · feat · @matt           x 1/3  A    3       +40 −7    5m ╎  ◆  Overview Checks 1/3 Reviews Files 3 Commits      
- ▌  e2e PR                                                       ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
-                                                                 ╎  x CI / fail echo bad; exit 1 · 3s                   
-  o #2 · @bob                  ◇ held  .             +0 −0    3h ╎  A approved                                          
-    typo fix                                                     ╎                                                      
-                                                                 ╎  SUMMARY                                             
-  d #5 · @sam · draft       - not run                +0 −0    5d ╎  Makes the thing optional.                           
-    pr: GraphQL page cache                                       ╎                                                      
-                                                                 ╎  ACTIVITY                                            
-                                                                 ╎  loading…                                            
                                                                  ╎                                                      
+ ▌                                                               ╎  ◆  Overview Checks 1/3 Reviews Files 3 Commits      
+ ▌o #1 · feat · @matt           x 1/3  A    3       +40 −7    5m ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+ ▌  e2e PR                                                       ╎  x CI / fail echo bad; exit 1 · 3s                   
+ ▌                                                               ╎  A approved                                          
+                                                                 ╎                                                      
+  o #2 · @bob                  ◇ held  .             +0 −0    3h ╎  SUMMARY                                             
+    typo fix                                                     ╎  Makes the thing optional.                           
+                                                                 ╎                                                      
+                                                                 ╎  ACTIVITY                                            
+  d #5 · @sam · draft       - not run                +0 −0    5d ╎  loading…                                            
+    pr: GraphQL page cache                                       ╎                                                      
                                                                  ╎  MERGE                                               
                                                                  ╎  v 3 commits behind main · + no conflicts            
                                                                  ╎  Checks x 1 failing (1 required)                     
-                                                                 ╎                                                      
-                                                                 ╎                                                      
                                                                  ╎                                                      
                                                                  ╎                                                      
                                                                  ╎                                                      

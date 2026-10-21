@@ -10,6 +10,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/matthew-reed-holden/homerun/internal/api"
 	"github.com/matthew-reed-holden/homerun/internal/pr"
@@ -115,8 +116,9 @@ func TestBattersBox(t *testing.T) {
 	lay := m.layout()
 	lines := strings.Split(m.tableView(lay.tw, lay.th), "\n")
 	l := &m.at().rows
-	sel, sel2, other := lines[l.first()], lines[l.first()+1], lines[l.first()+2]
-	for _, s := range []string{sel, sel2} { // both lines of the selected row
+	first := l.first()
+	sel, other := lines[first:first+4], lines[first+5] // the selected row's four lines, then the next row's text
+	for _, s := range sel {
 		if !strings.HasPrefix(ansi.Strip(s), "▌") || !strings.Contains(s, claySGR+"m▌") {
 			t.Fatalf("selected row %q", s)
 		}
@@ -124,8 +126,8 @@ func TestBattersBox(t *testing.T) {
 	if !strings.HasPrefix(ansi.Strip(other), " ") {
 		t.Fatalf("other row %q", other)
 	}
-	if strings.Contains(sel, "\x1b[7") {
-		t.Fatalf("reverse video: %q", sel)
+	if strings.Contains(sel[1], "\x1b[7") {
+		t.Fatalf("reverse video: %q", sel[1])
 	}
 }
 
@@ -245,13 +247,13 @@ func TestOddHeightNoHalfRow(t *testing.T) {
 	}
 	l.set(rows)
 	l.end()
-	h := l.first() + 9 // nine body lines: three rows, two gaps and a blank
+	h := l.firstIn(true) + 9 // nine body lines: two padded rows and a blank
 	lines := strings.Split(ansi.Strip(l.view(40, h, true)), "\n")
 	if len(lines) != h {
 		t.Fatalf("%d lines, want %d", len(lines), h)
 	}
 	body := lines[l.first():]
-	if !strings.Contains(body[len(body)-2], "row9-b") && !strings.Contains(body[len(body)-1], "row9-b") {
+	if !strings.Contains(strings.Join(body, "\n"), "row9-b") {
 		t.Fatalf("last row not whole:\n%s", strings.Join(lines, "\n"))
 	}
 	for i, s := range body {
@@ -284,7 +286,7 @@ func ciCols(t *testing.T, m *model) []int {
 	l := &m.at().rows
 	var out []int
 	for i, want := range []string{"1/2", "not run"} {
-		s := lines[l.first()+3*i]
+		s := lines[rowLine(l, i)]
 		c := cellOf(s, want)
 		if c < 2 {
 			t.Fatalf("row %d lacks %q: %q", i, want, s)
@@ -292,6 +294,15 @@ func ciCols(t *testing.T, m *model) []int {
 		out = append(out, c+ansi.StringWidth(want))
 	}
 	return out
+}
+
+// rowLine is the table line where row i's first line is, padded or compact.
+func rowLine(l *list, i int) int {
+	y := l.first() + l.span(0, i) - l.rowLines(l.rows[i])
+	if l.padded {
+		y++ // the pad above
+	}
+	return y
 }
 
 func TestWideTitleTruncates(t *testing.T) {
@@ -352,16 +363,16 @@ func TestPreviewHeaderTitleOnce(t *testing.T) {
 		t.Fatalf("header %q / %q", ls[0], ls[1])
 	}
 	for _, want := range []string{" OPEN ", "main ← feat", "@matt"} {
-		if !strings.Contains(ls[2], want) {
-			t.Fatalf("state line %q lacks %q", ls[2], want)
+		if !strings.Contains(ls[3], want) {
+			t.Fatalf("state line %q lacks %q", ls[3], want)
 		}
 	}
-	if !strings.Contains(ls[3], "◆  Overview") || !strings.Contains(ls[3], "◇  Checks 2/4") {
-		t.Fatalf("tabs %q", ls[3])
+	if !strings.Contains(ls[5], "◆  Overview") || !strings.Contains(ls[5], "◇  Checks 2/4") {
+		t.Fatalf("tabs %q", ls[5])
 	}
 	lay := m.layout()
 	if v := m.prPreviewView(lay.pw, lay.ph); strings.Contains(v, "\x1b[7") || !strings.Contains(v, claySGR+"m◆") {
-		t.Fatalf("active tab not a clay base: %q", strings.Split(v, "\n")[3])
+		t.Fatalf("active tab not a clay base: %q", strings.Split(v, "\n")[5])
 	}
 }
 
@@ -377,8 +388,8 @@ func TestStateTiles(t *testing.T) {
 		}
 		m, _ := prOpenModel(t, c.d)
 		lay := m.layout()
-		if v := m.prPreviewView(lay.pw, lay.ph); !strings.Contains(strings.Split(v, "\n")[2], tile(c.word)) {
-			t.Fatalf("%s: state line %q", c.word, strings.Split(ansi.Strip(v), "\n")[2])
+		if v := m.prPreviewView(lay.pw, lay.ph); !strings.Contains(strings.Split(v, "\n")[3], tile(c.word)) {
+			t.Fatalf("%s: state line %q", c.word, strings.Split(ansi.Strip(v), "\n")[3])
 		}
 	}
 }
@@ -428,7 +439,7 @@ func TestLeadGlyphFollowsIcons(t *testing.T) {
 		useIcons(t, mode)
 		keysIn(m, "4")
 		l := &m.at().rows
-		if row := tableLines(m)[l.first()]; !strings.HasPrefix(row, "▌"+ic("ci-pass")+" main") {
+		if row := tableLines(m)[l.first()+1]; !strings.HasPrefix(row, "▌"+ic("ci-pass")+" main") {
 			t.Fatalf("mode %d: branch row %q, want lead %q", mode, row, ic("ci-pass"))
 		}
 	}
@@ -643,17 +654,15 @@ func TestOuterGutter(t *testing.T) {
 func TestRowGap(t *testing.T) {
 	m := goldenModel(t, 120, 40)
 	l := &m.at().rows
-	if n := l.span(0, 2); n != 8 {
-		t.Fatalf("three rows span %d lines, want 8", n)
+	tableLines(m) // the view chooses the padded layout
+	if n := l.span(0, 2); n != 12 {
+		t.Fatalf("three padded rows span %d lines, want 12", n)
 	}
 	lines := tableLines(m)[l.first():]
-	for i, want := range []string{"#1", "e2e PR", "", "#2", "typo fix", "", "#5", "GraphQL"} {
+	for i, want := range []string{"", "#1", "e2e PR", "", "", "#2", "typo fix", "", "", "#5", "GraphQL", ""} {
 		if want == "" {
-			if strings.TrimSpace(lines[i]) != "" {
-				t.Fatalf("gap line %d %q", i, lines[i])
-			}
-			if strings.HasPrefix(lines[i], "▌") {
-				t.Fatalf("batter's box on the gap: %q", lines[i])
+			if !blankBody(lines[i]) {
+				t.Fatalf("pad line %d %q", i, lines[i])
 			}
 			continue
 		}
@@ -661,17 +670,17 @@ func TestRowGap(t *testing.T) {
 			t.Fatalf("line %d %q lacks %q", i, lines[i], want)
 		}
 	}
-	l.click(l.first() + 2)
+	l.click(l.first() + 2) // row 0's sub line
 	if l.cur != 0 {
-		t.Fatalf("click on the gap selected row %d", l.cur)
+		t.Fatalf("click on row 0's sub line selected row %d", l.cur)
 	}
-	l.click(l.first() + 3)
+	l.click(l.first() + 4) // row 1's top pad
 	if l.cur != 1 {
-		t.Fatalf("click on row 1 selected row %d", l.cur)
+		t.Fatalf("click on row 1's pad selected row %d", l.cur)
 	}
-	l.click(l.first() + 5)
+	l.click(l.first() + 7) // row 1's bottom pad
 	if l.cur != 1 {
-		t.Fatalf("click on the second gap selected row %d", l.cur)
+		t.Fatalf("click on row 1's bottom pad selected row %d", l.cur)
 	}
 }
 
@@ -700,7 +709,7 @@ func TestHeadsAlign(t *testing.T) {
 		m.tableRows()
 		l := &m.at().rows
 		lines := tableLines(m)
-		head, row := lines[l.first()-2], lines[l.first()]
+		head, row := lines[l.first()-3], lines[l.first()+1]
 		hs, he := cellsInOrder(t, head, "Title", ic("checks")+" CI", ic("rv-approved"), ic("behind"), ic("diff"), ic("age"))
 		rs, re := cellsInOrder(t, row, "#1", ic("ci-fail")+" 1/3", ic("rv-approved"), "3", "−7", "5m")
 		for _, i := range []int{0, 2} { // title and review are left-aligned
@@ -715,12 +724,12 @@ func TestHeadsAlign(t *testing.T) {
 		}
 		keysIn(m, "4")
 		l, lines = &m.at().rows, tableLines(m)
-		if h, r := lines[l.first()-2], lines[l.first()]; cellOf(h, ic("checks")+" CI") != cellOf(r, "1/1")-2 {
+		if h, r := lines[l.first()-3], lines[l.first()+1]; cellOf(h, ic("checks")+" CI") != cellOf(r, "1/1")-2 {
 			t.Fatalf("mode %d: branches CI head\n%s\n%s", mode, h, r)
 		}
 		keysIn(m, "5")
 		l, lines = &m.at().rows, tableLines(m)
-		h, r := lines[l.first()-2], lines[l.first()]
+		h, r := lines[l.first()-3], lines[l.first()+1]
 		hs, he = cellsInOrder(t, h, "Run", "Status", "Took")
 		rs, re = cellsInOrder(t, r, "#1", "running", "1m12s…")
 		if hs[1] != rs[1] || he[2] != re[2] {
@@ -842,8 +851,120 @@ func TestPreviewFocusNarrowsTable(t *testing.T) {
 	if lay.tw >= wide {
 		t.Fatalf("table %d wide with the preview focused, %d before", lay.tw, wide)
 	}
-	row := tableLines(m)[m.at().rows.first()]
+	row := tableLines(m)[m.at().rows.first()+1]
 	if !strings.Contains(row, "#1") || !strings.Contains(row, "@matt") || !strings.Contains(row, "1/3") || strings.Contains(row, "5m") || strings.Contains(row, "feat") {
 		t.Fatalf("narrow row %q", row)
+	}
+}
+
+// litSGR is the night field's background, the lit row's.
+const litSGR = "48;2;27;42;68"
+
+// blankBody is a table line with nothing on it but the gutter.
+func blankBody(s string) bool { return strings.Trim(s, " ▌") == "" }
+
+func TestPaddedRowsTouch(t *testing.T) {
+	m := goldenModel(t, 120, 40)
+	m.Update(tea.ColorProfileMsg{Profile: colorprofile.TrueColor})
+	l := &m.at().rows
+	l.home()
+	raw := strings.Split(m.tableView(m.layout().tw, m.layout().th), "\n")
+	lines := make([]string, len(raw))
+	for i, s := range raw {
+		lines[i] = ansi.Strip(s)
+	}
+	first := l.first()
+	body := lines[first : first+12]
+	for row, want := range []struct{ head, sub string }{{"#1", "e2e PR"}, {"#2", "typo fix"}, {"#5", "GraphQL"}} {
+		top := 4 * row
+		if !blankBody(body[top]) || !strings.Contains(body[top+1], want.head) || !strings.Contains(body[top+2], want.sub) || !blankBody(body[top+3]) {
+			t.Fatalf("row %d is not pad, two lines, pad:\n%s", row, strings.Join(body, "\n"))
+		}
+	}
+	for i := range 4 {
+		s := raw[first+i]
+		if !strings.Contains(s, litSGR) || !strings.HasPrefix(lines[first+i], "▌") || !strings.Contains(s, claySGR) {
+			t.Fatalf("selected row line %d lacks the lit field or the clay gutter: %q", i, s)
+		}
+	}
+	for i := 4; i < 12; i++ {
+		if strings.Contains(raw[first+i], litSGR) {
+			t.Fatalf("unselected line %d is lit: %q", i, raw[first+i])
+		}
+	}
+}
+
+func TestPaddedRowClick(t *testing.T) {
+	m := goldenModel(t, 120, 40)
+	l := &m.at().rows
+	tableLines(m)
+	first := l.first()
+	for row := range 3 {
+		for k := range 4 {
+			l.home()
+			l.click(first + 4*row + k)
+			if l.cur != row {
+				t.Fatalf("line %d of row %d selected row %d", k, row, l.cur)
+			}
+		}
+	}
+}
+
+func TestCompactFallback(t *testing.T) {
+	m := goldenModel(t, 80, 24)
+	l := &m.at().rows
+	lines := tableLines(m)
+	if l.span(0, 1) != 5 { // two two-line rows and the gap between them
+		t.Fatalf("80×24 two rows span %d lines, want the compact 5:\n%s", l.span(0, 1), strings.Join(lines, "\n"))
+	}
+	whole := 0
+	for i := 0; i+1 < len(lines); i++ {
+		for _, p := range [][2]string{{"#1 ", "e2e PR"}, {"#2 ", "typo fix"}, {"#5 ", "GraphQL"}} {
+			if strings.Contains(lines[i], p[0]) && strings.Contains(lines[i+1], p[1]) {
+				whole++
+			}
+		}
+	}
+	if whole < 2 {
+		t.Fatalf("%d whole rows at 80×24:\n%s", whole, strings.Join(lines, "\n"))
+	}
+	keysIn(m, "G")
+	lines = tableLines(m)
+	var sel []string
+	for _, s := range lines {
+		if strings.HasPrefix(s, "▌") {
+			sel = append(sel, s)
+		}
+	}
+	if len(sel) != 2 || !strings.Contains(sel[0], "#5") || !strings.Contains(sel[1], "GraphQL") {
+		t.Fatalf("cursor row not whole after G:\n%s", strings.Join(lines, "\n"))
+	}
+}
+
+func TestHeaderBreathingRoom(t *testing.T) {
+	m := goldenModel(t, 120, 40)
+	lines := tableLines(m)
+	// the search line, its rule, a blank, the column head and its rule, a blank,
+	// then the first row, whose top pad is its first line
+	if !strings.Contains(lines[1], "┄") || !blankBody(lines[2]) || !strings.Contains(lines[3], "Title") || !strings.Contains(lines[4], "┄") || !blankBody(lines[5]) || !blankBody(lines[6]) || !strings.Contains(lines[7], "#1") {
+		t.Fatalf("table header:\n%s", strings.Join(lines[:8], "\n"))
+	}
+	keysIn(m, "enter")
+	lay := m.layout()
+	head := m.prHeader(lay.pw - 2)
+	if len(head) != 5 || head[2] != "" || head[4] != "" || !strings.Contains(ansi.Strip(head[1]), "e2e PR") {
+		t.Fatalf("preview header %q", head)
+	}
+	if y := m.prTabsY(lay.pw - 2); y != 5 {
+		t.Fatalf("tabs at %d, want 5", y)
+	}
+	tabsY := m.prTabsY(lay.pw - 2)
+	for i, n := range []string{"Overview", "Checks", "Reviews", "Files", "Commits"} {
+		lay := m.layout()
+		line := strings.Split(screen(m), "\n")[lay.py+tabsY]
+		m.click(tea.Mouse{X: cellOf(line, n), Y: lay.py + tabsY, Button: tea.MouseLeft})
+		if m.pr.section != i {
+			t.Fatalf("click on %s: section %d", n, m.pr.section)
+		}
 	}
 }

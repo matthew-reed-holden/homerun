@@ -14,28 +14,26 @@ import (
 // on the same thing.
 type entry struct{ icon, text, sub, key string }
 
-// height is the lines the row takes.
-func (e entry) height() int {
-	if e.sub == "" {
-		return 1
-	}
-	return 2
-}
+// padMin is the body lines that two whole padded rows take: four each.
+const padMin = 8
 
 // list is a sectioned list of rows, numbered unless n is 0, under an optional
-// column head, with a blank line between rows. It owns its cursor and scroll
+// column head. A table with room for padMin body lines pads each two-line row
+// with a line above and below, the rows touching; a shorter one runs its rows
+// together with a blank line between them. It owns its cursor and scroll
 // offset, in rows, so a state refresh never moves the user's place.
 type list struct {
-	n     int
-	title string
-	lead  string // a styled first line in place of the title, as a PR tab's search line; "" for the title
-	note  string // a styled line under the lead's rule, as a rejected query's error; "" for none
-	head  string // a dim first line naming the columns; "" for none
-	rows  []entry
-	empty []string // shown in place of rows when there are none
-	cur   int
-	off   int
-	inner int // body lines the last view had; 0 before any view
+	n      int
+	title  string
+	lead   string // a styled first line in place of the title, as a PR tab's search line; "" for the title
+	note   string // a styled line under the lead's rule, as a rejected query's error; "" for none
+	head   string // a dim first line naming the columns; "" for none
+	rows   []entry
+	empty  []string // shown in place of rows when there are none
+	cur    int
+	off    int
+	inner  int  // body lines the last view had; 0 before any view
+	padded bool // the last view had room for padded rows
 }
 
 func (l *list) set(rows []entry) {
@@ -60,9 +58,18 @@ func (l *list) end()       { l.cur = max(0, len(l.rows)-1) }
 // message, which has no columns to name.
 func (l *list) showHead() bool { return l.head != "" && !(len(l.rows) == 0 && l.empty != nil) }
 
-// first is the line of the section, below its title, where rows start: a
-// search line has a rule under it, then any note, then the head and its rule.
-func (l *list) first() int {
+// roomy is whether a table h lines tall has room for padded rows: the one
+// place the layout is chosen, from the height the table is given.
+func (l *list) roomy(h int) bool { return h-l.firstIn(true) >= padMin }
+
+// first is the line of the section, below its title, where rows start.
+func (l *list) first() int { return l.firstIn(l.padded) }
+
+// firstIn is first in the padded or the compact layout. A search line has a
+// rule under it, then any note, then the head and its rule; padded, a blank
+// line sits between the search rule and the head, and one under the head's
+// rule.
+func (l *list) firstIn(padded bool) int {
 	n := 1
 	if l.lead != "" {
 		n++
@@ -72,8 +79,34 @@ func (l *list) first() int {
 	}
 	if l.showHead() {
 		n += 2
+		if padded {
+			if l.lead != "" {
+				n++
+			}
+			n++
+		}
 	}
 	return n
+}
+
+// rowLines is the lines row e takes: a two-line row takes four padded, a pad
+// above and below it.
+func (l *list) rowLines(e entry) int {
+	switch {
+	case e.sub == "":
+		return 1
+	case l.padded:
+		return 4
+	}
+	return 2
+}
+
+// gap is the blank line between rows: none padded, where the pads meet.
+func (l *list) gap() int {
+	if l.padded {
+		return 0
+	}
+	return 1
 }
 
 // span is the lines rows[from..to] take, the gaps between them included.
@@ -81,9 +114,9 @@ func (l *list) span(from, to int) int {
 	h := 0
 	for i := from; i <= to && i < len(l.rows); i++ {
 		if i > from {
-			h++
+			h += l.gap()
 		}
-		h += l.rows[i].height()
+		h += l.rowLines(l.rows[i])
 	}
 	return h
 }
@@ -103,13 +136,13 @@ func (l *list) scroll(inner int) {
 	l.off = clampInt(l.off, 0, max(0, len(l.rows)-1))
 }
 
-// click selects the row on the line y lines below the section's title line;
-// a gap between rows selects nothing. Once a view has drawn the list, only
-// the rows it showed whole take clicks.
+// click selects the row whose lines take the line y lines below the
+// section's title line; a gap between rows selects nothing. Once a view has
+// drawn the list, only the rows it showed whole take clicks.
 func (l *list) click(y int) {
 	y -= l.first()
 	for i, top := l.off, 0; y >= top && i < len(l.rows); i++ {
-		bottom := top + l.rows[i].height()
+		bottom := top + l.rowLines(l.rows[i])
 		if l.inner > 0 && bottom > l.inner && i != l.cur {
 			return
 		}
@@ -117,11 +150,12 @@ func (l *list) click(y int) {
 			l.cur = i
 			return
 		}
-		top = bottom + 1
+		top = bottom + l.gap()
 	}
 }
 
 func (l *list) view(w, h int, focused bool) string {
+	l.padded = l.roomy(h)
 	inner := max(0, h-l.first())
 	l.scroll(inner)
 	var lines []string
@@ -132,7 +166,13 @@ func (l *list) view(w, h int, focused bool) string {
 		lines = append(lines, fit(l.note, w))
 	}
 	if l.showHead() {
+		if l.lead != "" && l.padded {
+			lines = append(lines, "")
+		}
 		lines = append(lines, l.head, rule(w, false))
+		if l.padded {
+			lines = append(lines, "")
+		}
 	}
 	if len(l.rows) == 0 {
 		lines = append(lines, l.empty...)
@@ -141,12 +181,19 @@ func (l *list) view(w, h int, focused bool) string {
 	l.inner = inner
 	for i := l.off; i < len(l.rows) && (l.span(l.off, i) <= inner || i == l.cur); i++ {
 		r := l.rows[i]
-		if i > l.off {
+		sel := i == l.cur
+		if i > l.off && !l.padded {
 			lines = append(lines, "")
 		}
-		lines = append(lines, box(paint(r.icon)+" "+r.text, w, i == l.cur, focused))
+		if l.padded && r.sub != "" {
+			lines = append(lines, box("", w, sel, focused))
+		}
+		lines = append(lines, box(paint(r.icon)+" "+r.text, w, sel, focused))
 		if r.sub != "" {
-			lines = append(lines, box("  "+r.sub, w, i == l.cur, focused))
+			lines = append(lines, box("  "+r.sub, w, sel, focused))
+			if l.padded {
+				lines = append(lines, box("", w, sel, focused))
+			}
 		}
 	}
 	if l.lead != "" {

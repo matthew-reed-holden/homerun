@@ -4,17 +4,17 @@
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
    is:open author:@me              ╎  o/e2e · #1                                                                       
  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  e2e PR                                                                           
-   Title                       CI ╎   OPEN   main ← feat                                   by @matt · 5m ago ·  1    
- ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  ◆  Overview   ◇  Checks 2/4   ◇  Reviews 1   ◇  Files 3   ◇  Commits 1           
- ▌ #1 · @matt                 1/2 ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
- ▌  e2e PR                          ╎  SUMMARY                                                                          
-                                    ╎  Heading                                                                          
-   #2 · @bob                ◇ held ╎                                                                                   
-    typo fix                        ╎  Makes the thing b optional.                                                      
                                     ╎                                                                                   
-                                    ╎  ACTIVITY                                                                         
-                                   ┌────────────────────────────────────────────────┐                                   
-                                   │  Merge #1 into main?                           │                                   
+   Title                       CI ╎   OPEN   main ← feat                                   by @matt · 5m ago ·  1    
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎                                                                                   
+                                    ╎  ◆  Overview   ◇  Checks 2/4   ◇  Reviews 1   ◇  Files 3   ◇  Commits 1           
+ ▌                                  ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+ ▌ #1 · @matt                 1/2 ╎  SUMMARY                                                                          
+ ▌  e2e PR                          ╎  Heading                                                                          
+ ▌                                  ╎                                                                                   
+                                    ╎  Makes the thing b optional.                                                      
+   #2 · @bob                ◇ held┌────────────────────────────────────────────────┐                                   
+    typo fix                       │  Merge #1 into main?                           │                                   
                                    │                                                │                                   
                                    │    ○ merge commit                              │                                   
                                    │   ● squash                                     │                                   

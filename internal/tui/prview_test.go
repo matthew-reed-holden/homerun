@@ -150,7 +150,7 @@ func TestDescriptionPage(t *testing.T) {
 		d := detailFixture()
 		d.State = state
 		m.pr.d = d
-		if h := m.prHeader(80)[2]; !strings.Contains(h, tile(state)) {
+		if h := m.prHeader(80)[3]; !strings.Contains(h, tile(state)) {
 			t.Fatalf("%s: header %q", state, ansi.Strip(h))
 		}
 	}
@@ -640,7 +640,7 @@ func TestCommentFailureRestoresDraft(t *testing.T) {
 func TestMergedWhileOpen(t *testing.T) {
 	m, _ := prOpenModel(t, detailFixture())
 	page := strip(m.prPage(80))
-	if h := ansi.Strip(m.prHeader(80)[2]); !strings.Contains(h, " MERGED   into main by @matt · 6118d02") || page[0] != "It leaves this tab on the next refresh." {
+	if h := ansi.Strip(m.prHeader(80)[3]); !strings.Contains(h, " MERGED   into main by @matt · 6118d02") || page[0] != "It leaves this tab on the next refresh." {
 		t.Fatalf("header %q page head %q", h, page[:2])
 	}
 	for _, k := range []string{"m", "u"} {
@@ -653,7 +653,7 @@ func TestMergedWhileOpen(t *testing.T) {
 	d := detailFixture()
 	d.MergedBy, d.MergeSHA = "", ""
 	m.pr.d = d
-	if h := ansi.Strip(m.prHeader(80)[2]); !strings.Contains(h, " MERGED   into main ") || strings.Contains(h, "into main by") {
+	if h := ansi.Strip(m.prHeader(80)[3]); !strings.Contains(h, " MERGED   into main ") || strings.Contains(h, "into main by") {
 		t.Fatalf("no merger known: %q", h)
 	}
 }
