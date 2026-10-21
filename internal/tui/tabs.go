@@ -492,14 +492,18 @@ func mark(paths []string) string {
 // prLine lays out a PR row w wide; narrow screens drop Age, then Rev.
 func (m *model) prLine(w int, num, title, ci, rev, behind, age string) string {
 	showRev, showAge := m.w >= 90, m.w >= 100
-	fixed := 4 + 2 + 2 + 9 + 5
+	ciW := 9
+	if m.err != nil {
+		ciW = 20 // room for "github only"
+	}
+	fixed := 4 + 2 + 2 + ciW + 5
 	if showRev {
 		fixed += 4
 	}
 	if showAge {
 		fixed += 5
 	}
-	s := rfit(num, 4) + "  " + fit(title, max(1, w-fixed)) + "  " + fit(ci, 9)
+	s := rfit(num, 4) + "  " + fit(title, max(1, w-fixed)) + "  " + fit(ci, ciW)
 	if showRev {
 		s += " " + fit(rev, 3)
 	}
@@ -531,7 +535,10 @@ func (m *model) prRows(t *tab, w int) []entry {
 	for _, s := range res.PRs {
 		it := m.itemFor(repo, s.Number)
 		icon, ci := "·", dim.Render("· not run")
-		if it != nil {
+		switch {
+		case m.err != nil: // the engine's checks are unknown, not absent
+			icon, ci = "?", ciCell(mergedChecks(nil, s.Checks))+" "+dim.Render("github only")
+		case it != nil:
 			icon, ci = Rollup(it.Checks), ciCell(mergedChecks(it, s.Checks))+mark(m.rowDoubled(it, s.Checks))
 			if awaiting(*it) {
 				icon = "◇"
@@ -610,6 +617,10 @@ func (m *model) tableRows() {
 				t.rows.title += " · results from " + at.Format("15:04")
 			}
 			t.rows.head = dim.Render("  " + m.prLine(w, "#", "Title", "CI", "Rev", "↓", "Age"))
+			t.rows.empty = nil
+			if res, ok := t.res[r.Name]; ok && res.Total == 0 {
+				t.rows.empty = m.emptyLines(i)
+			}
 			t.rows.set(m.prRows(t, w))
 		case tabBranches:
 			t.rows.title, t.rows.head = "branches homerun runs", dim.Render("  "+branchLine(w, "Branch", "SHA", "Checks", "Age"))
@@ -619,6 +630,19 @@ func (m *model) tableRows() {
 			t.rows.set(m.runRows(w))
 		}
 	}
+}
+
+// emptyLines is what tab i's table says when its search found nothing,
+// pointing at the open-PRs tab when there is another.
+func (m *model) emptyLines(i int) []string {
+	hint := "/ to change it"
+	for j, o := range m.tabs {
+		if j != i && o.kind == tabSearch && o.query == "is:open" {
+			hint += fmt.Sprintf(" · %d for %s", j+1, termsafe.Line(o.name))
+			break
+		}
+	}
+	return []string{"", "  No open PRs match this search.", "  " + dim.Render(hint)}
 }
 
 // tabCount is the number a tab's label carries: a search's total, else its rows.

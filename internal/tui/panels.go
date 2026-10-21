@@ -20,6 +20,7 @@ type list struct {
 	title string
 	head  string // a dim first line naming the columns; "" for none
 	rows  []entry
+	empty []string // shown in place of rows when there are none
 	cur   int
 	off   int
 }
@@ -69,6 +70,9 @@ func (l *list) view(w, h int, focused bool) string {
 	var lines []string
 	if l.head != "" {
 		lines = append(lines, l.head)
+	}
+	if len(l.rows) == 0 {
+		lines = append(lines, l.empty...)
 	}
 	for i := l.off; i < len(l.rows) && i < l.off+inner; i++ {
 		r := l.rows[i]

@@ -387,6 +387,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.errSince = m.now()
 		}
 		m.err = msg.err
+		m.refresh()
 	case tickMsg:
 		if m.hostErr != nil {
 			return m, tea.Batch(m.fetch(), tick())
@@ -735,6 +736,10 @@ func (m *model) layout() layout {
 		bodyH--
 	}
 	l := layout{top: 2}
+	if m.err != nil {
+		bodyH-- // the banner leads the screen
+		l.top++
+	}
 	switch {
 	case m.zoom:
 		l.py, l.pw, l.ph = l.top, m.w, bodyH
@@ -791,6 +796,9 @@ func (m *model) render() string {
 		}
 	}
 	screen := m.header() + "\n" + m.tabRow() + "\n" + body + "\n" + m.bar()
+	if m.err != nil {
+		screen = m.banner() + "\n" + screen
+	}
 	if m.fltErr != "" {
 		screen += "\n" + m.filterErrLine()
 	}
@@ -831,6 +839,15 @@ func (m *model) mainView(w, h int) string {
 	return frame(title, append(head, m.tree.rows(w, inner, m.now(), focused)...), w, h, focused)
 }
 
+// banner is the red line that leads the screen while the engine is unreachable.
+func (m *model) banner() string {
+	warn := "✘ stale: daemon unreachable (since " + dur(m.now().Sub(m.errSince)) + ")"
+	if m.hostErr != nil {
+		warn += " · could not start: " + termsafe.Line(m.hostErr.Error()) + " · ctrl+r retries"
+	}
+	return truncate(red.Render(warn), m.w)
+}
+
 func (m *model) bar() string {
 	if m.flt != nil {
 		return m.filterBar()
@@ -850,13 +867,6 @@ func (m *model) bar() string {
 	}
 	// Standing lines and a fresh status lead, so truncation cuts key hints first.
 	var parts []string
-	if m.err != nil {
-		warn := "stale: daemon unreachable (since " + dur(m.now().Sub(m.errSince)) + ")"
-		if m.hostErr != nil {
-			warn += " · could not start: " + termsafe.Line(m.hostErr.Error()) + " · ctrl+r retries"
-		}
-		parts = append(parts, yellow.Render(warn))
-	}
 	for _, p := range []string{m.prOff(), m.rateLine()} {
 		if p != "" {
 			parts = append(parts, p)

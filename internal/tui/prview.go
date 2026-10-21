@@ -316,6 +316,9 @@ func (m *model) syncPage(w, h int) {
 func (m *model) prPage(w int) []string {
 	p := m.pr
 	var out []string
+	if p.d != nil && p.d.State == "MERGED" {
+		out = append(out, magenta.Render(truncate(mergedLine(p.d), w)), dim.Render("It leaves this tab on the next refresh."), "")
+	}
 	if p.err != nil {
 		out = append(out, strings.Split(red.Width(max(1, w)).Render(termsafe.Line(p.err.Error())), "\n")...)
 	}
@@ -358,6 +361,18 @@ func (m *model) prPage(w int) []string {
 		out = append(out, wrapLines(paintMerge(l), w)...)
 	}
 	return out
+}
+
+// mergedLine is "✔ Merged into main by @matt · 6118d02", with what GitHub gave.
+func mergedLine(d *pr.Detail) string {
+	l := "✔ Merged into " + termsafe.Line(d.BaseRef)
+	if d.MergedBy != "" {
+		l += " by @" + termsafe.Line(d.MergedBy)
+	}
+	if d.MergeSHA != "" {
+		l += " · " + short(termsafe.Line(d.MergeSHA))
+	}
+	return l
 }
 
 func stateWord(d *pr.Detail) string {

@@ -2,7 +2,7 @@ homerun  repo o/e2e ▾                                    engine: client · 1 r
 1 My PRs 2 · 2 Review requested 2 · 3 All open 2 · 4 Branches 1 · 5 Runs 3      
 ╭─is:open author:@me───────────────────────────────────────────────────────────╮
 │     #  Title                                                   CI        ↓   │
-│✘    1  e2e PR                                                  ✘ 1/2     ↓2  │
+│✘    1  e2e PR                                                  ✘ 1/2         │
 │◇    2  typo fix                                                ·             │
 │                                                                              │
 │                                                                              │
@@ -11,10 +11,10 @@ homerun  repo o/e2e ▾                                    engine: client · 1 r
 ╭─#1───────────────────────────────────────────────────────────────────────────╮
 │Overview  Checks 2/4                                                          │
 │#1 e2e PR  @matt · feat → main                                                │
-│⚠ 2 commits behind main · ✔ no conflicts                                      │
+│✔ no conflicts                                                                │
 │Checks ✔ 1 passed · ◌ 1 pending                                               │
 │Reviews: approved · Files 3 (+40 −7) · 💬 1                                   │
-│Merged                                                                        │
+│Open                                                                          │
 │──────────────────────────────────────────────────────────────────────────────│
 │                                                                              │
 │ Heading                                                                      │

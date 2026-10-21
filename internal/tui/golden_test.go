@@ -62,6 +62,7 @@ func TestGolden(t *testing.T) {
 	}{
 		{"wide-prs", 120, 40, nil},
 		{"standard-prs", 80, 24, nil},
+		{"standard-prs-stacked", 90, 30, nil},
 		{"wide-branches", 120, 40, []string{"4"}},
 		{"wide-runs", 120, 40, []string{"5"}},
 		{"standard-runs", 80, 24, []string{"5"}},
@@ -81,12 +82,15 @@ func TestGolden(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			m, _ := newTestModel(t)
-			if strings.HasSuffix(c.name, "-prs") {
+			if strings.Contains(c.name, "-prs") {
 				m.Update(searchMsg{repo: "o/e2e", tab: 0, query: "is:open author:@me", res: goldenResult()})
 				m.behind = map[string]int{"o/e2e#1": 3}
 			}
 			m.Update(tea.WindowSizeMsg{Width: c.w, Height: c.h})
 			if d := detailFixture(); strings.Contains(c.name, "-preview-") || strings.HasSuffix(c.name, "-merge-dialog") || strings.HasSuffix(c.name, "-comment") {
+				if strings.HasSuffix(c.name, "-preview-overview") {
+					d = openDetail()
+				}
 				if strings.HasSuffix(c.name, "-merge-dialog") {
 					d = openDetail()
 					d.MergeMethods = []string{"MERGE", "SQUASH", "REBASE"}
@@ -100,6 +104,41 @@ func TestGolden(t *testing.T) {
 				keysIn(m, c.keys...)
 			}
 			golden(t, c.name, ansi.Strip(m.render()))
+		})
+	}
+}
+
+func TestGoldenStates(t *testing.T) {
+	for _, name := range []string{"wide-no-token", "wide-engine-down", "wide-rate-limited", "wide-merged", "wide-empty-search"} {
+		t.Run(name, func(t *testing.T) {
+			var m *model
+			switch name {
+			case "wide-no-token":
+				m = noTokenModel(t)
+			case "wide-engine-down":
+				m = searchModel(t, &pr.Fake{Results: e2eResults(goldenResult())})
+				m.Update(errMsg{errors.New("connection refused")})
+				m.hostErr = errors.New("act not found on PATH (see: homerun doctor)")
+			case "wide-rate-limited":
+				f := &pr.Fake{Results: e2eResults(goldenResult())}
+				m = searchModel(t, f)
+				recordTicks(t)
+				at := time.Date(2026, 10, 14, 14, 2, 0, 0, time.UTC)
+				m.now = func() time.Time { return at }
+				_, c := m.Update(searchTickMsg{})
+				runBatch(m, c)
+				at = at.Add(time.Minute)
+				f.SearchErr = &pr.RateLimitError{}
+				_, c = m.Update(searchTickMsg{})
+				runBatch(m, c)
+			case "wide-merged":
+				recordDetailTicks(t)
+				m = searchModel(t, &pr.Fake{Results: e2eResults(goldenResult()), Details: map[string]*pr.Detail{"o/e2e#1": detailFixture()}})
+				run(m, m.key(press("enter")))
+			case "wide-empty-search":
+				m = searchModel(t, &pr.Fake{Results: e2eResults(pr.SearchResult{})})
+			}
+			golden(t, name, ansi.Strip(m.render()))
 		})
 	}
 }

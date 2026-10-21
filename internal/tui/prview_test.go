@@ -22,7 +22,7 @@ func detailFixture() *pr.Detail {
 				{Name: "lint", Status: "completed", Conclusion: "success", Required: true},
 				{Name: "build", Status: "in_progress"},
 			}},
-		ID: "PR_1", URL: "https://github.com/o/e2e/pull/1", State: "MERGED", Behind: 2,
+		ID: "PR_1", URL: "https://github.com/o/e2e/pull/1", State: "MERGED", MergedBy: "matt", MergeSHA: "6118d02abcdef", Behind: 2,
 		Timeline: []pr.Event{
 			{Kind: "commit", Author: "matt", At: now.Add(-2 * time.Hour), Text: "headline", SHA: "abc1234ffff"},
 			{Kind: "comment", Author: "bob", At: now.Add(-time.Hour), Text: "looks good"},
@@ -627,5 +627,56 @@ func TestCommentFailureRestoresDraft(t *testing.T) {
 	step(m, send)
 	if v := m.draft.Value(); v != "one\ntwo" {
 		t.Fatalf("draft %q", v)
+	}
+}
+
+func TestMergedWhileOpen(t *testing.T) {
+	m, _ := prOpenModel(t, detailFixture())
+	page := strip(m.prPage(80))
+	if page[0] != "✔ Merged into main by @matt · 6118d02" || page[1] != "It leaves this tab on the next refresh." {
+		t.Fatalf("page head %q", page[:2])
+	}
+	for _, k := range []string{"m", "u"} {
+		m.status = ""
+		keysIn(m, k)
+		if m.status != "already merged" || m.dlg != nil {
+			t.Fatalf("%s: status %q dlg %v", k, m.status, m.dlg)
+		}
+	}
+	d := detailFixture()
+	d.MergedBy, d.MergeSHA = "", ""
+	m.pr.d = d
+	if got := strip(m.prPage(80))[0]; got != "✔ Merged into main" {
+		t.Fatalf("no merger known: %q", got)
+	}
+}
+
+func TestSummaryCappedOnShortTerminal(t *testing.T) {
+	res := goldenResult()
+	res.PRs[0].Body = "one\ntwo\nthree\nfour"
+	m := searchModel(t, &pr.Fake{Results: e2eResults(res)})
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	lay := m.layout()
+	head := strip(m.previewHead(lay.pw - 2))
+	sources := slices.IndexFunc(head, func(l string) bool { return strings.Contains(l, "1 actions") })
+	if sources < 0 || sources > 6 {
+		t.Fatalf("summary is %d rows:\n%s", sources, strings.Join(head, "\n"))
+	}
+	if left := lay.ph - 2 - len(head); left < 3 {
+		t.Fatalf("tree keeps %d rows:\n%s", left, strings.Join(head, "\n"))
+	}
+	if !strings.HasPrefix(head[0], "#1 e2e PR") || head[sources-1] == "" {
+		t.Fatalf("cut badly:\n%s", strings.Join(head, "\n"))
+	}
+	if full := summaryLines(res.PRs[0], 0, false, 78); len(full) <= 6 {
+		t.Fatalf("fixture too small to prove the cap: %d rows", len(full))
+	}
+}
+
+func TestBodyLeadingBlankLinesDropped(t *testing.T) {
+	got := strip(summaryLines(pr.Summary{Number: 1, Title: "t", Body: "\n\n\nHello"}, 0, false, 80))
+	n := len(got)
+	if got[n-1] != "Hello" || got[n-2] != "" || got[n-3] == "" {
+		t.Fatalf("%q", got)
 	}
 }

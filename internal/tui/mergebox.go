@@ -162,6 +162,10 @@ func (m *model) onMutated(msg mutatedMsg) tea.Cmd {
 
 // mergeDetail opens the merge dialog for repo#n, or says why it can't.
 func (m *model) mergeDetail(repo string, n int, d *pr.Detail) {
+	if d.State == "MERGED" {
+		m.say("already merged")
+		return
+	}
 	if !canMerge(d) {
 		m.say("Can't merge: " + mergeLines(d)[0])
 		return
@@ -189,6 +193,9 @@ func (m *model) mergeDetail(repo string, n int, d *pr.Detail) {
 func (m *model) updateDetail(repo string, n int, d *pr.Detail) {
 	base := termsafe.Line(d.BaseRef)
 	switch {
+	case d.State == "MERGED":
+		m.say("already merged")
+		return
 	case d.State != "OPEN":
 		m.say(fmt.Sprintf("Can't update: #%d is %s", n, strings.ToLower(d.State)))
 		return

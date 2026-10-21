@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/x/ansi"
 )
@@ -53,11 +54,18 @@ func Styled(s string) string {
 		switch {
 		case seq == "\n", sgr.MatchString(seq):
 			b.WriteString(seq)
-		case width > 0:
+		case width > 0 || isText(seq):
 			b.WriteString(Line(seq))
 		}
 	}
 	return b.String()
+}
+
+// isText reports printable text: a grapheme without width (a combining mark
+// or joiner) is still text, unlike an escape sequence or control character.
+func isText(seq string) bool {
+	r, _ := utf8.DecodeRuneInString(seq)
+	return r != utf8.RuneError && !unicode.IsControl(r)
 }
 
 // Copy writes r to w one cleaned line at a time. Escapes are stripped per

@@ -48,6 +48,7 @@ type Event struct {
 type Detail struct {
 	Summary
 	ID, URL, State                         string
+	MergedBy, MergeSHA                     string // set once State is MERGED
 	ViewerDidAuthor, ViewerCanUpdateBranch bool
 	MergeMethods                           []string
 	DefaultMethod                          string

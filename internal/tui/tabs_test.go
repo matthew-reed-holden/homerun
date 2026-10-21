@@ -699,3 +699,44 @@ func TestPRChecksShowActionsLines(t *testing.T) {
 		t.Fatalf("cur %d", m.tree.cur)
 	}
 }
+
+func TestEngineUnreachableMarksRollup(t *testing.T) {
+	res := e2eResult()
+	res.PRs[0].Checks = []pr.Check{{Name: "ci/gh", Status: "completed", Conclusion: "failure", App: "github-actions"}}
+	m := searchModel(t, &pr.Fake{Results: e2eResults(res)})
+	if row := rowText(m, 0); strings.HasPrefix(row, "?") || strings.Contains(row, "github only") {
+		t.Fatalf("engine up: %q", row)
+	}
+	m.Update(errMsg{errors.New("connection refused")})
+	m.hostErr = errors.New("act not found on PATH")
+	out := strings.Split(screen(m), "\n")
+	if !strings.Contains(out[0], "stale: daemon unreachable") || !strings.Contains(out[0], "could not start: act not found on PATH") {
+		t.Fatalf("banner does not lead:\n%s", strings.Join(out, "\n"))
+	}
+	if strings.Contains(barText(m), "stale") {
+		t.Fatalf("banner repeated in the bar: %q", barText(m))
+	}
+	if len(out) != 40 {
+		t.Fatalf("%d lines", len(out))
+	}
+	indexAll(t, rowText(m, 0), "? ", "✘ 0/1", "github only")
+	indexAll(t, rowText(m, 1), "? ", "· github only")
+	if got := rowText(m, 1); strings.Contains(got, "not run") {
+		t.Fatalf("a row looks unhandled while the engine is down: %q", got)
+	}
+}
+
+func TestEmptySearch(t *testing.T) {
+	m := searchModel(t, &pr.Fake{Results: e2eResults(pr.SearchResult{})})
+	out := screen(m)
+	indexAll(t, out, "No open PRs match this search.", "/ to change it · 3 for All open")
+	if n, ok := m.tabCount(0); !ok || n != 0 {
+		t.Fatalf("count %d %v", n, ok)
+	}
+	// A tab with no result yet is loading, not empty.
+	m.at().res = map[string]pr.SearchResult{}
+	m.refresh()
+	if strings.Contains(screen(m), "No open PRs match") {
+		t.Fatal("a tab still loading says it is empty")
+	}
+}

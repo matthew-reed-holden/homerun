@@ -86,11 +86,20 @@ func (m *model) previewHead(inner int) []string {
 		}
 		it := m.itemFor(r.Name, s.Number)
 		behind, known := m.behindOf(s.Number)
-		out = summaryLines(s, behind, known, inner)
+		var rest []string
 		if l := sourceCounts(mergedChecks(it, s.Checks)); l != "" {
-			out = append(out, truncate(l, inner))
+			rest = append(rest, truncate(l, inner))
 		}
-		out = append(out, actionsLines(m.rowDoubled(it, s.Checks), r, inner)...)
+		rest = append(rest, actionsLines(m.rowDoubled(it, s.Checks), r, inner)...)
+		out = summaryLines(s, behind, known, inner)
+		// On a short terminal the summary gives up its tail so the tree keeps 3 rows.
+		if budget := m.layout().ph - 2 - 3 - len(rest) - 1; len(out) > budget {
+			out = out[:max(min(len(out), 4), budget)]
+			for len(out) > 0 && out[len(out)-1] == "" {
+				out = out[:len(out)-1]
+			}
+		}
+		out = append(out, rest...)
 	case tabBranches:
 		if out = actionsLines(m.rowDoubled(m.selBranch(), nil), r, inner); len(out) == 0 {
 			return nil
@@ -132,6 +141,9 @@ func summaryLines(s pr.Summary, behind int, known bool, w int) []string {
 	var body []string
 	for _, l := range strings.Split(termsafe.Text(s.Body), "\n") {
 		body = append(body, strings.Split(ansi.Wrap(l, max(1, w), ""), "\n")...)
+	}
+	for len(body) > 0 && strings.TrimSpace(body[0]) == "" {
+		body = body[1:]
 	}
 	for len(body) > 0 && strings.TrimSpace(body[len(body)-1]) == "" {
 		body = body[:len(body)-1]

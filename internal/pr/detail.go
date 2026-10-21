@@ -24,7 +24,7 @@ nodes{__typename
 
 const detailQuery = `query($owner:String!,$name:String!,$after:String){repository(owner:$owner,name:$name){
 mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed viewerDefaultMergeMethod
-pullRequest(number: %[1]d){` + fields + ` url viewerDidAuthor viewerCanUpdateBranch ` + timelineSel + `}}}`
+pullRequest(number: %[1]d){` + fields + ` url mergedBy{login} mergeCommit{oid} viewerDidAuthor viewerCanUpdateBranch ` + timelineSel + `}}}`
 
 const timelineQuery = `query($owner:String!,$name:String!,$after:String){repository(owner:$owner,name:$name){
 pullRequest(number: %d){` + timelineSel + `}}}`
@@ -103,6 +103,8 @@ func (c *Client) Detail(ctx context.Context, repo string, number int) (*Detail, 
 			PullRequest                                                *struct {
 				gqlPR
 				ID, URL                                string
+				MergedBy                               struct{ Login string }
+				MergeCommit                            struct{ Oid string }
 				ViewerDidAuthor, ViewerCanUpdateBranch bool
 				TimelineItems                          gqlTimeline
 			}
@@ -117,7 +119,7 @@ func (c *Client) Detail(ctx context.Context, repo string, number int) (*Detail, 
 		return nil, fmt.Errorf("github: pull request %s#%d not found", repo, number)
 	}
 	p.Number = number
-	d := &Detail{Summary: p.summary(), ID: p.ID, URL: p.URL, State: p.State,
+	d := &Detail{Summary: p.summary(), ID: p.ID, URL: p.URL, State: p.State, MergedBy: p.MergedBy.Login, MergeSHA: p.MergeCommit.Oid,
 		ViewerDidAuthor: p.ViewerDidAuthor, ViewerCanUpdateBranch: p.ViewerCanUpdateBranch,
 		DefaultMethod: r.ViewerDefaultMergeMethod, Behind: -1}
 	for _, m := range []struct {

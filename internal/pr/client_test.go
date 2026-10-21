@@ -141,7 +141,7 @@ func gqlVars(t *testing.T, body string) map[string]any {
 }
 
 const detailHead = `"id":"PR1","number":7,"title":"t","body":"b","author":{"login":"me"},"headRefName":"f","baseRefName":"main","headRefOid":"sha1",
-"url":"https://x/7","state":"OPEN","viewerDidAuthor":true,"viewerCanUpdateBranch":true`
+"url":"https://x/7","state":"MERGED","mergedBy":{"login":"matt"},"mergeCommit":{"oid":"6118d02abc"},"viewerDidAuthor":true,"viewerCanUpdateBranch":true`
 
 func detailPage(timeline, pageInfo string) string {
 	return `{"data":{"repository":{"mergeCommitAllowed":false,"squashMergeAllowed":true,"rebaseMergeAllowed":true,"viewerDefaultMergeMethod":"SQUASH",
@@ -173,8 +173,11 @@ func TestDetailParse(t *testing.T) {
 	if !reflect.DeepEqual(d.MergeMethods, []string{"SQUASH", "REBASE"}) || d.DefaultMethod != "SQUASH" || d.Behind != 3 {
 		t.Fatalf("%+v", d)
 	}
-	if d.ID != "PR1" || d.URL != "https://x/7" || d.State != "OPEN" || !d.ViewerDidAuthor || !d.ViewerCanUpdateBranch || d.Number != 7 || d.HeadSHA != "sha1" {
+	if d.ID != "PR1" || d.URL != "https://x/7" || d.State != "MERGED" || !d.ViewerDidAuthor || !d.ViewerCanUpdateBranch || d.Number != 7 || d.HeadSHA != "sha1" {
 		t.Fatalf("%+v", d)
+	}
+	if d.MergedBy != "matt" || d.MergeSHA != "6118d02abc" {
+		t.Fatalf("merged by %q at %q", d.MergedBy, d.MergeSHA)
 	}
 	var kinds []string
 	for _, e := range d.Timeline {

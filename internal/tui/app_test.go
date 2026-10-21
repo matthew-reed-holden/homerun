@@ -978,7 +978,7 @@ func TestStaleBannerShowsFailedRehost(t *testing.T) {
 	m := hostModel(t, Options{Host: func() (bool, error) { return false, nil }, Hosting: hosting(false)})
 	m.Update(errMsg{errors.New("unreachable")})
 	m.Update(hostMsg{err: errors.New("act not found\x1b[2J on PATH")})
-	out := m.bar()
+	out := m.banner()
 	if strings.Contains(out, "\x1b[2J") {
 		t.Fatalf("unsafe banner: %q", out)
 	}

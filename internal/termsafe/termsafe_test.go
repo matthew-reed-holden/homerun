@@ -39,3 +39,11 @@ func TestStyled(t *testing.T) {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
+
+func TestStyledKeepsZeroWidthGraphemes(t *testing.T) {
+	for _, in := range []string{"e\u0301", "\u00e9", "👍🏽", "👨\u200d👩\u200d👧", "a\x1b[1me\u0301\x1b[m"} {
+		if got := Styled(in); got != in {
+			t.Errorf("Styled(%q) = %q", in, got)
+		}
+	}
+}
