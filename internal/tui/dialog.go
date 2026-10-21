@@ -98,17 +98,23 @@ func cancelDialog(runID, label string, cancel func(string) tea.Cmd) *dialog {
 	}
 }
 
-// helpDialog is every key, then the notes (warnings marked as such), the
-// icons: setting and the closing hint.
-func helpDialog(notes ...string) *dialog {
+// note is a line help shows below the keys; a warning is marked as one.
+type note struct {
+	warn bool
+	text string
+}
+
+// helpDialog is every key, then the notes, the icons: setting and the
+// closing hint.
+func helpDialog(notes ...note) *dialog {
 	h := help.New()
 	h.Styles.FullKey, h.Styles.FullDesc, h.Styles.FullSeparator = th.fg, th.dim, th.line
 	body := h.FullHelpView(keys.groups()) + "\n"
 	for _, n := range notes {
-		if strings.HasPrefix(n, "PR tabs off") || strings.HasPrefix(n, "warning: ") {
-			body += "\n" + th.lights.Render(ic("warn")) + " " + n
+		if n.warn {
+			body += "\n" + th.lights.Render(ic("warn")) + " " + n.text
 		} else {
-			body += "\n" + th.dim.Render(n)
+			body += "\n" + th.dim.Render(n.text)
 		}
 	}
 	body += "\n" + th.dim.Render(iconsNote()) + "\n\nany key closes"

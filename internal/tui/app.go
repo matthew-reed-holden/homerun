@@ -147,16 +147,16 @@ func newModel(c *api.Client, now func() time.Time, o Options) *model {
 
 // notes are what help shows below the keys: why PR tabs are off in full,
 // config warnings, and where the log is.
-func (m *model) notes() []string {
-	var out []string
+func (m *model) notes() []note {
+	var out []note
 	if m.o.PRs == nil && m.o.PRsErr != nil {
-		out = append(out, "PR tabs off: "+termsafe.Text(m.o.PRsErr.Error()))
+		out = append(out, note{true, "PR tabs off: " + termsafe.Text(m.o.PRsErr.Error())})
 	}
 	for _, w := range m.o.Warns {
-		out = append(out, "warning: "+termsafe.Line(w))
+		out = append(out, note{true, "warning: " + termsafe.Line(w)})
 	}
 	if m.o.Log != "" {
-		out = append(out, "log: "+termsafe.Line(m.o.Log))
+		out = append(out, note{false, "log: " + termsafe.Line(m.o.Log)})
 	}
 	return out
 }

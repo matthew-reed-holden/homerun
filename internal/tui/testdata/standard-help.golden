@@ -1,0 +1,24 @@
+HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 ·  client                             
+◆ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◇ 5 Runs 3
+╌╌╌╌┌─────────────────────────────────────────────────────────────────────┐╌╌╌╌╌
+is:o│  Keys                                                              │     
+   T│                                                                     │    
+▌ #│ [ ]     tabs             k/↑   up              f      follow        │     
+▌  e│ 1-9     tab              j/↓   down            +      zoom          │     
+ ◇ #│ tab     table/preview    g     top             esc    back          │     
+   t│ l/enter preview          G     bottom          r      rerun         │     
+╌╌╌╌│ h       table            space fold            x      cancel        │╌╌╌╌╌
+#1 e│ R       repo             enter log             o      open          │     
+#1 e│ /       filter           /     search          y      copy sha      │     
+Chec│ ctrl+r  reload config    n     next match      m      merge         │     
+Revi│ ?       help             N     prev match      u      update branch │     
+2  h│ q       quit             e     next failure    c      comment       │     
+────│                                                ctrl+s send          │───  
+  C│                                                                     │  4s 
+  C│ icons: nerd | unicode | ascii, now nerd · boxes here? set unicode   │  3s 
+   e│                                                                     │     
+   │ any key closes                                                      │  1s 
+   └─────────────────────────────────────────────────────────────────────┘  0s 
+                                                                                
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+[ ] tabs · l/enter preview · r rerun · x cancel · m merge · u …  PR 1/2   ? help

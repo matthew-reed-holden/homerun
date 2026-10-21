@@ -214,3 +214,32 @@ func TestGoldenLook(t *testing.T) {
 		})
 	}
 }
+
+// TestGoldenHelp pins help at 80×24, alone and with every note: no token, a
+// config warning and the log path. The box must close inside the screen.
+func TestGoldenHelp(t *testing.T) {
+	for _, name := range []string{"standard-help", "standard-help-no-token"} {
+		t.Run(name, func(t *testing.T) {
+			var m *model
+			if name == "standard-help" {
+				m, _ = newTestModel(t)
+			} else {
+				m = noTokenModel(t)
+				m.o.PRsErr = errors.New(`exec "gh auth token": exit status 1: You are not logged into any GitHub hosts. To log in, run: gh auth login`)
+				m.o.Warns = []string{`tabs[3]: query "is:pr review:none" has no name; it is skipped`}
+				m.o.Log = "/home/someone/.local/state/homerun/homerun.log"
+			}
+			m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+			keysIn(m, "?")
+			out := ansi.Strip(m.render())
+			lines := strings.Split(out, "\n")
+			if len(lines) != 24 {
+				t.Fatalf("%d lines", len(lines))
+			}
+			if !strings.Contains(out, "any key closes") || !strings.Contains(out, "└") || !strings.Contains(out, "┌") {
+				t.Fatalf("help cut off at 80×24:\n%s", out)
+			}
+			golden(t, name, out)
+		})
+	}
+}
