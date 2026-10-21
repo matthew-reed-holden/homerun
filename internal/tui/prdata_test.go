@@ -213,9 +213,20 @@ func TestPreviewClickOffsetsTree(t *testing.T) {
 		t.Fatalf("click did not enter the PR: cmd %v focus %d", cmd, m.focus)
 	}
 	keysIn(m, "]")
-	m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + 3, Button: tea.MouseLeft}) // below the chips, the second tree row
-	if m.tree.cur != 1 {
-		t.Fatalf("cur %d", m.tree.cur)
+	lines := previewLines(m)
+	row := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, "CI / fail") })
+	if row < prHeadH {
+		t.Fatalf("no CI / fail row below the header:\n%s", strings.Join(lines, "\n"))
+	}
+	m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + row, Button: tea.MouseLeft}) // the second tree row's own line
+	if c, step, _ := m.tree.selected(); c.Name != "homerun / CI / fail" || step != -1 {
+		t.Fatalf("clicked CI / fail, selected %q step %d (cur %d)", c.Name, step, m.tree.cur)
+	}
+	for y := range prHeadH { // the where, title, state and tabs lines
+		m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + y, Button: tea.MouseLeft})
+		if c, step, _ := m.tree.selected(); c.Name != "homerun / CI / fail" || step != -1 {
+			t.Fatalf("click on header line %d selected %q step %d", y, c.Name, step)
+		}
 	}
 	m.click(tea.Mouse{X: 5, Y: lay.top + 3, Button: tea.MouseLeft}) // the table
 	if m.pr != nil || m.focus != onTable {

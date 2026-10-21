@@ -708,9 +708,13 @@ func TestPRChecksShowActionsLines(t *testing.T) {
 			t.Fatalf("PR Checks lacks %q:\n%s", want, out)
 		}
 	}
-	// A click lands on the tree row under it, below the chips and those lines.
+	// A click lands on the tree row under it, below the header, the tabs and those lines.
 	lay := m.layout()
-	m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + 1 + len(m.checksHead(lay.pw-2)) + 2, Button: tea.MouseLeft})
+	m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + prHeadH + len(m.checksHead(lay.pw-2)) + 1, Button: tea.MouseLeft}) // the second row
+	if m.tree.cur != 1 {
+		t.Fatalf("cur %d", m.tree.cur)
+	}
+	m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + prHeadH + len(m.checksHead(lay.pw-2)) - 1, Button: tea.MouseLeft}) // the rule above the tree
 	if m.tree.cur != 1 {
 		t.Fatalf("cur %d", m.tree.cur)
 	}
