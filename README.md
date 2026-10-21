@@ -50,6 +50,8 @@ To run a commit by hand: `homerun run [--pr N] OWNER/NAME [BRANCH]`. It exits no
 | `r` `x` `o` `y` `ctrl+r` | rerun (forks ask first), cancel, open on GitHub, copy SHA, reload config |
 | `?` `q` | help, quit |
 
+Icons need a Nerd Font. If they show as boxes, set `icons: unicode` (or `ascii`) in the user config; `nerd` is the default, and `?` names the setting.
+
 ## When this machine is off
 
 Required checks stay pending while the daemon is down. Re-enabling hosted Actions is not enough: hosted Actions never produce the `homerun / ...` check names, so those required checks would still never complete. Also swap the required checks in branch protection for the hosted ones, or remove the `homerun / ...` ones temporarily. Restore them when the machine is back.

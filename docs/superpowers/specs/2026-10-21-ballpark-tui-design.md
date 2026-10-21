@@ -71,6 +71,9 @@ workflow spec. Each part is usable on its own:
    preview with Overview and Checks moved over from today's PR pages,
    Branches and Runs tabs, repo picker, the new keys. Today's lazygit panel
    layout goes away.
+   - **Look (night game):** the visual identity between parts 1 and 2: the
+     palette, icons, scoreboard strip, bases, foul lines, two-line rows and
+     clay overlays. See `2026-10-21-ballpark-look-design.md`.
 2. **Drill-down:** Checks drill (job → step → log), Commits tab and its list,
    Reviews tab (read-only), the full-width transitions.
 3. **Config, Doctor, Scoreboard.**
@@ -85,8 +88,8 @@ its goldens.
 
 See the reference for every screen. The rules:
 
-- **Header line:** `homerun`, the picked repo (`owner/name ▾`), and the engine
-  status (hosted here / client / unreachable) with the active run count.
+- **Header line:** replaced by the look's scoreboard strip (`HOMERUN`, the
+  repo, the line score, the engine light). See the look spec, goal 2.
 - **Tab row:** `1 My PRs 3 · 2 Review requested 1 · 3 All open 7 · 4 Branches 2
   · 5 Runs 4 │ 6 Config · 7 Doctor`. Counts ride on the labels. The active tab
   is a filled chip. Config and Doctor sit after a dim divider because they are
@@ -103,13 +106,15 @@ See the reference for every screen. The rules:
 - **Bar line:** standing lines first (engine stale, PR tabs off, rate limit),
   then the 5-second status, then the key hints for the current context,
   generated from `keys.go` as today.
-- **Selection** stays a reverse/filled bar; **focus** shows as a bright border
-  and bold title.
+- **Selection** is the look's batter's box (a clay gutter bar on the lit
+  field), never reverse video; **focus** is a clay foul line and title, not a
+  bright border. See the look spec, goals 2 and 3.
 
 ### PR search tabs
 
 - Each PR tab is a saved GitHub search. homerun adds `is:pr repo:<picked
-  repo>` and never shows it in the query.
+  repo>`; the filter bar shows it dimmed and not editable (the look spec,
+  goal 6, replaced "never shows it").
 - **Defaults** (when config has no `tabs:` key):
   ```yaml
   tabs:
@@ -240,7 +245,8 @@ See the reference for every screen. The rules:
 
 - Merge (method choice), update branch (merge or rebase), comment, fork-run
   confirm, cancel run, quit with active runs, help with notes. Same rules as
-  today: centred, yellow border, take every key, only the named key confirms.
+  today: centred, take every key, only the named key confirms. They float in
+  one square clay border (the look spec, goal 6), not today's yellow one.
 - The merge, update and comment dialogs are huh forms (my call) so input
   looks the same everywhere.
 
@@ -491,8 +497,8 @@ fakes; never run `go test` commands concurrently.
 - Package layout for the new views, and whether the preview tabs share one
   model.
 - Exact frame art and timings, within the durations above.
-- Exact colours within the ANSI slots the reference names (red, green,
-  yellow, blue, magenta, cyan, dim); glyph tweaks that keep widths at one cell.
+- Colours are no longer ANSI slots: the look spec's palette (goal 1) holds
+  the exact truecolor values. Glyph tweaks that keep widths at one cell.
 - Column widths and truncation rules.
 - How the search results and daemon items are cached between polls.
 - Whether the launch wordmark and scoreboard share frames.
