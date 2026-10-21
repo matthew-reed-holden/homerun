@@ -676,3 +676,26 @@ func TestPRRowBarHasCancel(t *testing.T) {
 		t.Fatalf("PR row bar %q", b)
 	}
 }
+
+func TestPRChecksShowActionsLines(t *testing.T) {
+	recordDetailTicks(t)
+	st := fixture()
+	st.Repos[0].Unhandled = []string{".github/workflows/pages.yml"}
+	flows := []pr.Workflow{{Path: ".github/workflows/ci.yml", State: "active"}, {Path: ".github/workflows/pages.yml", State: "active"}}
+	f := &pr.Fake{Results: e2eResults(e2eResult()), Flows: map[string][]pr.Workflow{"o/e2e": flows}, Details: map[string]*pr.Detail{"o/e2e#1": detailFixture()}}
+	m := searchModelState(t, f, st)
+	run(m, keysIn(m, "enter"))
+	keysIn(m, "]")
+	out := screen(m)
+	for _, want := range []string{"⚠ ci.yml also runs on GitHub Actions", "left to GitHub Actions: pages.yml"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("PR Checks lacks %q:\n%s", want, out)
+		}
+	}
+	// A click lands on the tree row under it, below the chips and those lines.
+	lay := m.layout()
+	m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + 1 + len(m.checksHead(lay.pw-2)) + 2, Button: tea.MouseLeft})
+	if m.tree.cur != 1 {
+		t.Fatalf("cur %d", m.tree.cur)
+	}
+}

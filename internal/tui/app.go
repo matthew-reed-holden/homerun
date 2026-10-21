@@ -870,7 +870,7 @@ func (m *model) click(mo tea.Mouse) tea.Cmd {
 		case m.pr == nil:
 			m.tree.click(y - len(m.previewHead(lay.pw-2)))
 		case m.pr.section == 1:
-			m.tree.click(y - 1) // below the chips
+			m.tree.click(y - 1 - len(m.checksHead(lay.pw-2))) // below the chips and Actions lines
 		}
 		return cmd
 	}

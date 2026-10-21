@@ -275,9 +275,29 @@ func (m *model) prPreviewView(w, h int) string {
 		m.syncPage(w-2, inner)
 		lines = append(lines, strings.Split(m.pr.vp.View(), "\n")...)
 	} else {
-		lines = append(lines, m.tree.rows(w, inner, m.now(), focused)...)
+		head := m.checksHead(w - 2)
+		lines = append(lines, head...)
+		lines = append(lines, m.tree.rows(w, max(0, inner-len(head)), m.now(), focused)...)
 	}
 	return frame(fmt.Sprintf("#%d", m.pr.number), lines, w, h, focused)
+}
+
+// checksHead is what the Checks tab shows above the tree: the doubled and
+// left-to-Actions lines with a rule under them, judged by the detail's checks
+// or, before it lands, the search's; nil when there are none.
+func (m *model) checksHead(inner int) []string {
+	var gh []pr.Check
+	if m.pr.d != nil {
+		gh = m.pr.d.Checks
+	} else if s, ok := m.summary(m.pr.repo, m.pr.number); ok {
+		gh = s.Checks
+	}
+	_, it := m.prItem()
+	out := actionsLines(m.rowDoubled(it, gh), m.repo(), inner)
+	if len(out) == 0 {
+		return nil
+	}
+	return append(out, dim.Render(strings.Repeat("─", max(0, inner))))
 }
 
 // syncPage sizes the viewport and rebuilds the page when the width or detail changed.
