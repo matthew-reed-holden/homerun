@@ -113,7 +113,7 @@ func TestRepoAndRunEntries(t *testing.T) {
 		{Name: "o/a", Items: []api.Item{{Checks: []api.Check{{Status: "completed", Conclusion: "failure"}}}}},
 		{Name: "o/b", Error: "bad config"},
 	}}
-	re := repoEntries(st)
+	re := repoEntries(st, "")
 	if re[0].icon != "✘" || re[0].text != "o/a" || re[1].icon != "✘" || re[1].text != "o/b (error)" {
 		t.Fatalf("repos: %+v", re)
 	}

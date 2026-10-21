@@ -63,7 +63,11 @@ func TestListPolledForSelectedRepoOnly(t *testing.T) {
 	if len(f.Lists) != 1 {
 		t.Fatalf("o/backend has no PRs, but List ran: %+v", f.Lists)
 	}
-	runBatch(m, keysIn(m, "k"))
+	runBatch(m, keysIn(m, "enter")) // picks o/backend
+	if len(f.Lists) != 1 {
+		t.Fatalf("o/backend has no PRs, but List ran: %+v", f.Lists)
+	}
+	runBatch(m, keysIn(m, "1", "k", "enter"))
 	if len(f.Lists) != 2 || f.Lists[1].Repo != "o/e2e" {
 		t.Fatalf("back on o/e2e: %+v", f.Lists)
 	}
@@ -103,8 +107,8 @@ func TestListPollInterval(t *testing.T) {
 func TestSelectionFetchLeavesIntervalAlone(t *testing.T) {
 	f := &pr.Fake{Low: true}
 	m := prModel(t, f)
-	runBatch(m, keysIn(m, "1", "j"))
-	runBatch(m, keysIn(m, "k"))
+	runBatch(m, keysIn(m, "1", "j", "enter"))
+	runBatch(m, keysIn(m, "1", "k", "enter"))
 	if m.prDelay != 60*time.Second {
 		t.Fatalf("selection fetch moved the interval: %v", m.prDelay)
 	}
@@ -125,7 +129,7 @@ func TestListTickWithNothingToFetchStillReschedules(t *testing.T) {
 	f := &pr.Fake{}
 	m := prModel(t, f)
 	ticks := recordTicks(t)
-	runBatch(m, keysIn(m, "1", "j")) // o/backend: no PRs
+	runBatch(m, keysIn(m, "1", "j", "enter")) // o/backend: no PRs
 	_, c := m.Update(listTickMsg{})
 	runBatch(m, c)
 	if len(*ticks) != 1 || len(f.Lists) != 1 {
@@ -223,7 +227,7 @@ func TestNoTokenDashboardUnchanged(t *testing.T) {
 func TestLateListResultKeyedByRepo(t *testing.T) {
 	f := &pr.Fake{}
 	m := prModel(t, f)
-	keysIn(m, "1", "j") // o/backend
+	keysIn(m, "1", "j", "enter") // o/backend
 	before := ansi.Strip(m.render())
 	m.Update(listMsg{repo: "o/e2e", sums: map[int]pr.Summary{1: {Number: 1, IsDraft: true}}})
 	if _, ok := m.summary("o/e2e", 1); !ok {
@@ -235,7 +239,7 @@ func TestLateListResultKeyedByRepo(t *testing.T) {
 	if ansi.Strip(m.render()) != before {
 		t.Fatal("o/backend rows changed")
 	}
-	keysIn(m, "k")
+	keysIn(m, "1", "k", "enter")
 	if !strings.Contains(ansi.Strip(m.render()), "#1 draft e2e PR @matt 5m") {
 		t.Fatalf("badges not shown at once:\n%s", ansi.Strip(m.render()))
 	}

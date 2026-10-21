@@ -1,8 +1,8 @@
 ╭─1 Repos────────────────────────╮╭─#2 typo fix · abc1234 · @bob───────────────────────────────────────────────────────╮
-│✘ o/e2e                         ││no checks yet                                                                       │
+│✘ o/e2e ●                       ││no checks yet                                                                       │
 │· o/backend                     ││                                                                                    │
 ╰────────────────────────────────╯│                                                                                    │
-╭─2 Branches & PRs───────────────╮│                                                                                    │
+╭─2 Branches & PRs · e2e─────────╮│                                                                                    │
 │✔ main  fd387ab                 ││                                                                                    │
 │✘ #1 e2e PR @matt 5m            ││                                                                                    │
 │◇ #2 typo fix @bob awaiting     ││                                                                                    │

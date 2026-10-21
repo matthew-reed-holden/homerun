@@ -1,4 +1,4 @@
-╭─2 Branches & PRs───────╮╭─main · fd387ab───────────────────────────╮
+╭─2 Branches & PRs · e2e─╮╭─main · fd387ab───────────────────────────╮
 │✔ main  fd387ab         ││✔ CI / pass                             4s│
 │✘ #1 e2e PR @matt 5m    ││                                          │
 │◇ #2 typo fix @bob awai…││                                          │

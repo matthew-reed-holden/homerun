@@ -1,8 +1,8 @@
 ╭─1 Repos────────────────────────╮╭─#1 e2e PR · d954af8 · @matt · 5m ago───────────────────────────────────────────────╮
-│✘ o/e2e                         ││#1   @ ·  →                                                                         │
+│✘ o/e2e ●                       ││#1   @ ·  →                                                                         │
 │· o/backend                     ││✘ conflicts                                                                         │
 ╰────────────────────────────────╯│Checks none                                                                         │
-╭─2 Branches & PRs───────────────╮│Reviews: approved · Files 0 (+0 −0) · 💬 0                                          │
+╭─2 Branches & PRs · e2e─────────╮│Reviews: approved · Files 0 (+0 −0) · 💬 0                                          │
 │✔ main  fd387ab                 ││────────────────────────────────────────────────────────────────────────────────────│
 │✘ #1 ⚔ ✔ draft e2e PR @matt 5m  ││✔ CI / pass                                                                       4s│
 │◇ #2 typo fix @bob awaiting     ││✘ CI / fail — echo bad; exit 1                                                    3s│

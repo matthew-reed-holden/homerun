@@ -607,7 +607,7 @@ func TestInsertedItemKeepsSelectionAndLog(t *testing.T) {
 
 func TestInsertedRepoKeepsSelection(t *testing.T) {
 	m, _ := newTestModel(t)
-	keysIn(m, "1", "j") // o/backend
+	keysIn(m, "1", "j", "enter") // o/backend
 	st := fixture()
 	st.Repos = append([]api.Repo{{Name: "o/aaa"}}, st.Repos...)
 	m.Update(stateMsg{&st})

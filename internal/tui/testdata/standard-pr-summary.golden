@@ -1,8 +1,8 @@
 ╭─1 Repos────────────────────────╮╭─#1 e2e PR · d954af8 · @matt · 5m ago───────╮
-│✘ o/e2e                         ││#1 e2e PR  @matt · feat → main              │
+│✘ o/e2e ●                       ││#1 e2e PR  @matt · feat → main              │
 │· o/backend                     ││⚠ behind main · ✔ no conflicts              │
 ╰────────────────────────────────╯│Checks ✘ 1 failing (1 required) · ✔ 1 passed│
-╭─2 Branches & PRs───────────────╮│Reviews: review required · Files 3 (+40 −7)…│
+╭─2 Branches & PRs · e2e─────────╮│Reviews: review required · Files 3 (+40 −7)…│
 │✔ main  fd387ab                 ││                                            │
 │✘ #1 ↓ ○ ! e2e PR @matt 5m      ││Makes the thing                             │
 │◇ #2 typo fix @bob awaiting     ││optional.                                   │

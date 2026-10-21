@@ -98,18 +98,23 @@ func frame(title string, lines []string, w, h int, focused bool) string {
 	return strings.Join(out, "\n")
 }
 
-func repoEntries(st api.State) []entry {
+// repoEntries marks the picked repo with ●.
+func repoEntries(st api.State, picked string) []entry {
 	out := make([]entry, 0, len(st.Repos))
 	for _, r := range st.Repos {
+		t := termsafe.Line(r.Name)
+		if r.Name == picked {
+			t += " ●"
+		}
 		if r.Error != "" {
-			out = append(out, entry{"✘", termsafe.Line(r.Name) + " (error)", r.Name})
+			out = append(out, entry{"✘", t + " (error)", r.Name})
 			continue
 		}
 		var all []api.Check
 		for _, it := range r.Items {
 			all = append(all, it.Checks...)
 		}
-		out = append(out, entry{Rollup(all), termsafe.Line(r.Name), r.Name})
+		out = append(out, entry{Rollup(all), t, r.Name})
 	}
 	return out
 }

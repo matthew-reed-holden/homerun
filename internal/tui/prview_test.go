@@ -105,20 +105,21 @@ func TestEnterOpensPR(t *testing.T) {
 	}
 }
 
-func TestEnterFromReposKeepsFocus(t *testing.T) {
-	recordDetailTicks(t)
-	f := &pr.Fake{Details: map[string]*pr.Detail{"o/e2e#1": detailFixture()}}
+func TestRepoCursorBrowsesEnterPicks(t *testing.T) {
+	f := &pr.Fake{}
 	m := prModel(t, f)
-	m.state.Repos[0].Items = m.state.Repos[0].Items[1:] // first item is #1
-	m.refresh()
-	keysIn(m, "1")
-	run(m, keysIn(m, "enter"))
-	if m.pr == nil {
-		t.Fatal("not opened from repos")
+	keysIn(m, "1", "j") // hover o/backend
+	if m.repo().Name != "o/e2e" || !strings.Contains(ansi.Strip(m.render()), "e2e PR") {
+		t.Fatalf("hover rescoped: %q", m.repo().Name)
 	}
-	keysIn(m, "esc")
-	if m.focus != paneRepos || m.left != paneRepos {
-		t.Fatalf("focus %d left %d", m.focus, m.left)
+	runBatch(m, keysIn(m, "enter"))
+	out := ansi.Strip(m.render())
+	if m.repo().Name != "o/backend" || m.focus != paneItems || !strings.Contains(out, "Branches & PRs · backend") || !strings.Contains(out, "o/backend ●") {
+		t.Fatalf("enter did not pick: repo %q focus %d\n%s", m.repo().Name, m.focus, out)
+	}
+	m.Update(tea.MouseClickMsg{X: 3, Y: 1, Button: tea.MouseLeft}) // o/e2e row
+	if m.repo().Name != "o/e2e" {
+		t.Fatalf("click did not pick: %q", m.repo().Name)
 	}
 }
 
@@ -366,8 +367,8 @@ func prDaemonModel(t *testing.T) (*model, *fakeDaemon) {
 	m := newModel(c, func() time.Time { return now }, Options{PRs: f})
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m.Update(stateMsg{&st})
-	keysIn(m, "1")
-	run(m, keysIn(m, "enter")) // from the repos panel: its first item, #1
+	keysIn(m, "2")
+	run(m, keysIn(m, "enter")) // #1, the first item
 	if m.pr == nil || m.pr.number != 1 {
 		t.Fatal("not opened")
 	}
@@ -376,9 +377,10 @@ func prDaemonModel(t *testing.T) (*model, *fakeDaemon) {
 
 func TestPRActionsTargetTheOpenPR(t *testing.T) {
 	m, fd := prDaemonModel(t)
-	st := fixture() // main first again: the repos panel's first item is now main
+	st := fixture() // main first again
 	m.Update(stateMsg{&st})
-	keysIn(m, "j") // Checks row
+	m.items.cur = 0 // the dashboard selection is now main
+	keysIn(m, "j")  // Checks row
 	cmd := keysIn(m, "r")
 	if cmd == nil {
 		t.Fatalf("no rerun: %q", m.status)
@@ -478,7 +480,7 @@ func checksModel(t *testing.T) (*model, *fakeDaemon) {
 	m := newModel(c, func() time.Time { return now }, Options{PRs: &pr.Fake{Details: map[string]*pr.Detail{"o/e2e#1": d}}})
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m.Update(stateMsg{&st})
-	keysIn(m, "1")
+	keysIn(m, "2")
 	run(m, keysIn(m, "enter"))
 	keysIn(m, "j", "l")
 	return m, fd

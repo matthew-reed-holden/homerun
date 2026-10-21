@@ -98,6 +98,7 @@ type model struct {
 	listErr string                        // the list error said last; "" after a good list
 	prRetry time.Time                     // when the raised list poll runs next
 	pr      *prView                       // the open PR; nil on the dashboard
+	picked  string                        // the repo enter picked; "" or gone means the first
 	prGen   int                           // identifies the open PR so a stale fetch or tick is ignored
 
 	gen      int // identifies the current log stream so a stale one is ignored
@@ -180,11 +181,30 @@ func (m *model) activeRuns() int {
 
 func (m *model) say(s string) { m.status, m.statusAt = termsafe.Line(s), m.now() }
 
+// repo is the picked repo, which scopes items, the main pane and PR polling;
+// the repos cursor only browses.
 func (m *model) repo() api.Repo {
-	if m.repos.cur < len(m.state.Repos) {
-		return m.state.Repos[m.repos.cur]
+	for _, r := range m.state.Repos {
+		if r.Name == m.picked {
+			return r
+		}
+	}
+	if len(m.state.Repos) > 0 {
+		return m.state.Repos[0]
 	}
 	return api.Repo{}
+}
+
+// pick scopes the dashboard to the repo under the repos cursor.
+func (m *model) pick() tea.Cmd {
+	if m.repos.cur >= len(m.repos.rows) {
+		return nil
+	}
+	m.picked = m.repos.rows[m.repos.cur].key
+	m.items.home()
+	m.refresh()
+	m.focusLeft(paneItems)
+	return m.prSync()
 }
 
 // item is the selected branch or PR; nil on an unhandled-workflow row.
@@ -216,7 +236,11 @@ func (m *model) list(p pane) *list {
 }
 
 func (m *model) refresh() {
-	m.repos.set(repoEntries(m.state))
+	m.repos.set(repoEntries(m.state, m.repo().Name))
+	m.items.title = "Branches & PRs"
+	if n := m.repo().Name; n != "" {
+		m.items.title += " · " + repoShort(n)
+	}
 	m.items.set(m.itemRows())
 	m.runs.set(runEntries(m.state.Runs, m.now()))
 	if m.pr != nil {
@@ -420,16 +444,11 @@ func (m *model) cycle(d int) {
 	m.focusLeft(next)
 }
 
-// moved reacts to a cursor change in panel p: a new repo means new items.
+// moved reacts to a cursor change in panel p; the repos cursor changes nothing
+// until enter picks.
 func (m *model) moved(p pane, before int) tea.Cmd {
 	if p == paneRepos {
-		if m.repos.cur == before {
-			return nil
-		}
-		m.items.home()
-		m.items.set(m.itemRows())
-		m.syncMain()
-		return m.prSync()
+		return nil
 	}
 	m.syncMain()
 	return nil
@@ -510,6 +529,8 @@ func (m *model) leftKey(k tea.KeyPressMsg) tea.Cmd {
 		l.home()
 	case key.Matches(k, keys.Bottom):
 		l.end()
+	case key.Matches(k, keys.Into) && m.focus == paneRepos:
+		return m.pick()
 	case key.Matches(k, keys.Into):
 		if it := m.selectedItem(); key.Matches(k, keys.Enter) && m.o.PRs != nil && it != nil && it.PR > 0 {
 			return m.openPR(m.repo().Name, it.PR)
@@ -821,6 +842,9 @@ func (m *model) click(mo tea.Mouse) tea.Cmd {
 				before := l.cur
 				if y < lay.heights[i]-1 {
 					l.click(y)
+				}
+				if p == paneRepos && y >= 1 && y < lay.heights[i]-1 {
+					return m.pick()
 				}
 				return m.moved(p, before)
 			}
