@@ -747,10 +747,13 @@ func readLine(lines <-chan string, errc <-chan error, gen int) tea.Cmd {
 // layout places the sections below the strip, the bases and a foul line:
 // side by side from 100 columns, split by a vertical foul line and a space,
 // else the table over a foul line over the preview. A foul line and the
-// dugout line (with the filter error above it) close the screen.
+// dugout line (with the filter error above it) close the screen. An open
+// filter bar takes its rows at the top of the table section, pushing the
+// table down; stacked, those rows come out of the preview.
 type layout struct {
 	top            int // the first body row
-	tw, th         int // the table section, at (0, top); 0×0 while zoomed
+	ty             int // the table's first row: top, or below the filter bar
+	tw, th         int // the table section, at (0, ty); 0×0 while zoomed
 	px, py, pw, ph int // the preview section
 }
 
@@ -759,24 +762,29 @@ func (m *model) layout() layout {
 	if m.fltErr != "" {
 		bodyH--
 	}
-	l := layout{top: 3}
+	l := layout{top: 3, ty: 3}
+	bar := 0
+	if m.flt != nil && !m.zoom {
+		bar = filterH
+		l.ty += bar
+	}
 	switch {
 	case m.zoom:
 		l.py, l.pw, l.ph = l.top, m.w, bodyH
 	case m.w >= 100:
-		l.tw, l.th = m.w*11/20, bodyH
+		l.tw, l.th = m.w*11/20, bodyH-bar
 		l.px, l.py, l.pw, l.ph = l.tw+2, l.top, m.w-l.tw-2, bodyH
 	default:
 		// Part 1's share (2/5 of a body two lines taller) less the two lines
 		// of chrome it lacked, so the preview keeps every line it had.
 		l.tw, l.th = m.w, max(5, (bodyH+2)*2/5-2)
-		l.py, l.pw, l.ph = l.top+l.th+1, m.w, bodyH-l.th-1
+		l.py, l.pw, l.ph = l.ty+l.th+1, m.w, bodyH-bar-l.th-1
 	}
 	return l
 }
 
 func (l layout) inTable(x, y int) bool {
-	return x < l.tw && y >= l.top && y < l.top+l.th
+	return x < l.tw && y >= l.ty && y < l.ty+l.th
 }
 
 func (l layout) inPreview(x, y int) bool {
@@ -815,6 +823,9 @@ func (m *model) render() string {
 	onPv := m.focus == onPreview
 	if lay.tw > 0 {
 		table := m.tableView(lay.tw, lay.th)
+		if lay.ty > lay.top {
+			table = m.filterBar() + "\n" + table
+		}
 		if lay.px > 0 {
 			div := strings.Join(vfoul(lay.ph, onPv), " \n") + " "
 			body = lipgloss.JoinHorizontal(lipgloss.Top, table, div, body)
@@ -831,9 +842,6 @@ func (m *model) render() string {
 		screen += "\n" + m.filterErrLine()
 	}
 	screen += "\n" + m.dugout()
-	if m.flt != nil {
-		screen = overlayAt(screen, m.filterBar(), m.w, lay.top, false)
-	}
 	if m.dlg != nil {
 		screen = overlay(screen, m.dlg.view(m.w), m.w, m.h)
 	}
@@ -935,7 +943,7 @@ func (m *model) click(mo tea.Mouse) tea.Cmd {
 	switch {
 	case lay.inTable(mo.X, mo.Y):
 		m.leavePreview()
-		m.at().rows.click(mo.Y - lay.top)
+		m.at().rows.click(mo.Y - lay.ty)
 		m.syncMain()
 	case lay.inPreview(mo.X, mo.Y):
 		var cmd tea.Cmd

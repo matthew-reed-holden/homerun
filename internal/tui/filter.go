@@ -19,8 +19,8 @@ func (m *model) openFilter() {
 	m.sizeFilter()
 }
 
-// filterW is the filter box's width, its border included.
-func filterW(w int) int { return min(max(20, w-4), 100) }
+// filterH is the filter bar's height: the query between two border lines.
+const filterH = 3
 
 // sizeFilter fits the bar to the screen: the clay search icon, then the
 // scope homerun adds, dim and outside the input so no key can edit it, then
@@ -30,7 +30,7 @@ func (m *model) sizeFilter() {
 	if m.flt == nil {
 		return
 	}
-	inner := filterW(m.w) - 4
+	inner := m.layout().tw - 5
 	scope := "is:pr repo:" + termsafe.Line(m.repo().Name) + " "
 	if inner-ansi.StringWidth(scope)-3 < 20 {
 		scope = truncate("is:pr repo:…/"+termsafe.Line(repoShort(m.repo().Name)), inner-24) + " "
@@ -62,10 +62,12 @@ func (m *model) filterKey(k tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
-// filterBar is the floating query box, drawn over the top of the body.
+// filterBar is the query box across the table it sits on, a space short of
+// the foul line, as the table's rows are.
 func (m *model) filterBar() string {
 	m.sizeFilter()
-	return clayBox(filterW(m.w)).Render(m.flt.View())
+	box := clayBox(m.layout().tw - 1).Render(m.flt.View())
+	return strings.ReplaceAll(box, "\n", " \n") + " "
 }
 
 // filterHints is the dugout line's left side while the bar is open.

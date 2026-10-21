@@ -57,22 +57,15 @@ func clayBox(w int) lipgloss.Style {
 	return lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(th.p.clay).Padding(0, 1).Width(w)
 }
 
-// overlay draws fg centred on bg, a full w×h screen, and dims what it covers.
+// overlay draws fg centred on bg, a full w×h screen, and dims what it
+// covers, which then reads as the dialog's backdrop.
 func overlay(bg, fg string, w, h int) string {
-	return overlayAt(bg, fg, w, max(0, (h-lipgloss.Height(fg))/2), true)
-}
-
-// overlayAt draws fg centred across bg with its top at row y; dim greys the
-// screen behind it, which then reads as the dialog's backdrop.
-func overlayAt(bg, fg string, w, y int, dim bool) string {
 	bl := strings.Split(bg, "\n")
-	if dim {
-		for i, b := range bl {
-			bl[i] = th.dim.Faint(true).Render(ansi.Strip(b))
-		}
+	for i, b := range bl {
+		bl[i] = th.dim.Faint(true).Render(ansi.Strip(b))
 	}
 	fl := strings.Split(fg, "\n")
-	x := max(0, (w-lipgloss.Width(fg))/2)
+	x, y := max(0, (w-lipgloss.Width(fg))/2), max(0, (h-len(fl))/2)
 	for i, f := range fl {
 		if y+i >= len(bl) {
 			break

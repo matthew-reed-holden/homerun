@@ -505,3 +505,39 @@ func TestFilterLongRepoFits(t *testing.T) {
 		}
 	}
 }
+
+// The filter bar sits on top of the table and pushes it down: the table's
+// title and the selected PR stay in view, wide and stacked.
+func TestFilterBarPushesTable(t *testing.T) {
+	for _, sz := range [][2]int{{120, 40}, {80, 24}} {
+		m := searchModel(t, &pr.Fake{Results: e2eResults(e2eResult())})
+		m.Update(tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
+		keysIn(m, "/")
+		lay := m.layout()
+		lines := strings.Split(ansi.Strip(m.render()), "\n")
+		if len(lines) != sz[1] {
+			t.Fatalf("%v: %d lines", sz, len(lines))
+		}
+		if !strings.HasPrefix(lines[lay.top], "┌") || !strings.Contains(lines[lay.top+1], "is:pr repo:o/e2e is:open author:@me") {
+			t.Fatalf("%v: bar not at the table's top:\n%s", sz, strings.Join(lines, "\n"))
+		}
+		if l := lines[lay.ty]; !strings.HasPrefix(l, "is:open author:@me") {
+			t.Fatalf("%v: table title overdrawn: %q", sz, l)
+		}
+		var sel bool
+		for _, l := range lines[lay.ty : lay.ty+lay.th] {
+			sel = sel || strings.HasPrefix(l, "▌") && strings.Contains(l, "#1")
+		}
+		if !sel {
+			t.Fatalf("%v: selected PR hidden:\n%s", sz, strings.Join(lines, "\n"))
+		}
+		for i, l := range lines {
+			if w := ansi.StringWidth(l); w > sz[0] {
+				t.Fatalf("%v: line %d is %d cells", sz, i, w)
+			}
+		}
+		if d := ansi.Strip(m.dugout()); !strings.HasPrefix(d, "enter apply") || !strings.HasSuffix(d, "? help") {
+			t.Fatalf("%v: dugout %q", sz, d)
+		}
+	}
+}
