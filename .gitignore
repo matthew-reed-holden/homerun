@@ -14,3 +14,4 @@ dist/
 # Local agent scratch
 .superpowers/
 .worktrees/
+.playwright-mcp/
