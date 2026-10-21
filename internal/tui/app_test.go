@@ -288,8 +288,8 @@ func TestStackedBelow100(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 90, Height: 30})
 	lines := strings.Split(screen(m), "\n")
 	lay := m.layout()
-	if !strings.HasPrefix(lines[lay.top], "╭─is:open author:@me─") || !strings.HasSuffix(lines[lay.top], "╮") ||
-		!strings.HasPrefix(lines[lay.py], "╭─#1 e2e PR") || lay.th != 10 || lay.ph != 17 {
+	if !strings.HasPrefix(lines[lay.top], "is:open author:@me") || !strings.HasPrefix(lines[lay.py-1], "╌╌╌") ||
+		!strings.HasPrefix(lines[lay.py], "#1 e2e PR") || lay.th != 9 || lay.ph != 15 || !strings.HasSuffix(lines[29], "? help") {
 		t.Fatalf("layout %+v:\n%s", lay, strings.Join(lines, "\n"))
 	}
 }
@@ -403,11 +403,19 @@ func TestClickBounds(t *testing.T) {
 	m.Update(stateMsg{&st})
 	keysIn(m, "4")
 	lay := m.layout()
-	m.click(tea.Mouse{X: 5, Y: lay.top + lay.th - 1, Button: tea.MouseLeft}) // table bottom border
-	if m.at().rows.cur != 0 {
-		t.Fatalf("border click selected %d", m.at().rows.cur)
+	for _, y := range []int{lay.top, lay.top + 1, lay.top + lay.th, lay.top + lay.th + 1} { // title, column head, foul line, dugout line
+		m.click(tea.Mouse{X: 5, Y: y, Button: tea.MouseLeft})
+		if m.at().rows.cur != 0 {
+			t.Fatalf("click at y=%d selected %d", y, m.at().rows.cur)
+		}
 	}
-	for _, y := range []int{lay.py + lay.ph - 1, lay.py + lay.ph} { // preview bottom border, key bar
+	m.click(tea.Mouse{X: 5, Y: lay.top + lay.th - 1, Button: tea.MouseLeft}) // the last row in view
+	if want := lay.th - 3; m.at().rows.cur != want {
+		t.Fatalf("last row click selected %d, want %d", m.at().rows.cur, want)
+	}
+	m.at().rows.home()
+	m.syncMain()
+	for _, y := range []int{lay.py, lay.py + lay.ph, lay.py + lay.ph + 1} { // title, foul line, dugout line
 		m.click(tea.Mouse{X: lay.px + 5, Y: y, Button: tea.MouseLeft})
 		if m.tree.cur != 0 {
 			t.Fatalf("click at y=%d moved tree to %d", y, m.tree.cur)
@@ -546,16 +554,17 @@ func TestActionErrorShowsStatus(t *testing.T) {
 func TestMouseSelects(t *testing.T) {
 	m, _ := newTestModel(t)
 	keysIn(m, "5", "tab")
-	// 120×40: the table's top border is row 2, its column head row 3, so row 5 is the second run.
-	m.Update(tea.MouseClickMsg{X: 3, Y: 5, Button: tea.MouseLeft})
+	// 120×40: the strip, bases and foul line are rows 0-2, the table's title row 3,
+	// its column head row 4, so row 6 is the second run.
+	m.Update(tea.MouseClickMsg{X: 3, Y: 6, Button: tea.MouseLeft})
 	if m.focus != onTable || m.at().rows.cur != 1 {
 		t.Fatalf("click: focus %d cur %d", m.focus, m.at().rows.cur)
 	}
-	m.Update(tea.MouseWheelMsg{X: 3, Y: 5, Button: tea.MouseWheelDown})
+	m.Update(tea.MouseWheelMsg{X: 3, Y: 6, Button: tea.MouseWheelDown})
 	if m.at().rows.cur != 2 {
 		t.Fatalf("wheel: cur %d", m.at().rows.cur)
 	}
-	m.Update(tea.MouseClickMsg{X: 80, Y: 4, Button: tea.MouseLeft})
+	m.Update(tea.MouseClickMsg{X: 80, Y: 5, Button: tea.MouseLeft})
 	if m.focus != onPreview {
 		t.Fatal("click into the preview")
 	}
@@ -1002,12 +1011,15 @@ func TestStaleBannerShowsFailedRehost(t *testing.T) {
 	m := hostModel(t, Options{Host: func() (bool, error) { return false, nil }, Hosting: hosting(false)})
 	m.Update(errMsg{errors.New("unreachable")})
 	m.Update(hostMsg{err: errors.New("act not found\x1b[2J on PATH")})
-	out := m.banner()
+	out := m.strip()
 	if strings.Contains(out, "\x1b[2J") {
-		t.Fatalf("unsafe banner: %q", out)
+		t.Fatalf("unsafe strip: %q", out)
 	}
-	if plain := ansi.Strip(out); !strings.Contains(plain, "stale: daemon unreachable (since 0s) · could not start: act not found on PATH · ctrl+r retries") {
+	if plain := m.engineWarn(); !strings.Contains(plain, "stale: daemon unreachable (since 0s) · could not start: act not found on PATH · ctrl+r retries") {
 		t.Fatalf("banner: %q", plain)
+	}
+	if d := ansi.Strip(m.dugout()); !strings.HasPrefix(d, "ctrl+r retry · ") {
+		t.Fatalf("dugout %q", d)
 	}
 }
 

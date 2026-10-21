@@ -2,7 +2,7 @@ package tui
 
 import "charm.land/bubbles/v2/key"
 
-// keyMap holds every binding once; the key bar and the help popup are both
+// keyMap holds every binding once; the dugout line and the help popup are both
 // generated from it, so they cannot disagree with what the keys do.
 type keyMap struct {
 	PrevTab, NextTab, Tab, Tabs, Next, Prev, Into, Back  key.Binding
@@ -19,7 +19,7 @@ func bind(help, desc string, ks ...string) key.Binding {
 var keys = keyMap{
 	PrevTab:   key.NewBinding(key.WithKeys("[")),
 	NextTab:   key.NewBinding(key.WithKeys("]")),
-	Tabs:      bind("[ ]", "tabs", "[", "]"), // for the bar and help; PrevTab and NextTab do the switching
+	Tabs:      bind("[ ]", "tabs", "[", "]"), // for the dugout line and help; PrevTab and NextTab do the switching
 	Tab:       bind("1-9", "tab", "1", "2", "3", "4", "5", "6", "7", "8", "9"),
 	Next:      bind("tab", "table/preview", "tab"),
 	Prev:      bind("shift+tab", "table/preview", "shift+tab"),
@@ -64,18 +64,19 @@ const (
 	inLog
 )
 
+// bar is the dugout line's hints for c; the line adds ? help itself.
 func (k keyMap) bar(c barCtx) []key.Binding {
 	switch c {
 	case inTablePR:
-		return []key.Binding{k.Tabs, k.Into, k.Rerun, k.Cancel, k.Merge, k.Update, k.Open, k.Repo, k.Help, k.Quit}
+		return []key.Binding{k.Tabs, k.Into, k.Rerun, k.Cancel, k.Merge, k.Update, k.Open, k.Repo, k.Quit}
 	case inPreviewOverview:
-		return []key.Binding{k.Tabs, k.Merge, k.Update, k.Comment, k.Open, k.Back, k.Help, k.Quit}
+		return []key.Binding{k.Tabs, k.Merge, k.Update, k.Comment, k.Open, k.Back, k.Quit}
 	case inPreviewChecks:
-		return []key.Binding{k.Tabs, k.Enter, k.Fold, k.Rerun, k.Cancel, k.Open, k.Back, k.Help, k.Quit}
+		return []key.Binding{k.Tabs, k.Enter, k.Fold, k.Rerun, k.Cancel, k.Open, k.Back, k.Quit}
 	case inLog:
-		return []key.Binding{k.Search, k.NextMatch, k.NextFail, k.Follow, k.Zoom, k.Esc, k.Help}
+		return []key.Binding{k.Search, k.NextMatch, k.NextFail, k.Follow, k.Zoom, k.Esc}
 	}
-	return []key.Binding{k.Tabs, k.Into, k.Rerun, k.Cancel, k.Copy, k.Open, k.Repo, k.Help, k.Quit}
+	return []key.Binding{k.Tabs, k.Into, k.Rerun, k.Cancel, k.Copy, k.Open, k.Repo, k.Quit}
 }
 
 func (k keyMap) groups() [][]key.Binding {

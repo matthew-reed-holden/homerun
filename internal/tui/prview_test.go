@@ -110,8 +110,8 @@ func TestEnterWithoutPRsKeepsInto(t *testing.T) {
 	if m.pr != nil || m.focus != onPreview {
 		t.Fatalf("pr %v focus %d", m.pr, m.focus)
 	}
-	if !strings.Contains(ansi.Strip(m.bar()), "PR tabs off: gh: not logged in. Run gh auth login or set user_token.") {
-		t.Fatalf("bar %q", ansi.Strip(m.bar()))
+	if !strings.Contains(barText(m), "PR tabs off: gh: not logged in. Run gh auth login or set user_token.") {
+		t.Fatalf("bar %q", barText(m))
 	}
 }
 
@@ -225,7 +225,7 @@ func TestDetailErrorShowsInPage(t *testing.T) {
 
 func TestPRKeysByContext(t *testing.T) {
 	m, _ := prOpenModel(t, detailFixture())
-	bar := ansi.Strip(m.bar())
+	bar := barText(m)
 	for _, want := range []string{"[ ] tabs", "m merge", "u update", "c comment", "o open", "h table", "?", "q"} {
 		if !strings.Contains(bar, want) {
 			t.Fatalf("Overview bar %q lacks %q", bar, want)
@@ -254,7 +254,7 @@ func TestPRKeysByContext(t *testing.T) {
 	if m.pr.section != 1 {
 		t.Fatal("] to Checks")
 	}
-	bar = ansi.Strip(m.bar())
+	bar = barText(m)
 	for _, want := range []string{"enter log", "space fold", "r rerun", "x cancel", "o open", "h table"} {
 		if !strings.Contains(bar, want) {
 			t.Fatalf("Checks bar %q lacks %q", bar, want)
@@ -460,7 +460,7 @@ func TestChecksSection(t *testing.T) {
 
 func TestChecksSectionKeys(t *testing.T) {
 	m, fd := checksModel(t)
-	if bar := ansi.Strip(m.bar()); !strings.Contains(bar, "fold") || !strings.Contains(bar, "rerun") || !strings.Contains(bar, "cancel") {
+	if bar := barText(m); !strings.Contains(bar, "fold") || !strings.Contains(bar, "rerun") || !strings.Contains(bar, "cancel") {
 		t.Fatalf("bar %q", bar)
 	}
 	var opened []string
@@ -662,7 +662,7 @@ func TestSummaryCappedOnShortTerminal(t *testing.T) {
 	if sources < 0 || sources > 6 {
 		t.Fatalf("summary is %d rows:\n%s", sources, strings.Join(head, "\n"))
 	}
-	if left := lay.ph - 2 - len(head); left < 3 {
+	if left := lay.ph - 1 - len(head); left < 3 { // 1: the title
 		t.Fatalf("tree keeps %d rows:\n%s", left, strings.Join(head, "\n"))
 	}
 	if !strings.HasPrefix(head[0], "#1 e2e PR") || head[sources-1] == "" {

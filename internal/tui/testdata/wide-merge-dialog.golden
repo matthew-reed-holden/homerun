@@ -1,40 +1,40 @@
-homerun  repo o/e2e ▾                                                                            engine: client · 1 runs
-1 My PRs 2 · 2 Review requested 2 · 3 All open 2 · 4 Branches 1 · 5 Runs 3                                              
-╭─is:open author:@me─────────────────────────────────────────────╮╭─#1─────────────────────────────────────────────────╮
-│     #  Title                            CI        Rev ↓    Age ││Overview  Checks 2/4                                │
-│✘    1  e2e PR                           ✘ 1/2              5m  ││#1 e2e PR  @matt · feat → main                      │
-│◇    2  typo fix                         ·                  3h  ││✔ no conflicts                                      │
-│                                                                ││Checks ✔ 1 passed · ◌ 1 pending                     │
-│                                                                ││Reviews: approved · Files 3 (+40 −7) · 💬 1         │
-│                                                                ││Open                                                │
-│                                                                ││────────────────────────────────────────────────────│
-│                                                                ││                                                    │
-│                                                                ││ Heading                                            │
-│                                                                ││                                                    │
-│                                                                ││Makes the thing b optional.                         │
-│                                                                ││                                                    │
-│                                                                ││Timeline                                            │
-│                         ╭─────────────────────────────────────────────────────────────────╮ · 2h ago                 │
-│                         │ Merge #1 into main?                                             │                          │
-│                         │                                                                 │                          │
-│                         │ ○ Create a merge commit  ● Squash and merge  ○ Rebase and merge │                          │
-│                         │                                                                 │                          │
-│                         │ [tab] switch · [y] merge · any other key cancels                │                          │
-│                         ╰─────────────────────────────────────────────────────────────────╯                          │
-│                                                                ││✔ lint required                                     │
-│                                                                ││⟳ build                                             │
-│                                                                ││                                                    │
-│                                                                ││Merge                                               │
-│                                                                ││✔ Ready to merge                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-╰────────────────────────────────────────────────────────────────╯╰────────────────────────────────────────────────────╯
-[ ] tabs • m merge • u update branch • c comment • o open • h table • ? help • q quit
+HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 ·  client                                                                     
+◆ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◇ 5 Runs 3                                        
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+is:open author:@me                                                ╎ #1                                                  
+      #  Title                            CI        Rev ↓    Age  ╎ Overview  Checks 2/4                                
+▌✘    1  e2e PR                           ✘ 1/2              5m   ╎ #1 e2e PR  @matt · feat → main                      
+ ◇    2  typo fix                         ·                  3h   ╎ ✔ no conflicts                                      
+                                                                  ╎ Checks ✔ 1 passed · ◌ 1 pending                     
+                                                                  ╎ Reviews: approved · Files 3 (+40 −7) · 💬 1         
+                                                                  ╎ Open                                                
+                                                                  ╎ ──────────────────────────────────────────────────  
+                                                                  ╎                                                     
+                                                                  ╎  Heading                                            
+                                                                  ╎                                                     
+                                                                  ╎ Makes the thing b optional.                         
+                                                                  ╎                                                     
+                          ╭─────────────────────────────────────────────────────────────────╮                           
+                          │ Merge #1 into main?                                             │t · 2h ago                 
+                          │                                                                 │                           
+                          │ ○ Create a merge commit  ● Squash and merge  ○ Rebase and merge │                           
+                          │                                                                 │                           
+                          │ [tab] switch · [y] merge · any other key cancels                │                           
+                          ╰─────────────────────────────────────────────────────────────────╯                           
+                                                                  ╎ Checks                                              
+                                                                  ╎ ✔ lint required                                     
+                                                                  ╎ ⟳ build                                             
+                                                                  ╎                                                     
+                                                                  ╎ Merge                                               
+                                                                  ╎ ✔ Ready to merge                                    
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+[ ] tabs · m merge · u update branch · c comment · o open · h table · q quit                             PR 1/2   ? help

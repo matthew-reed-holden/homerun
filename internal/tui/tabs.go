@@ -13,6 +13,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/matthew-reed-holden/homerun/internal/api"
 	"github.com/matthew-reed-holden/homerun/internal/pr"
 	"github.com/matthew-reed-holden/homerun/internal/termsafe"
@@ -608,7 +609,7 @@ func (m *model) runRows(w int) []entry {
 // tableRows rebuilds every tab's rows, title and column header for the table pane's width.
 func (m *model) tableRows() {
 	r := m.repo()
-	w := max(1, m.layout().tw-4) // borders, icon and its space
+	w := max(1, m.layout().tw-4) // the gutter, icon and its space, and a space before the foul line
 	for i := range m.tabs {
 		t := &m.tabs[i]
 		switch t.kind {
@@ -617,17 +618,17 @@ func (m *model) tableRows() {
 			if at := t.at[r.Name]; t.err != "" && !at.IsZero() {
 				t.rows.title += " · results from " + at.Format("15:04")
 			}
-			t.rows.head = th.dim.Render("  " + m.prLine(w, "#", "Title", "CI", "Rev", "↓", "Age"))
+			t.rows.head = th.dim.Render("   " + m.prLine(w, "#", "Title", "CI", "Rev", "↓", "Age"))
 			t.rows.empty = nil
 			if res, ok := t.res[r.Name]; ok && res.Total == 0 {
 				t.rows.empty = m.emptyLines(i)
 			}
 			t.rows.set(m.prRows(t, w))
 		case tabBranches:
-			t.rows.title, t.rows.head = "branches homerun runs", th.dim.Render("  "+branchLine(w, "Branch", "SHA", "Checks", "Age"))
+			t.rows.title, t.rows.head = "branches homerun runs", th.dim.Render("   "+branchLine(w, "Branch", "SHA", "Checks", "Age"))
 			t.rows.set(m.branchRows(r, w))
 		case tabRuns:
-			t.rows.title, t.rows.head = "runs, newest first", th.dim.Render("  "+runLine(w, "Target", "SHA", "Status", "Took", "Age"))
+			t.rows.title, t.rows.head = "runs, newest first", th.dim.Render("   "+runLine(w, "Target", "SHA", "Status", "Took", "Age"))
 			t.rows.set(m.runRows(w))
 		}
 	}
@@ -656,53 +657,182 @@ func (m *model) tabCount(i int) (int, bool) {
 	return len(t.rows.rows), m.connected
 }
 
-// tabRow is "1 My PRs 3 · 2 Review requested · …", the active tab reversed and
-// the PR tabs struck through while they are off.
-func (m *model) tabRow() string {
+// bases is the tab row: ◆ in clay on the active tab, ◇ on the others, counts
+// in amber, and the PR tabs struck through while they are off.
+func (m *model) bases() string {
 	var parts []string
 	for i, t := range m.tabs {
-		l := fmt.Sprintf("%d %s", i+1, termsafe.Line(t.name))
-		if n, ok := m.tabCount(i); ok {
-			l += fmt.Sprintf(" %d", n)
-		}
-		st := lipgloss.NewStyle()
-		if m.off(i) {
-			st = st.Strikethrough(true)
-		}
+		mark, label := th.line.Render("◇"), th.dim
 		if i == m.tab {
-			st = st.Reverse(true).Bold(true)
+			mark, label = th.clay.Render("◆"), th.fg.Bold(true)
 		}
-		parts = append(parts, st.Render(l))
+		if m.off(i) {
+			label = label.Strikethrough(true)
+		}
+		l := mark + " " + label.Render(fmt.Sprintf("%d %s", i+1, termsafe.Line(t.name)))
+		if n, ok := m.tabCount(i); ok {
+			l += " " + th.amber.Render(strconv.Itoa(n))
+		}
+		parts = append(parts, l)
 	}
-	return fit(strings.Join(parts, th.dim.Render(" · ")), m.w)
+	return fit(strings.Join(parts, "  "), m.w)
 }
 
-// header is homerun, the picked repo, and the engine with its active runs.
-func (m *model) header() string {
-	name := termsafe.Line(m.repo().Name)
-	if name == "" {
-		name = "no repo"
-	}
-	left := th.bold.Render("homerun") + "  " + th.dim.Render("repo") + " " + name + " ▾"
-	n := 0
-	for _, r := range m.repoRuns() {
-		if live(r.Status) {
-			n++
+// lineScore is the strip's numbers for the picked repo: the PR tab's result
+// count ("–" without a token, "…" before it lands), runs queued or running,
+// and finished runs passed and failed. A cancelled run counts in neither.
+func (m *model) lineScore() (prs, runs, pass, fail string) {
+	prs = "–"
+	if m.o.PRs != nil {
+		prs = "…"
+		t := m.at()
+		if t.kind != tabSearch {
+			t = &m.tabs[0] // the PR tabs come first
+		}
+		if res, ok := t.res[m.repo().Name]; ok && t.kind == tabSearch {
+			prs = strconv.Itoa(res.Total)
 		}
 	}
-	right := fmt.Sprintf("engine: client · %d runs", n)
+	var r, p, f int
+	for _, run := range m.repoRuns() {
+		switch {
+		case live(run.Status), run.Status == "requeue":
+			r++
+		case run.Status == "done":
+			switch Rollup(run.Checks) {
+			case "✔":
+				p++
+			case "✘":
+				f++
+			}
+		}
+	}
+	return prs, strconv.Itoa(r), strconv.Itoa(p), strconv.Itoa(f)
+}
+
+// warning is one note at the strip's right end.
+type warning struct {
+	text string
+	st   lipgloss.Style
+}
+
+// warnings are the strip's right end: the engine down, PR tabs off, the rate
+// limit, then a status said in the last five seconds.
+func (m *model) warnings() []warning {
+	var out []warning
+	if m.err != nil {
+		out = append(out, warning{m.engineWarn(), th.out})
+	}
+	for _, s := range []string{m.prOff(), m.rateLine()} {
+		if s != "" {
+			out = append(out, warning{s, th.lights})
+		}
+	}
+	if m.status != "" && m.now().Sub(m.statusAt) < 5*time.Second {
+		out = append(out, warning{m.status, th.dim})
+	}
+	return out
+}
+
+// engineWarn says the engine is unreachable and since when, and why hosting it failed.
+func (m *model) engineWarn() string {
+	warn := "stale: daemon unreachable (since " + dur(m.now().Sub(m.errSince)) + ")"
+	if m.hostErr != nil {
+		warn += " · could not start: " + termsafe.Line(m.hostErr.Error()) + " · ctrl+r retries"
+	}
+	return warn
+}
+
+// minRepo is as far as the strip truncates the repo name.
+const minRepo = 8
+
+// strip is the scoreboard: HOMERUN, the picked repo, the line score with the
+// engine light, and the warnings at the right end. When it does not fit, the
+// repo truncates first, then ✔ ✘ drops, then PRs and RUNS; the engine light
+// and the warnings stay, a long warning truncated with ….
+func (m *model) strip() string {
+	engine := th.safe.Render(ic("engine")) + " " + th.dim.Render("client")
 	switch {
-	case m.err != nil:
-		right = "engine: unreachable"
+	case m.err != nil: // the warning says the rest
+		engine = th.out.Render(ic("engine"))
 	case m.hosting():
-		right = fmt.Sprintf("engine: hosted here · %d runs", n)
+		engine = th.safe.Render(ic("engine")) + " " + th.dim.Render("hosted here")
 	}
-	right = th.dim.Render(right)
-	gap := m.w - lipgloss.Width(left) - lipgloss.Width(right)
-	if gap < 2 {
-		return fit(left+"  "+right, m.w)
+	name := termsafe.Line(m.repo().Name)
+	prs, runs, pass, fail := m.lineScore()
+	left := func(repo string, score, pf bool) string {
+		parts := []string{th.clay.Bold(true).Render("HOMERUN")}
+		if name == "" {
+			return strings.Join(append(parts, engine), "  ")
+		}
+		parts = append(parts, th.fg.Render(repo))
+		ls := ""
+		if score {
+			ls = th.dim.Render("PRs ") + th.amber.Render(prs) + th.dim.Render(" · RUNS ") + th.amber.Render(runs) + th.dim.Render(" · ")
+			if pf {
+				ls += th.safe.Render(ic("ci-pass")) + " " + th.amber.Render(pass) + " " + th.out.Render(ic("ci-fail")) + " " + th.amber.Render(fail) + th.dim.Render(" · ")
+			}
+		}
+		return strings.Join(append(parts, ls+engine), "  ")
 	}
-	return left + strings.Repeat(" ", gap) + right
+	ws := m.warnings()
+	warnW := 0
+	for i, w := range ws {
+		warnW += ansi.StringWidth(w.text)
+		if i > 0 {
+			warnW += 2
+		}
+	}
+	gap := 0
+	if warnW > 0 {
+		gap = 2
+	}
+	l := ""
+	for _, c := range []struct{ score, pf bool }{{true, true}, {true, false}, {false, false}} {
+		room := m.w - (ansi.StringWidth(left(name, c.score, c.pf)) - ansi.StringWidth(name)) - gap - warnW
+		if room >= min(ansi.StringWidth(name), minRepo) {
+			l = left(truncate(name, room), c.score, c.pf)
+			break
+		}
+	}
+	if l == "" {
+		l = left(truncate(name, minRepo), false, false)
+		shrink(ws, m.w-ansi.StringWidth(l)-gap)
+	}
+	var right []string
+	for _, w := range ws {
+		if w.text != "" {
+			right = append(right, w.st.Render(w.text))
+		}
+	}
+	r := strings.Join(right, "  ")
+	pad := max(gap, m.w-ansi.StringWidth(l)-ansi.StringWidth(r))
+	return litRow(fit(l+strings.Repeat(" ", pad)+r, m.w), th.p.strip)
+}
+
+// shrink truncates the longest warnings, one cell at a time, until all of
+// them and the gaps between fit in room.
+func shrink(ws []warning, room int) {
+	total := func() int {
+		n := 2 * max(0, len(ws)-1)
+		for _, w := range ws {
+			n += ansi.StringWidth(w.text)
+		}
+		return n
+	}
+	for total() > room {
+		long := 0
+		for i, w := range ws {
+			if ansi.StringWidth(w.text) > ansi.StringWidth(ws[long].text) {
+				long = i
+			}
+		}
+		n := ansi.StringWidth(ws[long].text)
+		if n <= 1 {
+			return
+		}
+		ws[long].text = truncate(ws[long].text, n-1)
+	}
 }
 
 // searchURL is the active search on GitHub, with homerun's repo scope.

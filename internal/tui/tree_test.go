@@ -155,12 +155,12 @@ func TestFailedJobRowNamesStep(t *testing.T) {
 	}
 }
 
-// treeRows is the tree's inner lines, without the frame.
+// treeRows is the tree's body lines, below the title, without the gutter.
 func treeRows(out string) []string {
 	ls := strings.Split(ansi.Strip(out), "\n")
-	ls = ls[1 : len(ls)-1]
+	ls = ls[1:]
 	for i, l := range ls {
-		ls[i] = strings.TrimSpace(strings.Trim(l, "│"))
+		ls[i] = strings.TrimSpace(strings.TrimPrefix(l, "▌"))
 	}
 	return ls
 }
@@ -222,20 +222,20 @@ func TestScrollCountsTwoLineJobs(t *testing.T) {
 		tr.open[cs[n].Name] = false
 	}
 	tr.end()
-	r := treeRows(tr.view("t", 40, 7, now, true)) // 5 lines: room for two whole jobs
+	r := treeRows(tr.view("t", 40, 6, now, true)) // 5 lines: room for two whole jobs
 	if len(r) != 5 || !strings.Contains(r[0], "j4") || !strings.Contains(r[2], "j5") || r[3] != "why j5" {
 		t.Fatalf("cursor job not fully shown: %q", r)
 	}
 	tr.move(-1)
-	if r := treeRows(tr.view("t", 40, 7, now, true)); !strings.Contains(strings.Join(r, "\n"), "why j4") {
+	if r := treeRows(tr.view("t", 40, 6, now, true)); !strings.Contains(strings.Join(r, "\n"), "why j4") {
 		t.Fatalf("j4: %q", r)
 	}
 	tr.home()
-	if r := treeRows(tr.view("t", 40, 7, now, true)); !strings.Contains(r[0], "j1") || r[1] != "why j1" {
+	if r := treeRows(tr.view("t", 40, 6, now, true)); !strings.Contains(r[0], "j1") || r[1] != "why j1" {
 		t.Fatalf("top: %q", r)
 	}
 	tr.end()
-	tr.view("t", 40, 7, now, true)
+	tr.view("t", 40, 6, now, true)
 	tr.click(3) // j5's row
 	if c, _, _ := tr.selected(); c.Name != "j5" {
 		t.Fatalf("scrolled click selected %s", c.Name)

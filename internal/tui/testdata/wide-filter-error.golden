@@ -1,40 +1,40 @@
-homerun  repo o/e2e ▾                                                                            engine: client · 1 runs
-1 My PRs 2 · 2 Review requested 2 · 3 All open 2 · 4 Branches 1 · 5 Runs 3                                              
-╭─is:open author:@me─────────────────────────────────────────────╮╭─#1 e2e PR · d954af8 · @matt · 5m ago───────────────╮
-│     #  Title                            CI        Rev ↓    Age ││#1 e2e PR  @matt · feat → main                      │
-│✘    1  e2e PR                           ✘ 1/2              5m  ││Checks none                                         │
-│◇    2  typo fix                         ·                  3h  ││Reviews: none · Files 0 (+0 −0) · 💬 0              │
-│                                                                ││2 homerun                                           │
-│                                                                ││────────────────────────────────────────────────────│
-│                                                                ││✔ CI / pass homerun                               4s│
-│                                                                ││✘ CI / fail homerun — echo bad; exit 1            3s│
-│                                                                ││  exit status 1                                     │
-│                                                                ││  ✔ Set up job                                    1s│
-│                                                                ││  ✘ echo bad; exit 1                              0s│
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-│                                                                ││                                                    │
-╰────────────────────────────────────────────────────────────────╯╰────────────────────────────────────────────────────╯
-[ ] tabs • l/enter preview • r rerun • x cancel • m merge • u update branch • o open • R repo • ? help • q quit
+HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 ·  client                                                                     
+◆ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◇ 5 Runs 3                                        
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+is:open author:@me                                                ╎ #1 e2e PR · d954af8 · @matt · 5m ago                
+      #  Title                            CI        Rev ↓    Age  ╎ #1 e2e PR  @matt · feat → main                      
+▌✘    1  e2e PR                           ✘ 1/2              5m   ╎ Checks none                                         
+ ◇    2  typo fix                         ·                  3h   ╎ Reviews: none · Files 0 (+0 −0) · 💬 0              
+                                                                  ╎ 2 homerun                                           
+                                                                  ╎ ──────────────────────────────────────────────────  
+                                                                  ╎  ✔ CI / pass homerun                             4s 
+                                                                  ╎  ✘ CI / fail homerun — echo bad; exit 1          3s 
+                                                                  ╎    exit status 1                                    
+                                                                  ╎    ✔ Set up job                                  1s 
+                                                                  ╎    ✘ echo bad; exit 1                            0s 
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+                                                                  ╎                                                     
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
 ✘ GitHub rejected the query: github: Invalid search query. The tab kept its old query.
+[ ] tabs · l/enter preview · r rerun · x cancel · m merge · u update branch · o open · R repo · q quit   PR 1/2   ? help

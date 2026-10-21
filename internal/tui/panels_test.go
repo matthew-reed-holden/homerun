@@ -34,9 +34,10 @@ func rows(n int) []entry {
 	return out
 }
 
-func TestFrameIsExactSize(t *testing.T) {
-	dims(t, frame("1 Repos", []string{"a", "a much longer line than fits in the box"}, 20, 5, true), 20, 5)
-	dims(t, frame("a title far longer than the box is wide", nil, 12, 3, false), 12, 3)
+func TestSectionIsExactSize(t *testing.T) {
+	dims(t, section("1 Repos", []string{"a", "a much longer line than fits in the box"}, 20, 5, true), 20, 5)
+	dims(t, section("a title far longer than the box is wide", nil, 12, 3, false), 12, 3)
+	dims(t, section("rows past h", []string{"a", "b", "c", "d"}, 12, 3, false), 12, 3)
 }
 
 func TestListScrollsToCursor(t *testing.T) {

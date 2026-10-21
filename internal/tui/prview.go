@@ -213,7 +213,7 @@ func (m *model) prKey(k tea.KeyPressMsg) tea.Cmd {
 
 func (m *model) overviewKey(k tea.KeyPressMsg) tea.Cmd {
 	lay := m.layout()
-	m.syncPage(lay.pw-2, lay.ph-3)
+	m.syncPage(lay.pw-2, lay.ph-2)
 	vp := &m.pr.vp
 	switch {
 	case key.Matches(k, keys.Down):
@@ -269,7 +269,7 @@ func (m *model) chips() string {
 // prPreviewView is the preview inside a PR: the chips, then the active tab.
 func (m *model) prPreviewView(w, h int) string {
 	focused := m.focus == onPreview
-	inner := max(0, h-3)
+	inner := max(0, h-2) // the title and the chips
 	lines := []string{m.chips()}
 	if m.pr.section == 0 {
 		m.syncPage(w-2, inner)
@@ -279,7 +279,7 @@ func (m *model) prPreviewView(w, h int) string {
 		lines = append(lines, head...)
 		lines = append(lines, m.tree.rows(w, max(0, inner-len(head)), m.now(), focused)...)
 	}
-	return frame(fmt.Sprintf("#%d", m.pr.number), lines, w, h, focused)
+	return section(fmt.Sprintf("#%d", m.pr.number), lines, w, h, focused)
 }
 
 // checksHead is what the Checks tab shows above the tree: the doubled and

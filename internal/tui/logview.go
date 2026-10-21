@@ -153,14 +153,14 @@ func (l *logView) find(dir int) bool {
 }
 
 func (l *logView) view(title string, w, h int, focused bool) string {
-	l.h = max(1, h-3) // borders and the status line
+	l.h = max(1, h-2) // the title and the status line
 	l.top = clampInt(l.top, 0, len(l.lines)-l.h)
 	var lines []string
 	for i := l.top; i < len(l.lines) && i < l.top+l.h; i++ {
 		s := fit(l.lines[i], w-2)
 		switch {
 		case i == l.match:
-			s = sel.Render(s)
+			s = th.lit.Render(s)
 		case failLine(l.lines[i]):
 			s = th.out.Render(s)
 		}
@@ -185,5 +185,5 @@ func (l *logView) view(title string, w, h int, focused bool) string {
 	} else {
 		lines = append(lines, th.dim.Render(truncate(status, w-2)))
 	}
-	return frame(title, lines, w, h, focused)
+	return section(title, lines, w, h, focused)
 }

@@ -13,10 +13,7 @@ import (
 	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 )
 
-var (
-	sel    = lipgloss.NewStyle().Reverse(true)
-	chipOn = lipgloss.NewStyle().Reverse(true).Bold(true) // the active preview tab
-)
+var chipOn = lipgloss.NewStyle().Reverse(true).Bold(true) // the active preview tab; Task 4 replaces it
 
 func Icon(status, conclusion string) string {
 	switch {

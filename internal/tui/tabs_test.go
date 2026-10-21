@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -74,15 +75,15 @@ func rowKeys(m *model) []string {
 func TestTabsFromOptions(t *testing.T) {
 	_, c := newFake(t, api.State{})
 	m := newModel(c, func() time.Time { return now }, Options{PRs: &pr.Fake{}})
-	if got := strings.TrimRight(ansi.Strip(m.tabRow()), " "); got != "1 My PRs · 2 Review requested · 3 All open · 4 Branches · 5 Runs" {
+	if got := strings.TrimRight(ansi.Strip(m.bases()), " "); got != "◆ 1 My PRs  ◇ 2 Review requested  ◇ 3 All open  ◇ 4 Branches  ◇ 5 Runs" {
 		t.Fatalf("default tabs %q", got)
 	}
 	m = newModel(c, func() time.Time { return now }, Options{PRs: &pr.Fake{}, Tabs: []Tab{{"Mine", "is:open"}}})
-	if got := strings.TrimRight(ansi.Strip(m.tabRow()), " "); got != "1 Mine · 2 Branches · 3 Runs" {
+	if got := strings.TrimRight(ansi.Strip(m.bases()), " "); got != "◆ 1 Mine  ◇ 2 Branches  ◇ 3 Runs" {
 		t.Fatalf("config tabs %q", got)
 	}
 	m = searchModel(t, &pr.Fake{Results: e2eResults(e2eResult())})
-	if got := strings.TrimRight(ansi.Strip(m.tabRow()), " "); got != "1 My PRs 2 · 2 Review requested 2 · 3 All open 2 · 4 Branches 1 · 5 Runs 3" {
+	if got := strings.TrimRight(ansi.Strip(m.bases()), " "); got != "◆ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◇ 5 Runs 3" {
 		t.Fatalf("counts %q", got)
 	}
 }
@@ -186,7 +187,7 @@ func TestTableSanitisesAndAligns(t *testing.T) {
 		dims(t, strings.Join(lines, "\n"), w, 24)
 		ci := col(t, ansi.Strip(m.at().rows.head), "CI")
 		for i, sub := range []string{"· not run", "✘ 1/2", "· not run"} {
-			if c := col(t, rowText(m, i), sub); c != ci {
+			if c := 1 + col(t, rowText(m, i), sub); c != ci { // 1: the gutter
 				t.Fatalf("%d: row %d CI at %d, head at %d: %q", w, i, c, ci, rowText(m, i))
 			}
 		}
@@ -199,8 +200,8 @@ func TestSearchCeilingRow(t *testing.T) {
 		res.PRs = append(res.PRs, pr.Summary{Number: 100 + n, Title: fmt.Sprintf("pr %d", n)})
 	}
 	m := searchModel(t, &pr.Fake{Results: e2eResults(res)})
-	if !strings.Contains(ansi.Strip(m.tabRow()), "1 My PRs 73 ·") {
-		t.Fatalf("tab row %q", ansi.Strip(m.tabRow()))
+	if !strings.Contains(ansi.Strip(m.bases()), "1 My PRs 73  ◇") {
+		t.Fatalf("bases %q", ansi.Strip(m.bases()))
 	}
 	rows := m.at().rows.rows
 	if len(rows) != 51 || rowText(m, 50) != "… 23 more on GitHub · o opens the search" {
@@ -264,9 +265,9 @@ func TestNoTokenStartsOnBranches(t *testing.T) {
 		t.Fatalf("started on %q", m.at().name)
 	}
 	// Lip Gloss strikes each character on its own.
-	row := m.tabRow()
-	for _, part := range []string{"\x1b[9mM\x1b[m\x1b[9my", "\x1b[9mR\x1b[m\x1b[9me\x1b[m\x1b[9mv", "\x1b[9mA\x1b[m\x1b[9ml"} {
-		if !strings.Contains(row, part) {
+	row := m.bases()
+	for _, ch := range []string{"M", "R", "A"} {
+		if !regexp.MustCompile(`;9m` + ch).MatchString(row) {
 			t.Fatalf("PR tab not struck through: %q", row)
 		}
 	}
@@ -306,24 +307,25 @@ func TestBranchesAndRunsArePickedRepoOnly(t *testing.T) {
 	}
 	indexAll(t, rowText(m, 0), "⟳ #1", "d954af8", "running", "1m12s…")
 	indexAll(t, rowText(m, 2), "✔ main", "fd387ab", "passed", "1m00s", "10m")
-	if h := ansi.Strip(m.header()); !strings.HasSuffix(h, "engine: client · 1 runs") {
-		t.Fatalf("header %q", h)
+	if h := ansi.Strip(m.strip()); !strings.Contains(h, "RUNS 1") || !strings.Contains(h, "client") {
+		t.Fatalf("strip %q", h)
 	}
 }
 
 func TestHeaderEngineStatus(t *testing.T) {
 	runs := []api.Run{{ID: "r2", Repo: "o/e2e", Label: "#1", Status: "running"}, {ID: "r1", Repo: "o/e2e", Label: "main", Status: "done"}}
 	m := hostModel(t, Options{Hosting: hosting(true)}, runs...)
-	h := ansi.Strip(m.header())
-	if !strings.HasPrefix(h, "homerun  repo o/e2e ▾") || !strings.HasSuffix(h, "engine: hosted here · 1 runs") || ansi.StringWidth(h) != 120 {
+	h := ansi.Strip(m.strip())
+	if !strings.HasPrefix(h, "HOMERUN  o/e2e  PRs – · RUNS 1 · ") || !strings.HasSuffix(strings.TrimRight(h, " "), ic("engine")+" hosted here") || ansi.StringWidth(h) != 120 {
 		t.Fatalf("hosting: %q", h)
 	}
 	m = hostModel(t, Options{Hosting: hosting(false)}, runs...)
-	if h := ansi.Strip(m.header()); !strings.HasSuffix(h, "engine: client · 1 runs") {
+	if h := ansi.Strip(m.strip()); !strings.Contains(h, "RUNS 1") || !strings.Contains(h, ic("engine")+" client") {
 		t.Fatalf("client: %q", h)
 	}
 	m.Update(errMsg{errors.New("connection refused")})
-	if h := ansi.Strip(m.header()); !strings.HasSuffix(h, "engine: unreachable") {
+	if h := m.strip(); strings.Contains(ansi.Strip(h), "client") || !strings.Contains(h, "38;2;229;72;77m"+ic("engine")) ||
+		!strings.Contains(ansi.Strip(h), "stale: daemon unreachable") {
 		t.Fatalf("unreachable: %q", h)
 	}
 }
@@ -526,7 +528,7 @@ func TestEnterPreviewFetchesDetail(t *testing.T) {
 		t.Fatalf("active chip not marked: %q", m.chips())
 	}
 	lay := m.layout()
-	if top := strings.Split(screen(m), "\n")[lay.py]; !strings.Contains(top, "╭─#1─") {
+	if top := strings.Split(screen(m), "\n")[lay.py]; strings.TrimSpace(ansi.Cut(top, lay.px, lay.px+lay.pw)) != "#1" {
 		t.Fatalf("pane title %q", top)
 	}
 	if !strings.Contains(screen(m), "#  Title") {
@@ -742,8 +744,8 @@ func TestEngineUnreachableMarksRollup(t *testing.T) {
 	if !strings.Contains(out[0], "stale: daemon unreachable") || !strings.Contains(out[0], "could not start: act not found on PATH") {
 		t.Fatalf("banner does not lead:\n%s", strings.Join(out, "\n"))
 	}
-	if strings.Contains(barText(m), "stale") {
-		t.Fatalf("banner repeated in the bar: %q", barText(m))
+	if d := ansi.Strip(m.dugout()); strings.Contains(d, "stale") {
+		t.Fatalf("warning repeated in the dugout line: %q", d)
 	}
 	if len(out) != 40 {
 		t.Fatalf("%d lines", len(out))

@@ -16,6 +16,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/matthew-reed-holden/homerun/internal/api"
 	"github.com/matthew-reed-holden/homerun/internal/pr"
 	"github.com/matthew-reed-holden/homerun/internal/termsafe"
@@ -735,33 +736,31 @@ func readLine(lines <-chan string, errc <-chan error, gen int) tea.Cmd {
 	}
 }
 
-// layout places the panes below the header and tab row: side by side from
-// 100 columns, else the table over the preview.
+// layout places the sections below the strip, the bases and a foul line:
+// side by side from 100 columns, split by a vertical foul line and a space,
+// else the table over a foul line over the preview. A foul line and the
+// dugout line (with the filter error above it) close the screen.
 type layout struct {
 	top            int // the first body row
-	tw, th         int // the table pane, at (0, top); 0×0 while zoomed
-	px, py, pw, ph int // the preview pane
+	tw, th         int // the table section, at (0, top); 0×0 while zoomed
+	px, py, pw, ph int // the preview section
 }
 
 func (m *model) layout() layout {
-	bodyH := max(0, m.h-3)
+	bodyH := max(0, m.h-5)
 	if m.fltErr != "" {
 		bodyH--
 	}
-	l := layout{top: 2}
-	if m.err != nil {
-		bodyH-- // the banner leads the screen
-		l.top++
-	}
+	l := layout{top: 3}
 	switch {
 	case m.zoom:
 		l.py, l.pw, l.ph = l.top, m.w, bodyH
 	case m.w >= 100:
 		l.tw, l.th = m.w*11/20, bodyH
-		l.px, l.py, l.pw, l.ph = l.tw, l.top, m.w-l.tw, bodyH
+		l.px, l.py, l.pw, l.ph = l.tw+2, l.top, m.w-l.tw-2, bodyH
 	default:
-		l.tw, l.th = m.w, max(5, bodyH*2/5)
-		l.py, l.pw, l.ph = l.top+l.th, m.w, bodyH-l.th
+		l.tw, l.th = m.w, max(5, bodyH*2/5-1) // the foul line between comes out of the table's share
+		l.py, l.pw, l.ph = l.top+l.th+1, m.w, bodyH-l.th-1
 	}
 	return l
 }
@@ -803,21 +802,21 @@ func (m *model) render() string {
 	}
 	lay := m.layout()
 	body := m.mainView(lay.pw, lay.ph)
+	onPv := m.focus == onPreview
 	if lay.tw > 0 {
 		table := m.tableView(lay.tw, lay.th)
 		if lay.px > 0 {
-			body = lipgloss.JoinHorizontal(lipgloss.Top, table, body)
+			div := strings.Join(vfoul(lay.ph, onPv), " \n") + " "
+			body = lipgloss.JoinHorizontal(lipgloss.Top, table, div, body)
 		} else {
-			body = table + "\n" + body
+			body = table + "\n" + foul(m.w, onPv) + "\n" + body
 		}
 	}
-	screen := m.header() + "\n" + m.tabRow() + "\n" + body + "\n" + m.bar()
-	if m.err != nil {
-		screen = m.banner() + "\n" + screen
-	}
+	screen := m.strip() + "\n" + m.bases() + "\n" + foul(m.w, false) + "\n" + body + "\n" + foul(m.w, false)
 	if m.fltErr != "" {
 		screen += "\n" + m.filterErrLine()
 	}
+	screen += "\n" + m.dugout()
 	if m.dlg != nil {
 		screen = overlay(screen, m.dlg.view(m.w), m.w, m.h)
 	}
@@ -843,7 +842,7 @@ func (m *model) mainView(w, h int) string {
 	focused := m.focus == onPreview
 	switch {
 	case errText != "":
-		return frame(title, strings.Split(th.out.Width(w-2).Render(errText), "\n"), w, h, focused)
+		return section(title, strings.Split(th.out.Width(w-2).Render(errText), "\n"), w, h, focused)
 	case m.log != nil:
 		return m.log.view(title+" · log", w, h, focused)
 	}
@@ -851,20 +850,13 @@ func (m *model) mainView(w, h int) string {
 	if len(head) == 0 {
 		return m.tree.view(title, w, h, m.now(), focused)
 	}
-	inner := max(0, h-2-len(head))
-	return frame(title, append(head, m.tree.rows(w, inner, m.now(), focused)...), w, h, focused)
+	inner := max(0, h-1-len(head))
+	return section(title, append(head, m.tree.rows(w, inner, m.now(), focused)...), w, h, focused)
 }
 
-// banner is the red line that leads the screen while the engine is unreachable.
-func (m *model) banner() string {
-	warn := "✘ stale: daemon unreachable (since " + dur(m.now().Sub(m.errSince)) + ")"
-	if m.hostErr != nil {
-		warn += " · could not start: " + termsafe.Line(m.hostErr.Error()) + " · ctrl+r retries"
-	}
-	return truncate(th.out.Render(warn), m.w)
-}
-
-func (m *model) bar() string {
+// dugout is the bottom line: the context's key hints, the position on a PR
+// row, and ? help, which never drops; hints drop from the right first.
+func (m *model) dugout() string {
 	if m.flt != nil {
 		return m.filterBar()
 	}
@@ -881,18 +873,34 @@ func (m *model) bar() string {
 			ctx = inTablePR
 		}
 	}
-	// Standing lines and a fresh status lead, so truncation cuts key hints first.
-	var parts []string
-	for _, p := range []string{m.prOff(), m.rateLine()} {
-		if p != "" {
-			parts = append(parts, p)
+	right := th.dim.Render("? help")
+	if pos := m.position(); pos != "" {
+		right = th.fg.Render(pos) + "   " + right
+	}
+	m.help.Styles.ShortKey, m.help.Styles.ShortDesc, m.help.Styles.ShortSeparator = th.fg, th.dim, th.dim
+	m.help.ShortSeparator = " · "
+	bs := keys.bar(ctx)
+	if m.hostErr != nil { // the strip's warning may be cut short of saying so
+		bs = append([]key.Binding{bind("ctrl+r", "retry", "ctrl+r")}, bs...)
+	}
+	room := m.w - ansi.StringWidth(right) - 2
+	hints := truncate(m.help.ShortHelpView(bs), max(0, room))
+	return hints + strings.Repeat(" ", max(2, m.w-ansi.StringWidth(hints)-ansi.StringWidth(right))) + right
+}
+
+// position is "PR 2/3" while the table's cursor is on a PR row, else "".
+func (m *model) position() string {
+	s, ok := m.selPR()
+	if !ok {
+		return ""
+	}
+	prs := m.at().res[m.repo().Name].PRs
+	for i, p := range prs {
+		if p.Number == s.Number {
+			return fmt.Sprintf("PR %d/%d", i+1, len(prs))
 		}
 	}
-	if m.status != "" && m.now().Sub(m.statusAt) < 5*time.Second {
-		parts = append(parts, m.status)
-	}
-	parts = append(parts, m.help.ShortHelpView(keys.bar(ctx)))
-	return truncate(strings.Join(parts, "  "), m.w)
+	return ""
 }
 
 // click and wheel map a mouse position onto the layout.
@@ -904,9 +912,7 @@ func (m *model) click(mo tea.Mouse) tea.Cmd {
 	switch {
 	case lay.inTable(mo.X, mo.Y):
 		m.leavePreview()
-		if y := mo.Y - lay.top; y < lay.th-1 {
-			m.at().rows.click(y)
-		}
+		m.at().rows.click(mo.Y - lay.top)
 		m.syncMain()
 	case lay.inPreview(mo.X, mo.Y):
 		var cmd tea.Cmd
@@ -917,7 +923,7 @@ func (m *model) click(mo tea.Mouse) tea.Cmd {
 		}
 		y := mo.Y - lay.py
 		switch {
-		case m.log != nil || y >= lay.ph-1:
+		case m.log != nil:
 		case m.pr == nil:
 			m.tree.click(y - len(m.previewHead(lay.pw-2)))
 		case m.pr.section == 1:
@@ -947,7 +953,7 @@ func (m *model) wheel(mo tea.Mouse) tea.Cmd {
 	case m.log != nil:
 		m.log.scroll(3 * d)
 	case m.pr != nil && m.pr.section == 0:
-		m.syncPage(lay.pw-2, lay.ph-3)
+		m.syncPage(lay.pw-2, lay.ph-2)
 		if d > 0 {
 			m.pr.vp.ScrollDown(3)
 		} else {

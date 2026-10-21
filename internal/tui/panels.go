@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
@@ -12,7 +13,7 @@ import (
 // reorders rows keeps the cursor on the same thing.
 type entry struct{ icon, text, key string }
 
-// list is a framed list of rows, numbered unless n is 0, under an optional
+// list is a sectioned list of rows, numbered unless n is 0, under an optional
 // column head. It owns its cursor and scroll offset so a state refresh never
 // moves the user's place.
 type list struct {
@@ -43,7 +44,7 @@ func (l *list) move(d int) { l.cur = clampInt(l.cur+d, 0, len(l.rows)-1) }
 func (l *list) home()      { l.cur = 0 }
 func (l *list) end()       { l.cur = max(0, len(l.rows)-1) }
 
-// first is the line below the top border where rows start.
+// first is the line of the section, below its title, where rows start.
 func (l *list) first() int {
 	if l.head != "" {
 		return 2
@@ -51,7 +52,7 @@ func (l *list) first() int {
 	return 1
 }
 
-// click selects the row y lines below the list's top border.
+// click selects the row y lines below the section's title line.
 func (l *list) click(y int) {
 	if i := l.off + y - l.first(); y >= l.first() && i < len(l.rows) {
 		l.cur = i
@@ -59,7 +60,7 @@ func (l *list) click(y int) {
 }
 
 func (l *list) view(w, h int, focused bool) string {
-	inner := max(0, h-1-l.first())
+	inner := max(0, h-l.first())
 	if l.cur < l.off {
 		l.off = l.cur
 	}
@@ -76,40 +77,71 @@ func (l *list) view(w, h int, focused bool) string {
 	}
 	for i := l.off; i < len(l.rows) && i < l.off+inner; i++ {
 		r := l.rows[i]
-		if i == l.cur && focused {
-			lines = append(lines, sel.Render(fit(r.icon+" "+ansi.Strip(r.text), w-2)))
-			continue
-		}
-		lines = append(lines, paint(r.icon)+" "+r.text)
+		lines = append(lines, box(paint(r.icon)+" "+r.text, w, i == l.cur, focused))
 	}
 	title := l.title
 	if l.n > 0 {
 		title = fmt.Sprintf("%d %s", l.n, l.title)
 	}
-	return frame(title, lines, w, h, focused)
+	return section(title, lines, w, h, focused)
 }
 
-// frame draws a rounded box of exactly w×h cells with the title set into the
-// top border; the focused box is bright, the others dim.
-func frame(title string, lines []string, w, h int, focused bool) string {
-	border := th.dim
-	if focused {
-		border = th.safe
+// box is a row w wide behind its gutter: the selected row is the batter's
+// box, a clay ▌ on the lit field (a chalk ▌ while its section is not focused).
+func box(s string, w int, selected, focused bool) string {
+	switch {
+	case !selected:
+		return " " + fit(s, w-1)
+	case !focused:
+		return th.line.Render("▌") + fit(s, w-1)
 	}
-	t := truncate(title, max(0, w-4))
+	return litRow(th.clay.Render("▌")+fit(s, w-1), th.p.lit)
+}
+
+// litRow paints bg behind s, styled spans included: every reset re-opens it.
+func litRow(s string, bg color.Color) string {
+	on := ansi.NewStyle().BackgroundColor(bg).String()
+	return on + strings.ReplaceAll(s, "\x1b[m", "\x1b[m"+on) + "\x1b[m"
+}
+
+// section is a title line over the body, exactly w×h: the title is clay and
+// bold while the section has focus, dim otherwise. There is no box.
+func section(title string, lines []string, w, h int, focused bool) string {
+	t := th.dim.Render(fit(title, w))
 	if focused {
-		t = th.bold.Render(t)
+		t = th.clay.Bold(true).Render(fit(title, w))
 	}
-	out := []string{border.Render("╭─") + t + border.Render(strings.Repeat("─", max(0, w-3-ansi.StringWidth(t)))+"╮")}
-	for i := range max(0, h-2) {
+	out := []string{t}
+	for i := range max(0, h-1) {
 		l := ""
 		if i < len(lines) {
 			l = lines[i]
 		}
-		out = append(out, border.Render("│")+fit(l, w-2)+border.Render("│"))
+		out = append(out, fit(l, w))
 	}
-	out = append(out, border.Render("╰"+strings.Repeat("─", max(0, w-2))+"╯"))
-	return strings.Join(out, "\n")
+	return strings.Join(out[:max(0, min(len(out), h))], "\n")
+}
+
+// foul is a dashed chalk line w wide; clay beside the focused section.
+func foul(w int, focused bool) string {
+	st := th.line
+	if focused {
+		st = th.clay
+	}
+	return st.Render(strings.Repeat("╌", max(0, w)))
+}
+
+// vfoul is the vertical foul line between the table and the preview.
+func vfoul(h int, focused bool) []string {
+	st := th.line
+	if focused {
+		st = th.clay
+	}
+	out := make([]string, max(0, h))
+	for i := range out {
+		out[i] = st.Render("╎")
+	}
+	return out
 }
 
 // awaiting reports a fork PR homerun is holding for the owner's approval:

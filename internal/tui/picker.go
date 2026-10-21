@@ -6,7 +6,6 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/matthew-reed-holden/homerun/internal/api"
 	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 )
@@ -105,16 +104,17 @@ func (m *model) pickerView() string {
 	off := clampInt(p.cur-pickRows+1, 0, max(0, len(p.rows)-pickRows))
 	for i := off; i < len(p.rows) && i < off+pickRows; i++ {
 		r := p.rows[i]
-		var plain, styled string
+		var styled string
 		if r.add {
-			plain = "+ add " + termsafe.Line(r.name) + " (this folder)"
-			styled = th.dim.Render(plain)
+			styled = th.dim.Render("+ add " + termsafe.Line(r.name) + " (this folder)")
 		} else {
 			e := byName[r.name]
-			plain, styled = e.icon+" "+ansi.Strip(e.text), paint(e.icon)+" "+e.text
+			styled = paint(e.icon) + " " + e.text
 		}
 		if i == p.cur {
-			styled = sel.Render(plain)
+			styled = th.clay.Render("▌") + litRow(styled, th.p.lit)
+		} else {
+			styled = " " + styled
 		}
 		lines = append(lines, styled)
 	}

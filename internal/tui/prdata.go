@@ -36,7 +36,7 @@ func (m *model) prSync() tea.Cmd {
 	return tea.Batch(m.fetchSearches(false), m.fetchFlows())
 }
 
-// prOff is the bar's standing line while PR tabs are off.
+// prOff is the strip's standing warning while PR tabs are off.
 func (m *model) prOff() string {
 	if m.o.PRs != nil || m.o.PRsErr == nil {
 		return ""
@@ -45,11 +45,11 @@ func (m *model) prOff() string {
 		return "PR tabs off: config error. Press ? for details."
 	}
 	reason, _, _ := strings.Cut(m.o.PRsErr.Error(), "\n")
-	// ponytail: the reason is cut to 20 columns so the fix fits an 80-column bar.
+	// ponytail: the reason is cut to 20 columns so the fix fits the strip at 120 columns.
 	return "PR tabs off: " + truncate(termsafe.Line(reason), 20) + ". Run gh auth login or set user_token."
 }
 
-// rateLine is the bar's standing line while a poll interval is raised for the rate limit.
+// rateLine is the strip's standing warning while a poll interval is raised for the rate limit.
 func (m *model) rateLine() string {
 	var at time.Time
 	if m.prDelay > prPoll {
@@ -93,7 +93,7 @@ func (m *model) previewHead(inner int) []string {
 		rest = append(rest, actionsLines(m.rowDoubled(it, s.Checks), r, inner)...)
 		out = summaryLines(s, behind, known, inner)
 		// On a short terminal the summary gives up its tail so the tree keeps 3 rows.
-		if budget := m.layout().ph - 2 - 3 - len(rest) - 1; len(out) > budget {
+		if budget := m.layout().ph - 1 - 3 - len(rest) - 1; len(out) > budget { // the title, 3 tree rows, the rule
 			out = out[:max(min(len(out), 4), budget)]
 			for len(out) > 0 && out[len(out)-1] == "" {
 				out = out[:len(out)-1]

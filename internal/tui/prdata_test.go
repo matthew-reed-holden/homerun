@@ -67,8 +67,8 @@ func TestSearchPollInterval(t *testing.T) {
 	tick()
 	f.Low = true
 	tick()
-	if !strings.Contains(ansi.Strip(m.bar()), "GitHub rate limit, retrying at 12:02") {
-		t.Fatalf("bar: %q", ansi.Strip(m.bar()))
+	if !strings.Contains(barText(m), "GitHub rate limit, retrying at 12:02") {
+		t.Fatalf("bar: %q", barText(m))
 	}
 	tick()
 	tick()
@@ -100,8 +100,8 @@ func TestSearchPollRateLimitError(t *testing.T) {
 	ticks := recordTicks(t)
 	_, c := m.Update(searchTickMsg{})
 	runBatch(m, c)
-	if (*ticks)[0] != 120*time.Second || !strings.Contains(ansi.Strip(m.bar()), "GitHub rate limit, retrying at 12:02") {
-		t.Fatalf("ticks %v bar %q", *ticks, ansi.Strip(m.bar()))
+	if (*ticks)[0] != 120*time.Second || !strings.Contains(barText(m), "GitHub rate limit, retrying at 12:02") {
+		t.Fatalf("ticks %v bar %q", *ticks, barText(m))
 	}
 }
 
@@ -254,7 +254,15 @@ func TestSearchErrorKeepsResultsSaysOnce(t *testing.T) {
 	}
 }
 
-func barText(m *model) string { return ansi.Strip(m.bar()) }
+// barText is what part 1's bar said: the strip's notes, untruncated, then
+// the dugout line.
+func barText(m *model) string {
+	var out []string
+	for _, w := range m.warnings() {
+		out = append(out, w.text)
+	}
+	return strings.Join(append(out, ansi.Strip(m.dugout())), "  ")
+}
 
 // A fresh status goes ahead of the key hints, so they truncate and it does not.
 func TestBarStatusAheadOfHints(t *testing.T) {
@@ -346,6 +354,9 @@ func TestBarPROffCapsReason(t *testing.T) {
 		}
 		if ansi.StringWidth(off)+37 > 72 {
 			t.Fatalf("%d: prOff too wide: %q", w, off)
+		}
+		if s := ansi.Strip(m.strip()); ansi.StringWidth(s) > w || !strings.Contains(s, "PR tabs off: command failed") {
+			t.Fatalf("%d: strip %q", w, s)
 		}
 		// At 80 columns the status gets what prOff leaves; at 120 it is whole.
 		if want := "  config reloaded  "; !strings.HasPrefix(want, strings.TrimSuffix(rest, "…")) && !strings.HasPrefix(rest, want) {

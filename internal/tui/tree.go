@@ -94,7 +94,7 @@ func (t *tree) move(d int) { t.cur = clampInt(t.cur+d, 0, len(t.nodes())-1) }
 func (t *tree) home()      { t.cur = 0 }
 func (t *tree) end()       { t.cur = max(0, len(t.nodes())-1) }
 
-// click selects the row y lines below the pane's top border. A failed job's
+// click selects the row y lines below the section's title. A failed job's
 // last-line row belongs to that job.
 func (t *tree) click(y int) {
 	if y < 1 {
@@ -183,7 +183,7 @@ func (t *tree) toggle() {
 const timeW = 9
 
 func (t *tree) view(title string, w, h int, now time.Time, focused bool) string {
-	return frame(title, t.rows(w, max(0, h-2), now, focused), w, h, focused)
+	return section(title, t.rows(w, max(0, h-1), now, focused), w, h, focused)
 }
 
 // rows are the tree's lines for inner rows of room.
@@ -220,16 +220,13 @@ func (t *tree) rows(w, inner int, now time.Time, focused bool) []string {
 				line = fit(indent+paint(icon)+" "+name+" "+th.dim.Render(truncate("— "+why, room)), w-2-timeW) + rfit(tm, timeW)
 			}
 		}
-		if i == t.cur && focused {
-			line = sel.Render(ansi.Strip(line))
-		}
-		lines = append(lines, line)
+		lines = append(lines, box(line, w, i == t.cur && focused, focused))
 		if l := lastLine(c, n); l != "" && len(lines) < inner {
-			lines = append(lines, th.dim.Render(truncate("  "+l, w-2)))
+			lines = append(lines, " "+th.dim.Render(truncate("  "+l, w-2)))
 		}
 	}
 	if len(ns) == 0 {
-		lines = []string{th.dim.Render("no checks yet")}
+		lines = []string{" " + th.dim.Render("no checks yet")}
 	}
 	return lines
 }
