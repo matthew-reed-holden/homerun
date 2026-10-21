@@ -9,16 +9,16 @@ is:open author:@me
    typo fix                                                                     
 ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
 #1 · log                                                                        
-⭐ Run Set up job                                                               
-pulling image                                                                   
-⭐ Run Main echo bad; exit 1                                                    
-| bad                                                                           
-  ❌  Failure - Main echo bad; exit 1                                           
+ ⭐ Run Set up job                                                              
+ pulling image                                                                  
+ ⭐ Run Main echo bad; exit 1                                                   
+ | bad                                                                          
+   ❌  Failure - Main echo bad; exit 1                                          
                                                                                 
                                                                                 
                                                                                 
                                                                                 
                                                                                 
-run finished · line 1/5                                                         
+ run finished · line 1/5                                                        
 ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
 / search · n next match · e next failure · f follow · + zoom ·…  PR 1/2   ? help

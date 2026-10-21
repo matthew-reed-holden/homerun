@@ -148,3 +148,31 @@ func TestJumpIgnoresLongerStepWithSamePrefix(t *testing.T) {
 		t.Fatalf("top %d, want the exact make step", l.top)
 	}
 }
+
+// The current match keeps a clay ▌ in the gutter, which NO_COLOR keeps too.
+func TestLogMatchGutter(t *testing.T) {
+	l := newLogView("r1", "", "", "", 0, false)
+	feed(l, runLog)
+	_ = l.view("t", 60, 10, true)
+	l.startSearch()
+	for _, r := range "BAD" {
+		l.typeKey(tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	l.typeKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+	lines := strings.Split(ansi.Strip(l.view("t", 60, 10, true)), "\n")[1:]
+	n := 0
+	for i, s := range lines {
+		if strings.HasPrefix(s, "▌") {
+			n++
+			if i != l.match-l.top || !strings.Contains(strings.ToLower(s), "bad") {
+				t.Fatalf("▌ on line %d %q, match %d top %d", i, s, l.match, l.top)
+			}
+		}
+	}
+	if n != 1 {
+		t.Fatalf("%d ▌ lines:\n%s", n, strings.Join(lines, "\n"))
+	}
+	if !strings.Contains(l.view("t", 60, 10, true), claySGR+"m▌") {
+		t.Fatal("gutter mark not clay")
+	}
+}

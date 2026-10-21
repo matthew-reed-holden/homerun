@@ -157,12 +157,16 @@ func (l *logView) view(title string, w, h int, focused bool) string {
 	l.top = clampInt(l.top, 0, len(l.lines)-l.h)
 	var lines []string
 	for i := l.top; i < len(l.lines) && i < l.top+l.h; i++ {
+		// A gutter like the rows': the current match is a clay ▌ on the lit
+		// field, so it still shows where colour is stripped.
 		s := fit(l.lines[i], w-2)
 		switch {
 		case i == l.match:
-			s = th.lit.Render(s)
+			s = litRow(th.clay.Render("▌")+s, th.p.lit)
 		case failLine(l.lines[i]):
-			s = th.out.Render(s)
+			s = " " + th.out.Render(s)
+		default:
+			s = " " + s
 		}
 		lines = append(lines, s)
 	}
@@ -181,9 +185,9 @@ func (l *logView) view(title string, w, h int, focused bool) string {
 		status += " · /" + termsafe.Line(l.query)
 	}
 	if l.typing {
-		lines = append(lines, truncate(l.input.View(), w-2))
+		lines = append(lines, " "+truncate(l.input.View(), w-2))
 	} else {
-		lines = append(lines, th.dim.Render(truncate(status, w-2)))
+		lines = append(lines, " "+th.dim.Render(truncate(status, w-2)))
 	}
 	return section(title, lines, w, h, focused)
 }
