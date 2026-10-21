@@ -12,13 +12,13 @@ import (
 )
 
 func TestPaletteRoles(t *testing.T) {
-	names := []string{"bg", "strip", "fg", "dim", "line", "clay", "amber", "safe", "out", "lights", "sha", "lit"}
+	names := []string{"bg", "strip", "fg", "dim", "line", "clay", "amber", "safe", "out", "lights", "sha", "lit", "faint", "del"}
 	hex := map[string][]string{
-		"night": {"#0d1526", "#091020", "#e8ecf2", "#5b6b85", "#3d4b66", "#e0874a", "#ffb84d", "#6cc070", "#e5484d", "#f2d264", "#8ea4c8", "#1b2a44"},
-		"day":   {"#f7f5ef", "#ebe6d8", "#13213a", "#66738a", "#bcc2cc", "#c4652b", "#a86500", "#2f7a35", "#b8303a", "#8a6a00", "#8ea4c8", "#ebe4d3"},
+		"night": {"#0d1526", "#091020", "#e8ecf2", "#5b6b85", "#3d4b66", "#e0874a", "#ffb84d", "#6cc070", "#e5484d", "#f2d264", "#8ea4c8", "#1b2a44", "#3a4760", "#3a1620"},
+		"day":   {"#f7f5ef", "#ebe6d8", "#13213a", "#66738a", "#bcc2cc", "#c4652b", "#a86500", "#2f7a35", "#b8303a", "#8a6a00", "#3d5a85", "#ebe4d3", "#b5bccb", "#f6dfe0"},
 	}
 	for name, p := range map[string]palette{"night": night, "day": day} {
-		got := []any{p.bg, p.strip, p.fg, p.dim, p.line, p.clay, p.amber, p.safe, p.out, p.lights, p.sha, p.lit}
+		got := []any{p.bg, p.strip, p.fg, p.dim, p.line, p.clay, p.amber, p.safe, p.out, p.lights, p.sha, p.lit, p.faint, p.del}
 		for i, g := range got {
 			if g != any(lipgloss.Color(hex[name][i])) {
 				t.Errorf("%s.%s = %v, want %s", name, names[i], g, hex[name][i])

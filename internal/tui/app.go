@@ -823,38 +823,41 @@ func readLine(lines <-chan string, errc <-chan error, gen int) tea.Cmd {
 	}
 }
 
-// layout places the sections below the strip, the bases and a foul line,
-// inside a one-cell gutter each side: side by side from 100 columns, split by
-// a vertical foul line, else the table over a foul line over the preview. A
-// foul line and the dugout line (with the filter error above it) close the
-// screen. The preview's content has a cell of padding each side; with the
-// preview focused, the table narrows to give it room.
+// layout places the sections below the strip, the row under it (blank, or
+// the engine banner), the bases and a foul line, inside a one-cell gutter
+// each side: side by side from 100 columns, split by a vertical foul line,
+// else the table over a foul line over the preview. A foul line and the
+// dugout line close the screen. The preview's content has two cells of
+// padding on the left and one on the right; with the preview focused, the
+// table narrows to give it room.
 type layout struct {
 	top            int // the first body row
 	tx, tw, th     int // the table section, at (tx, top); 0×0 while zoomed
 	px, py, pw, ph int // the preview's content, inside its padding
 }
 
+// bodyTop is the screen row the body starts on: the strip, the row under
+// it, the bases and the foul line come first.
+const bodyTop = 4
+
 func (m *model) layout() layout {
 	iw := m.w - 2
-	bodyH := max(0, m.h-5)
-	if m.fltErr != "" {
-		bodyH--
-	}
-	l := layout{top: 3, tx: 1}
+	bodyH := max(0, m.h-bodyTop-2) // the closing foul line and the dugout
+	l := layout{top: bodyTop, tx: 1}
 	switch {
 	case m.zoom:
-		l.px, l.py, l.pw, l.ph = 2, l.top, iw-2, bodyH
+		l.px, l.py, l.pw, l.ph = 3, l.top, iw-3, bodyH
 	case m.w >= 100:
 		l.tw, l.th = iw*11/20, bodyH
 		if m.narrow() {
 			l.tw = max(30, iw*3/10)
 		}
-		l.px, l.py, l.pw, l.ph = l.tx+l.tw+2, l.top, iw-l.tw-3, bodyH // the divider and a pad before
+		l.px, l.py, l.pw, l.ph = l.tx+l.tw+3, l.top, iw-l.tw-4, bodyH // the divider and two pads before
 	default:
-		// Two whole rows under the search line and the head: 2+1+2 lines.
-		l.tw, l.th = iw, max(7, (bodyH+2)*2/5-2)
-		l.px, l.py, l.pw, l.ph = 2, l.top+l.th+1, iw-2, bodyH-l.th-1
+		// Two whole rows under the search line, the head and their rules:
+		// 4+2+1+2 lines.
+		l.tw, l.th = iw, max(9, (bodyH+2)*2/5-2)
+		l.px, l.py, l.pw, l.ph = 3, l.top+l.th+1, iw-3, bodyH-l.th-1
 	}
 	return l
 }
@@ -867,7 +870,7 @@ func (l layout) inTable(x, y int) bool {
 }
 
 func (l layout) inPreview(x, y int) bool {
-	return x >= l.px-1 && x <= l.px+l.pw && y >= l.py && y < l.py+l.ph
+	return x >= l.px-2 && x <= l.px+l.pw && y >= l.py && y < l.py+l.ph
 }
 
 func (m *model) View() tea.View {
@@ -917,16 +920,16 @@ func (m *model) render() string {
 	if m.log != nil {
 		top = breadcrumb(m.crumbs...) + "\n" + foul(iw, true)
 	}
-	rest := top + "\n" + body + "\n" + foul(iw, false)
-	if m.fltErr != "" {
-		rest += "\n" + m.filterErrLine()
-	}
-	rest += "\n" + m.dugout()
+	rest := top + "\n" + body + "\n" + foul(iw, false) + "\n" + m.dugout()
 	lines := strings.Split(rest, "\n")
 	for i, l := range lines {
 		lines[i] = " " + fit(l, iw) + " "
 	}
-	screen := m.strip() + "\n" + strings.Join(lines, "\n")
+	under := fit("", m.w) // a blank row sets the strip off; the engine banner takes its place
+	if m.err != nil {
+		under = m.banner()
+	}
+	screen := m.strip() + "\n" + under + "\n" + strings.Join(lines, "\n")
 	if m.dlg != nil {
 		screen = overlay(screen, m.dlg.view(m.w), m.w, m.h)
 	}
@@ -946,15 +949,20 @@ func (m *model) sign(msg string) string {
 	return lipgloss.Place(m.w, m.h, lipgloss.Center, lipgloss.Center, block)
 }
 
-// pad gives each line of s a cell of padding each side.
+// pad gives each line of s two cells of padding on the left and one on the right.
 func pad(s string) string {
-	return " " + strings.ReplaceAll(s, "\n", " \n ") + " "
+	return "  " + strings.ReplaceAll(s, "\n", " \n  ") + " "
 }
 
 // tableView is the active tab's table; an open filter edits its search line
-// in place.
+// in place, and a rejected query's error sits under the search line's rule.
 func (m *model) tableView(w, h int) string {
-	v := m.at().rows.view(w, h, m.focus == onTable)
+	l := &m.at().rows
+	l.note = ""
+	if m.fltErr != "" {
+		l.note = m.filterErrLine(w)
+	}
+	v := l.view(w, h, m.focus == onTable)
 	if m.flt == nil {
 		return v
 	}
@@ -982,9 +990,9 @@ func (m *model) mainView(w, h int) string {
 	return section(title, append(head, m.tree.rows(w, inner, m.now(), focused)...), w, h, focused)
 }
 
-// dugout is the bottom line: the focused section's key hints, key in bold
-// chalk and label dim, the position on a PR row, and ? help, which never
-// drops; whole hints drop from the right first.
+// dugout is the bottom line, a cell in from the gutter: the focused
+// section's key hints, key in chalk and label dim, the position on a PR row,
+// and ? help, which never drops; whole hints drop from the right first.
 func (m *model) dugout() string {
 	ctx := inTable
 	switch {
@@ -1010,11 +1018,11 @@ func (m *model) dugout() string {
 		bs = append([]key.Binding{bind("ctrl+r", "retry", "ctrl+r")}, bs...)
 	}
 	bs = bs[:min(len(bs), maxHints)]
-	iw := m.w - 2
+	iw := m.w - 3 // the gutters and the cell the hints start in from
 	room := iw - ansi.StringWidth(right) - 2
 	hints := ""
 	for _, b := range bs {
-		h := th.fg.Bold(true).Render(b.Help().Key) + " " + th.dim.Render(b.Help().Desc)
+		h := th.fg.Render(b.Help().Key) + " " + th.dim.Render(b.Help().Desc)
 		if hints != "" {
 			h = hints + th.dim.Render(" · ") + h
 		}
@@ -1023,7 +1031,7 @@ func (m *model) dugout() string {
 		}
 		hints = h
 	}
-	return hints + strings.Repeat(" ", max(2, iw-ansi.StringWidth(hints)-ansi.StringWidth(right))) + right
+	return " " + hints + strings.Repeat(" ", max(2, iw-ansi.StringWidth(hints)-ansi.StringWidth(right))) + right
 }
 
 // maxHints is as many key hints as the dugout line shows; ? help has the rest.

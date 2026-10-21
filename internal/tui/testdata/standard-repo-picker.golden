@@ -1,24 +1,24 @@
- HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 · engine ●             updated 0s ago 
- ◆ 1 My PRs 2 ◇ 2 Review requested 2 ◇ 3 All open 2 ◇ 4 Branches 1 ◇ 5 Runs 3   
- ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  is:pr repo:o/e2e is:open author:@me                                          
-   Title                                             CI                     
- ▌ #1 · feat · @matt                                 1/2               +0 −0  
- ▌  e2e PR                                                                      
-                  ┌──────────────────────────────────────────┐                  
-   #2 · typo · @b│  Pick a repo                            │           +0 −0  
-    typo fix      │                                          │                  
- ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌│                                         │╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  o/e2e · #1      │                                          │                  
-  e2e PR          │ ▌ o/e2e ● 2 PRs                         │                  
-   OPEN   main ← f│   o/backend                             │                  
-  ◆ Overview  ◇ Ch│                                          │                  
-  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌│ enter pick · esc cancel                  │╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
-  SUMMARY         └──────────────────────────────────────────┘                  
-  No description provided.                                                      
+  H O M E R U N   o/e2e   PRs 2 · RUNS 1 ·  1  0 · engine ●   updated 0s ago  
                                                                                 
-  ACTIVITY                                                                      
-   0 comments · reviews: none                                                  
-  loading…                                                                      
+  ◆  1 Mine 2   ◇  2 Rev 2   ◇  3 All 2   ◇  4 Br 1   ◇  5 Runs 3               
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
- l/enter preview · / filter · r rerun · m merge                 PR 1/2   ? help 
+   is:pr repo:o/e2e is:open author:@me                                         
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ 
+   Title                                             CI                     
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┌──────────────────────────────────────────┐┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ 
+ ▌ #1 · feat · @m│  Pick a repo                            │           +0 −0  
+ ▌  e2e PR        │                                          │                  
+                  │                                         │                  
+   #2 · typo · @b│                                          │           +0 −0  
+    typo fix      │ ▌ o/e2e ● 2 PRs                         │                  
+ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌│   o/backend                             │╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
+   o/e2e · #1     │                                          │                  
+   e2e PR         │ enter pick · esc cancel                  │                  
+    OPEN   main ← └──────────────────────────────────────────┘                  
+   ◆ Overview  ◇ Checks 1/2  ◇ Reviews  ◇ Files 0  ◇ Commits                    
+   ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+   SUMMARY                                                                      
+   No description provided.                                                     
+                                                                                
+ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
+  l/enter preview · / filter · r rerun · m merge                PR 1/2   ? help 

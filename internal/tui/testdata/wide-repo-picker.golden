@@ -1,18 +1,18 @@
- HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 · engine ●                                                     updated 0s ago 
- ◆ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◇ 5 Runs 3                                       
+  H O M E R U N   o/e2e   PRs 2 · RUNS 1 ·  1  0 · engine ●                                           updated 0s ago  
+                                                                                                                        
+  ◆  1 My PRs 2   ◇  2 Review requested 2   ◇  3 All open 2   ◇  4 Branches 1   ◇  5 Runs 3                             
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  is:pr repo:o/e2e is:open author:@me                           ╎ o/e2e · #1                                           
-   Title                      CI                           ╎ e2e PR                                               
- ▌ #1 · feat · @matt          1/2                  +0 −0    5m ╎  OPEN   main ← feat  @matt · 5m ago                  
- ▌  e2e PR                                                       ╎ ◆ Overview ◇ Checks 1/2 ◇ Rev ◇ Files 0 ◇ Commits    
-                                                                 ╎ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
-   #2 · typo · @bob          ◇ held                 +0 −0    3h ╎ SUMMARY                                              
-    typo fix                                                     ╎ No description provided.                             
-                                                                 ╎                                                      
-                                                                 ╎ ACTIVITY                                             
-                                                                 ╎  0 comments · reviews: none                         
-                                                                 ╎ loading…                                             
-                                                                 ╎                                                      
+   is:pr repo:o/e2e is:open author:@me                          ╎  o/e2e · #1                                          
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  e2e PR                                              
+   Title                      CI                           ╎   OPEN   main ← feat  @matt · 5m ago                 
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  ◆ Overview ◇ Checks 1/2 ◇ Rev ◇ Files 0 ◇ Cmts      
+ ▌ #1 · feat · @matt          1/2                  +0 −0    5m ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+ ▌  e2e PR                                                       ╎  SUMMARY                                             
+                                                                 ╎  No description provided.                            
+   #2 · typo · @bob          ◇ held                 +0 −0    3h ╎                                                      
+    typo fix                                                     ╎  ACTIVITY                                            
+                                                                 ╎   0 comments · reviews: none                        
+                                                                 ╎  loading…                                            
                                       ┌──────────────────────────────────────────┐                                      
                                       │  Pick a repo                            │                                      
                                       │                                          │                                      
@@ -37,4 +37,4 @@
                                                                  ╎                                                      
                                                                  ╎                                                      
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
- l/enter preview · / filter · r rerun · m merge · u update branch · o open                              PR 1/2   ? help 
+  l/enter preview · / filter · r rerun · m merge · u update branch · o open                             PR 1/2   ? help 

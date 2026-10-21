@@ -78,8 +78,10 @@ func TestRejectedQueryKeepsResults(t *testing.T) {
 		t.Fatalf("rows %d title %q edit %q", len(m.at().rows.rows), m.at().rows.title, m.at().edit)
 	}
 	s := ansi.Strip(m.render())
-	if !strings.Contains(s, ic("ci-fail")+" GitHub rejected the query: github: Invalid search query. The tab kept its old query.") {
-		t.Fatalf("screen:\n%s", s)
+	lay := m.layout()
+	// The error sits inside the table, under the search line's rule, cut to the table's width.
+	if l := strings.Split(s, "\n")[lay.top+2]; !strings.Contains(l, ic("ci-fail")+" GitHub rejected the query: github: Invalid search query") || ansi.StringWidth(l) > m.w {
+		t.Fatalf("error line %q in screen:\n%s", l, s)
 	}
 	if n := len(strings.Split(s, "\n")); n != 40 {
 		t.Fatalf("%d lines", n)

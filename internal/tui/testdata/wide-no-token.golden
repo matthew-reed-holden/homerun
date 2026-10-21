@@ -1,8 +1,10 @@
- HOMERUN  o/e2e  PRs – · RUNS 1 · engine ●         PR tabs off: gh: not logged in. Run gh auth login or set user_token. 
- ◇ 1 My PRs  ◇ 2 Review requested  ◇ 3 All open  ◆ 4 Branches 1  ◇ 5 Runs 3                                             
+  H O M E R U N   o/e2e   engine ●                PR tabs off: gh: not logged in. Run gh auth login or set user_token.  
+                                                                                                                        
+  ◇  1 My PRs   ◇  2 Review requested   ◇  3 All open   ◆  4 Branches 1   ◇  5 Runs 3                                   
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
- branches homerun runs                                           ╎ main · fd387ab                                       
-   Branch                                        CI           ╎   CI / pass  homerun                           4s   
+ BRANCHES HOMERUN RUNS, WITHOUT AN OPEN PR                       ╎  main · fd387ab                                      
+   Branch                                        CI           ╎    CI / pass  homerun                          4s   
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎                                                      
  ▌ main · fd387ab                                1/1           ╎                                                      
  ▌                                                               ╎                                                      
                                                                  ╎                                                      
@@ -34,7 +36,5 @@
                                                                  ╎                                                      
                                                                  ╎                                                      
                                                                  ╎                                                      
-                                                                 ╎                                                      
-                                                                 ╎                                                      
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
- l/enter preview · r rerun · x cancel · y copy sha · o open · R repo                                             ? help 
+  l/enter preview · r rerun · x cancel · y copy sha · o open · R repo                                            ? help 

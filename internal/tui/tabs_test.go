@@ -80,15 +80,15 @@ func rowKeys(m *model) []string {
 func TestTabsFromOptions(t *testing.T) {
 	_, c := newFake(t, api.State{})
 	m := newModel(c, func() time.Time { return now }, Options{PRs: &pr.Fake{}})
-	if got := strings.TrimRight(ansi.Strip(m.bases()), " "); got != "◆ 1 My PRs  ◇ 2 Review requested  ◇ 3 All open  ◇ 4 Branches  ◇ 5 Runs" {
+	if got := strings.TrimRight(ansi.Strip(m.bases()), " "); got != " ◆  1 My PRs   ◇  2 Review requested   ◇  3 All open   ◇  4 Branches   ◇  5 Runs" {
 		t.Fatalf("default tabs %q", got)
 	}
 	m = newModel(c, func() time.Time { return now }, Options{PRs: &pr.Fake{}, Tabs: []Tab{{"Mine", "is:open"}}})
-	if got := strings.TrimRight(ansi.Strip(m.bases()), " "); got != "◆ 1 Mine  ◇ 2 Branches  ◇ 3 Runs" {
+	if got := strings.TrimRight(ansi.Strip(m.bases()), " "); got != " ◆  1 Mine   ◇  2 Branches   ◇  3 Runs" {
 		t.Fatalf("config tabs %q", got)
 	}
 	m = searchModel(t, &pr.Fake{Results: e2eResults(e2eResult())})
-	if got := strings.TrimRight(ansi.Strip(m.bases()), " "); got != "◆ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◇ 5 Runs 3" {
+	if got := strings.TrimRight(ansi.Strip(m.bases()), " "); got != " ◆  1 My PRs 2   ◇  2 Review requested 2   ◇  3 All open 2   ◇  4 Branches 1   ◇  5 Runs 3" {
 		t.Fatalf("counts %q", got)
 	}
 }
@@ -205,7 +205,7 @@ func TestSearchCeilingRow(t *testing.T) {
 		res.PRs = append(res.PRs, pr.Summary{Number: 100 + n, Title: fmt.Sprintf("pr %d", n)})
 	}
 	m := searchModel(t, &pr.Fake{Results: e2eResults(res)})
-	if !strings.Contains(ansi.Strip(m.bases()), "1 My PRs 73  ◇") {
+	if !strings.Contains(ansi.Strip(m.bases()), "1 My PRs 73   ◇") {
 		t.Fatalf("bases %q", ansi.Strip(m.bases()))
 	}
 	rows := m.at().rows.rows
@@ -321,7 +321,7 @@ func TestHeaderEngineStatus(t *testing.T) {
 	runs := []api.Run{{ID: "r2", Repo: "o/e2e", Label: "#1", Status: "running"}, {ID: "r1", Repo: "o/e2e", Label: "main", Status: "done"}}
 	m := hostModel(t, Options{Hosting: hosting(true)}, runs...)
 	h := ansi.Strip(m.strip())
-	if !strings.HasPrefix(h, " HOMERUN  o/e2e  PRs – · RUNS 1 · ") || !strings.Contains(h, "engine ●") || ansi.StringWidth(h) != 120 {
+	if !strings.HasPrefix(h, "  H O M E R U N   o/e2e   PRs – · RUNS 1 · ") || !strings.Contains(h, "engine ●") || ansi.StringWidth(h) != 120 {
 		t.Fatalf("hosting: %q", h)
 	}
 	if s := ansi.Strip(m.helpView().view(120)); !strings.Contains(s, "engine: hosted here") {
@@ -332,8 +332,8 @@ func TestHeaderEngineStatus(t *testing.T) {
 		t.Fatalf("client help: %q", s)
 	}
 	m.Update(errMsg{errors.New("connection refused")})
-	if h := m.strip(); !strings.Contains(h, "38;2;229;72;77m●") || !strings.Contains(ansi.Strip(h), "stale: daemon unreachable") {
-		t.Fatalf("unreachable: %q", h)
+	if h := m.strip(); !strings.Contains(h, "38;2;229;72;77m●") || strings.Contains(ansi.Strip(h), "unreachable") {
+		t.Fatalf("unreachable: the light is the strip's share, the banner says the rest: %q", h)
 	}
 }
 
@@ -753,10 +753,10 @@ func TestEngineUnreachableMarksRollup(t *testing.T) {
 	m.Update(errMsg{errors.New("connection refused")})
 	m.hostErr = errors.New("act not found on PATH")
 	out := strings.Split(screen(m), "\n")
-	if !strings.Contains(out[0], "stale: daemon unreachable") || !strings.Contains(out[0], "could not start: act not found on PATH") {
-		t.Fatalf("banner does not lead:\n%s", strings.Join(out, "\n"))
+	if !strings.Contains(out[1], "homerun engine unreachable") || !strings.Contains(out[1], "could not host: act not found on PATH") {
+		t.Fatalf("banner not under the strip:\n%s", strings.Join(out, "\n"))
 	}
-	if d := ansi.Strip(m.dugout()); strings.Contains(d, "stale") {
+	if d := ansi.Strip(m.dugout()); strings.Contains(d, "unreachable") {
 		t.Fatalf("warning repeated in the dugout line: %q", d)
 	}
 	if len(out) != 40 {

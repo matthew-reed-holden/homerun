@@ -1,17 +1,17 @@
- H┌──────────────────────────────────────────────────────────────────────────┐… 
- ◇│  Keys                                                                   │  
- ╌│                                                                          │╌ 
- b│ [ ]     tabs             k/↑   up              f      follow             │  
-  │ 1-9     tab              j/↓   down            +      zoom               │  
- ▌│ tab     table/preview    g     top             esc    back               │  
- ▌│ l/enter preview          G     bottom          r      rerun              │  
-  │ h       table            space fold            x      cancel             │  
-  │ R       repo             enter log             o      open               │  
+  ┌──────────────────────────────────────────────────────────────────────────┐  
+  │  Keys                                                                   │  
+  │                                                                          │  
+ ╌│ [ ]     tabs             k/↑   up              f      follow             │╌ 
+ B│ 1-9     tab              j/↓   down            +      zoom               │  
+  │ tab     table/preview    g     top             esc    back               │  
+ ┄│ l/enter preview          G     bottom          r      rerun              │┄ 
+ ▌│ h       table            space fold            x      cancel             │  
+ ▌│ R       repo             enter log             o      open               │  
   │ /       filter           /     search          y      copy sha           │  
- ╌│ ctrl+r  reload config    n     next match      m      merge              │╌ 
+  │ ctrl+r  reload config    n     next match      m      merge              │  
   │ T       theme            N     prev match      u      update branch      │  
   │ ?       help             e     next failure    c      comment            │  
-  │ q       quit                                   ctrl+s send               │  
+ ╌│ q       quit                                   ctrl+s send               │╌ 
   │                                                                          │  
   │  PR tabs off: exec "gh auth token": exit status 1: You are not logged   │  
   │ into any GitHub hosts. To log in, run: gh auth login                     │  
@@ -21,4 +21,4 @@
   │                                                                          │  
   │ any key closes · engine: client                                          │  
  ╌└──────────────────────────────────────────────────────────────────────────┘╌ 
- l/enter preview · r rerun · x cancel · y copy sha · o open · R repo     ? help 
+  l/enter preview · r rerun · x cancel · y copy sha · o open · R repo    ? help 

@@ -1,24 +1,24 @@
- HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 · engine ●             updated 0s ago 
+  H O M E R U N   o/e2e   PRs 2 · RUNS 1 ·  1  0 · engine ●   updated 0s ago  
+                                                                                
  #1 › CI / fail › echo bad; exit 1 · log                                        
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  is:pr repo:o/e2e is:open author:@me                                          
+   is:pr repo:o/e2e is:open author:@me                                         
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ 
    Title                                             CI                     
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ 
  ▌ #1 · feat · @matt                                 1/2               +0 −0  
  ▌  e2e PR                                                                      
                                                                                 
    #2 · typo · @bob                                 ◇ held              +0 −0  
     typo fix                                                                    
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  #1 · log                                                                      
-   ⭐ Run Set up job                                                            
-   pulling image                                                                
-   ⭐ Run Main echo bad; exit 1                                                 
-   | bad                                                                        
-     ❌  Failure - Main echo bad; exit 1                                        
+   #1 · log                                                                     
+    ⭐ Run Set up job                                                           
+    pulling image                                                               
+    ⭐ Run Main echo bad; exit 1                                                
+    | bad                                                                       
+      ❌  Failure - Main echo bad; exit 1                                       
                                                                                 
-                                                                                
-                                                                                
-                                                                                
-   run finished · line 1/5                                                      
+    run finished · line 1/5                                                     
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
- / search · n next match · e next failure · f follow · + zoom   PR 1/2   ? help 
+  / search · n next match · e next failure · f follow · + zoom  PR 1/2   ? help 

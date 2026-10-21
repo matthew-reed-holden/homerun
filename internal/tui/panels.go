@@ -29,6 +29,7 @@ type list struct {
 	n     int
 	title string
 	lead  string // a styled first line in place of the title, as a PR tab's search line; "" for the title
+	note  string // a styled line under the lead's rule, as a rejected query's error; "" for none
 	head  string // a dim first line naming the columns; "" for none
 	rows  []entry
 	empty []string // shown in place of rows when there are none
@@ -55,12 +56,24 @@ func (l *list) move(d int) { l.cur = clampInt(l.cur+d, 0, len(l.rows)-1) }
 func (l *list) home()      { l.cur = 0 }
 func (l *list) end()       { l.cur = max(0, len(l.rows)-1) }
 
-// first is the line of the section, below its title, where rows start.
+// showHead is whether the column head is drawn: not over an empty-search
+// message, which has no columns to name.
+func (l *list) showHead() bool { return l.head != "" && !(len(l.rows) == 0 && l.empty != nil) }
+
+// first is the line of the section, below its title, where rows start: a
+// search line has a rule under it, then any note, then the head and its rule.
 func (l *list) first() int {
-	if l.head != "" {
-		return 2
+	n := 1
+	if l.lead != "" {
+		n++
 	}
-	return 1
+	if l.note != "" {
+		n++
+	}
+	if l.showHead() {
+		n += 2
+	}
+	return n
 }
 
 // span is the lines rows[from..to] take, the gaps between them included.
@@ -112,8 +125,14 @@ func (l *list) view(w, h int, focused bool) string {
 	inner := max(0, h-l.first())
 	l.scroll(inner)
 	var lines []string
-	if l.head != "" {
-		lines = append(lines, l.head)
+	if l.lead != "" { // the search line's rule: clay while the table has focus
+		lines = append(lines, rule(w, focused))
+	}
+	if l.note != "" {
+		lines = append(lines, fit(l.note, w))
+	}
+	if l.showHead() {
+		lines = append(lines, l.head, rule(w, false))
 	}
 	if len(l.rows) == 0 {
 		lines = append(lines, l.empty...)
@@ -158,12 +177,13 @@ func litRow(s string, bg color.Color) string {
 	return on + strings.ReplaceAll(s, "\x1b[m", "\x1b[m"+on) + "\x1b[m"
 }
 
-// section is a title line over the body, exactly w×h: the title is clay and
-// bold while the section has focus, dim otherwise. There is no box.
+// section is a title line over the body, exactly w×h: the title is chalk
+// while the section has focus, dim otherwise (the foul line beside it and
+// the batter's box carry the focus; clay is theirs). There is no box.
 func section(title string, lines []string, w, h int, focused bool) string {
 	t := th.dim.Render(fit(title, w))
 	if focused {
-		t = th.clay.Bold(true).Render(fit(title, w))
+		t = th.fg.Render(fit(title, w))
 	}
 	return sectionLines(t, lines, w, h)
 }
@@ -199,6 +219,16 @@ func breadcrumb(parts ...string) string {
 		return last
 	}
 	return th.dim.Render(strings.Join(ps[:len(ps)-1], " › ")+" › ") + last
+}
+
+// rule is the dotted line under a search line or a column head, lighter than
+// a foul line; clay under the search line while its table has focus.
+func rule(w int, hot bool) string {
+	st := th.line
+	if hot {
+		st = th.clay
+	}
+	return st.Render(strings.Repeat("┄", max(0, w)))
 }
 
 // foul is a dashed chalk line w wide; clay beside the focused section.

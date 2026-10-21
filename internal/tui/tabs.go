@@ -774,10 +774,10 @@ func (m *model) tableRows() {
 			}
 			t.rows.set(m.prRows(t, w))
 		case tabBranches:
-			t.rows.title, t.rows.head = "branches homerun runs", head("branch", m.branchCols(), "Branch", ic("checks")+" CI", ic("age"))
+			t.rows.title, t.rows.head = "BRANCHES HOMERUN RUNS, WITHOUT AN OPEN PR", head("branch", m.branchCols(), "Branch", ic("checks")+" CI", ic("age"))
 			t.rows.set(m.branchRows(r, w))
 		case tabRuns:
-			t.rows.title, t.rows.head = "runs, newest first", head("run", m.runCols(), "Run", "Status", "Took", ic("age"))
+			t.rows.title, t.rows.head = "RUNS, NEWEST FIRST", head("run", m.runCols(), "Run", "Status", "Took", ic("age"))
 			t.rows.set(m.runRows(w))
 		}
 	}
@@ -793,7 +793,7 @@ func (m *model) scope(w int) string {
 	return s
 }
 
-// searchLine is a PR tab's first line, w wide: the dim search icon, the dim
+// searchLine is a PR tab's first line, w wide: a cell in, the dim search icon, the dim
 // scope homerun adds when it fits, then the tab's query in chalk, and when the last search
 // failed, when the results shown are from.
 func (m *model) searchLine(i, w int) string {
@@ -802,8 +802,8 @@ func (m *model) searchLine(i, w int) string {
 	if at := t.at[m.repo().Name]; t.err != "" && !at.IsZero() {
 		q += th.dim.Render(" · results from " + at.Format("15:04"))
 	}
-	line := th.dim.Render(ic("search")) + " "
-	room := w - 2 - ansi.StringWidth(q) - 1
+	line := " " + th.dim.Render(ic("search")) + " " // a cell in, level with the row icons
+	room := w - 3 - ansi.StringWidth(q) - 1
 	if ansi.StringWidth("is:pr repo:…/"+termsafe.Line(repoShort(m.repo().Name))) <= room { // else the query alone, as in the narrow table
 		line += th.dim.Render(m.scope(room)) + " "
 	}
@@ -833,29 +833,56 @@ func (m *model) tabCount(i int) (int, bool) {
 	return len(t.rows.rows), m.connected
 }
 
-// bases is the tab row: ◆ in clay on the active tab, ◇ on the others, counts
-// in amber, and the PR tabs struck through while they are off.
+// shortTabs are the default tabs' names under 100 columns.
+var shortTabs = map[string]string{"My PRs": "Mine", "Review requested": "Rev", "All open": "All", "Branches": "Br"}
+
+// shortTab is a tab's name under 100 columns: the default tabs have short
+// forms; any other keeps its first word, six cells at most.
+func shortTab(name string) string {
+	if s, ok := shortTabs[name]; ok {
+		return s
+	}
+	first, _, _ := strings.Cut(name, " ")
+	return truncate(first, 6)
+}
+
+// bases is the tab row, a cell in from the gutter: ◆ in clay on the active
+// tab, ◇ on the others, two spaces after the mark and three between tabs;
+// counts in amber, the active tab's full and the others' faint; the PR tabs
+// struck through in faint while they are off. Under 100 columns the names
+// shorten; when even that overflows, one space between keeps every count.
 func (m *model) bases() string {
-	var parts []string
-	for i, t := range m.tabs {
-		mark, label := th.line.Render("◇"), th.dim
-		if i == m.tab {
-			mark, label = th.clay.Render("◆"), th.fg.Bold(true)
+	iw := m.w - 2
+	build := func(short bool, sep string) string {
+		var parts []string
+		for i, t := range m.tabs {
+			mark, label, count := th.line.Render("◇"), th.dim, th.amber.Faint(true)
+			if i == m.tab {
+				mark, label, count = th.clay.Render("◆"), th.fg.Bold(true), th.amber
+			}
+			if m.off(i) {
+				label = th.faint.Strikethrough(true)
+			}
+			name := termsafe.Line(t.name)
+			if short {
+				name = shortTab(name)
+			}
+			l := mark + "  " + label.Render(fmt.Sprintf("%d %s", i+1, name))
+			if n, ok := m.tabCount(i); ok {
+				l += " " + count.Render(strconv.Itoa(n))
+			}
+			parts = append(parts, l)
 		}
-		if m.off(i) {
-			label = label.Strikethrough(true)
-		}
-		l := mark + " " + label.Render(fmt.Sprintf("%d %s", i+1, termsafe.Line(t.name)))
-		if n, ok := m.tabCount(i); ok {
-			l += " " + th.amber.Render(strconv.Itoa(n))
-		}
-		parts = append(parts, l)
+		return " " + strings.Join(parts, sep)
 	}
-	s := strings.Join(parts, "  ")
-	if ansi.StringWidth(s) > m.w-2 { // 80 columns: one space between keeps every count
-		s = strings.Join(parts, " ")
+	s := build(m.w < 100, "   ")
+	if ansi.StringWidth(s) > iw {
+		s = build(true, "   ")
 	}
-	return fit(s, m.w-2)
+	if ansi.StringWidth(s) > iw {
+		s = build(true, " ")
+	}
+	return fit(s, iw)
 }
 
 // lineScore is the strip's numbers for the picked repo: the PR tab's result
@@ -890,37 +917,46 @@ func (m *model) lineScore() (prs, runs, pass, fail string) {
 	return prs, strconv.Itoa(r), strconv.Itoa(p), strconv.Itoa(f)
 }
 
-// warning is one note at the strip's right end.
+// warning is one note at the strip's right end; a passing one (a status
+// said, or how long since the last update) is the first to go when the
+// strip is short of room.
 type warning struct {
-	text string
-	st   lipgloss.Style
+	text    string
+	st      lipgloss.Style
+	passing bool
 }
 
-// warnings are the strip's right end: the engine down, PR tabs off, the rate
-// limit, then a status said in the last five seconds.
+// warnings are the strip's right end: PR tabs off, the rate limit, then a
+// status said in the last five seconds. The engine being down has a banner
+// of its own under the strip, which keeps only the red light.
 func (m *model) warnings() []warning {
 	var out []warning
-	if m.err != nil {
-		out = append(out, warning{m.engineWarn(), th.out})
-	}
 	for _, s := range []string{m.prOff(), m.rateLine()} {
 		if s != "" {
-			out = append(out, warning{s, th.lights})
+			out = append(out, warning{s, th.lights, false})
 		}
 	}
 	if m.status != "" && m.now().Sub(m.statusAt) < 5*time.Second {
-		out = append(out, warning{m.status, th.dim})
+		out = append(out, warning{m.status, th.dim, true})
 	}
 	return out
 }
 
-// engineWarn says the engine is unreachable and since when, and why hosting it failed.
+// engineWarn says the engine is unreachable and since when, and why hosting
+// it failed; the state shown is what it said last.
 func (m *model) engineWarn() string {
-	warn := "stale: daemon unreachable (since " + dur(m.now().Sub(m.errSince)) + ")"
+	warn := "homerun engine unreachable since " + m.errSince.Format("15:04")
 	if m.hostErr != nil {
-		warn += " · could not start: " + termsafe.Line(m.hostErr.Error()) + " · ctrl+r retries"
+		warn += " · could not host: " + termsafe.Line(m.hostErr.Error()) + " · ctrl+r retry"
 	}
 	return warn
+}
+
+// banner is the full-width row under the strip while the engine is down:
+// engineWarn in the out colour on the del ground.
+func (m *model) banner() string {
+	l := th.out.Render(ic("ci-fail") + " " + truncate(m.engineWarn(), m.w-4))
+	return litRow(" "+fit(l, m.w-2)+" ", th.p.del)
 }
 
 // minRepo is as far as the strip truncates the repo name.
@@ -929,21 +965,22 @@ const minRepo = 8
 // strip is the scoreboard: HOMERUN, the picked repo, the line score with the
 // engine light, and the warnings at the right end, or how long since the
 // last good update when there are none. When it does not fit, the repo
-// truncates first, then ✔ ✘ drops, then PRs and RUNS; the engine light and
-// the warnings stay, a long warning truncated with ….
+// truncates first, then ✔ ✘ drops, then PRs and RUNS; a passing status goes
+// before any of that gives way; the engine light and the standing warnings
+// stay, a long warning truncated with ….
 func (m *model) strip() string {
-	iw := m.w - 2 // the gutters
+	iw := m.w - 4 // two cells of gutter each side inside the band
 	light := th.safe.Render("●")
-	if m.err != nil { // the warning says the rest
+	if m.err != nil { // the banner says the rest
 		light = th.out.Render("●")
 	}
 	engine := th.dim.Render("engine ") + light
 	name := termsafe.Line(m.repo().Name)
 	prs, runs, pass, fail := m.lineScore()
 	left := func(repo string, score, pf bool) string {
-		parts := []string{th.clay.Bold(true).Render("HOMERUN")}
+		parts := []string{wordmark()}
 		if name == "" {
-			return strings.Join(append(parts, engine), "  ")
+			return strings.Join(append(parts, engine), stripGap)
 		}
 		parts = append(parts, th.fg.Render(repo))
 		ls := ""
@@ -953,30 +990,38 @@ func (m *model) strip() string {
 				ls += th.safe.Render(ic("ci-pass")) + " " + th.amber.Render(pass) + " " + th.out.Render(ic("ci-fail")) + " " + th.amber.Render(fail) + th.dim.Render(" · ")
 			}
 		}
-		return strings.Join(append(parts, ls+engine), "  ")
+		return strings.Join(append(parts, ls+engine), stripGap)
 	}
 	ws := m.warnings()
 	if len(ws) == 0 && !m.updated.IsZero() {
-		ws = []warning{{"updated " + age(m.updated, m.now()) + " ago", th.dim}}
+		ws = []warning{{"updated " + age(m.updated, m.now()) + " ago", th.dim, true}}
 	}
-	warnW := 0
-	for i, w := range ws {
-		warnW += ansi.StringWidth(w.text)
-		if i > 0 {
-			warnW += 2
+	// The repo gives way, then ✔ ✘, then the score; before any of that, a
+	// passing warning; the standing ones are truncated last.
+	fitLeft := func(ws []warning) (string, int) {
+		warnW := 0
+		for i, w := range ws {
+			warnW += ansi.StringWidth(w.text)
+			if i > 0 {
+				warnW += 2
+			}
 		}
-	}
-	gap := 0
-	if warnW > 0 {
-		gap = 2
-	}
-	l := ""
-	for _, c := range []struct{ score, pf bool }{{true, true}, {true, false}, {false, false}} {
-		room := iw - (ansi.StringWidth(left(name, c.score, c.pf)) - ansi.StringWidth(name)) - gap - warnW
-		if room >= min(ansi.StringWidth(name), minRepo) {
-			l = left(truncate(name, room), c.score, c.pf)
-			break
+		gap := 0
+		if warnW > 0 {
+			gap = 2
 		}
+		for _, c := range []struct{ score, pf bool }{{true, true}, {true, false}, {false, false}} {
+			room := iw - (ansi.StringWidth(left(name, c.score, c.pf)) - ansi.StringWidth(name)) - gap - warnW
+			if room >= min(ansi.StringWidth(name), minRepo) {
+				return left(truncate(name, room), c.score, c.pf), gap
+			}
+		}
+		return "", gap
+	}
+	l, gap := fitLeft(ws)
+	for l == "" && len(ws) > 0 && ws[len(ws)-1].passing {
+		ws = ws[:len(ws)-1]
+		l, gap = fitLeft(ws)
 	}
 	if l == "" {
 		l = left(truncate(name, minRepo), false, false)
@@ -990,8 +1035,14 @@ func (m *model) strip() string {
 	}
 	r := strings.Join(right, "  ")
 	pad := max(gap, iw-ansi.StringWidth(l)-ansi.StringWidth(r))
-	return litRow(" "+fit(l+strings.Repeat(" ", pad)+r, iw)+" ", th.p.strip)
+	return litRow("  "+fit(l+strings.Repeat(" ", pad)+r, iw)+"  ", th.p.strip)
 }
+
+// stripGap is the space between the strip's parts.
+const stripGap = "   "
+
+// wordmark is HOMERUN letter-spaced, bold clay.
+func wordmark() string { return th.clay.Bold(true).Render("H O M E R U N") }
 
 // shrink truncates the longest warnings, one cell at a time, until all of
 // them and the gaps between fit in room.

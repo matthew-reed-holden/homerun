@@ -27,9 +27,9 @@ func (m *model) sizeFilter() {
 		return
 	}
 	inner := m.layout().tw - 1 // a space before the foul line
-	scope := m.scope(max(12, inner-3-20)) + " "
-	m.flt.Prompt = th.clay.Render(ic("search")) + " " + th.dim.Render(scope)
-	m.flt.SetWidth(max(1, inner-2-ansi.StringWidth(scope)-1))
+	scope := m.scope(max(12, inner-4-20)) + " "
+	m.flt.Prompt = " " + th.clay.Render(ic("search")) + " " + th.dim.Render(scope) // a cell in, as the search line
+	m.flt.SetWidth(max(1, inner-3-ansi.StringWidth(scope)-1))
 }
 
 // filterKey is the bar's keys while it is open. Enter makes the typed query
@@ -66,6 +66,7 @@ func filterHints() []key.Binding {
 	return []key.Binding{bind("enter", "apply", "enter"), bind("esc", "keep old query", "esc"), bind("ctrl+u", "clear", "ctrl+u")}
 }
 
-func (m *model) filterErrLine() string {
-	return truncate(th.out.Render(ic("ci-fail"))+" "+th.dim.Render("GitHub rejected the query: "+termsafe.Line(m.fltErr)+". The tab kept its old query."), m.w-2)
+// filterErrLine is the rejected query's error, w wide, under the search line.
+func (m *model) filterErrLine(w int) string {
+	return truncate(" "+th.out.Render(ic("ci-fail"))+" "+th.dim.Render("GitHub rejected the query: "+termsafe.Line(m.fltErr)+". The tab kept its old query."), w)
 }

@@ -35,7 +35,7 @@ func TestStripNarrow(t *testing.T) {
 	if w := ansi.StringWidth(s); w > 80 {
 		t.Fatalf("strip %d cells: %q", w, s)
 	}
-	for _, want := range []string{"engine ●", "stale", "GitHub rate"} {
+	for _, want := range []string{"engine ●", "GitHub rate"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("strip lacks %q: %q", want, s)
 		}
@@ -46,10 +46,24 @@ func TestStripNarrow(t *testing.T) {
 	if !strings.Contains(m.strip(), "38;2;229;72;77m●") {
 		t.Fatalf("engine light not red: %q", m.strip())
 	}
+	// The engine's trouble has its own banner row under the strip, on the del ground.
+	b := ansi.Strip(m.banner())
+	if w := ansi.StringWidth(b); w != 80 || !strings.Contains(b, "homerun engine unreachable since 12:00") {
+		t.Fatalf("banner %d cells: %q", w, b)
+	}
+	if !strings.Contains(m.banner(), "48;2;58;22;32") {
+		t.Fatalf("banner not on the del ground: %q", m.banner())
+	}
 }
 
+// Without a token the strip says why the PR tabs are off, whole; the line
+// score shows PRs – when the strip has room for both.
 func TestStripNoToken(t *testing.T) {
 	m := noTokenModel(t)
+	if s := ansi.Strip(m.strip()); !strings.HasSuffix(strings.TrimRight(s, " "), "PR tabs off: gh: not logged in. Run gh auth login or set user_token.") {
+		t.Fatalf("strip %q", s)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	if s := ansi.Strip(m.strip()); !strings.Contains(s, "PRs –") || !strings.Contains(s, "PR tabs off") {
 		t.Fatalf("strip %q", s)
 	}
@@ -60,7 +74,7 @@ func TestStripNoRepo(t *testing.T) {
 	m := newModel(c, func() time.Time { return now }, Options{})
 	m.Update(stateMsg{&api.State{}})
 	s := ansi.Strip(m.strip())
-	if !strings.HasPrefix(s, " HOMERUN") || !strings.Contains(s, "engine ●") || strings.Contains(s, "PRs") || strings.Contains(s, "RUNS") {
+	if !strings.HasPrefix(s, "  H O M E R U N") || !strings.Contains(s, "engine ●") || strings.Contains(s, "PRs") || strings.Contains(s, "RUNS") {
 		t.Fatalf("strip %q", s)
 	}
 }
@@ -84,14 +98,14 @@ func TestLineScore(t *testing.T) {
 func TestBases(t *testing.T) {
 	m, _ := newTestModel(t)
 	b := ansi.Strip(m.bases())
-	if !strings.Contains(b, "◆ 1 My PRs 2") || !strings.Contains(b, "◇ 2 Review requested 2") || !strings.Contains(b, "◇ 5 Runs 3") {
+	if !strings.Contains(b, "◆  1 My PRs 2   ◇  2 Review requested 2") || !strings.Contains(b, "◇  5 Runs 3") {
 		t.Fatalf("bases %q", b)
 	}
 	if strings.Contains(m.bases(), "\x1b[7") {
 		t.Fatalf("reverse video: %q", m.bases())
 	}
 	off := noTokenModel(t).bases()
-	if !struck.MatchString(off) || !strings.Contains(ansi.Strip(off), "◆ 4 Branches") {
+	if !struck.MatchString(off) || !strings.Contains(ansi.Strip(off), "◆  4 Branches") {
 		t.Fatalf("no token bases %q", off)
 	}
 }
@@ -158,8 +172,9 @@ func TestDugoutKeepsHelp(t *testing.T) {
 	}
 }
 
-// Stacked at 90×30 the preview keeps every line part 1 showed, down to the
-// failing required check; 80×24 gives its table 7 lines, two whole rows.
+// Stacked at 90×30 the preview keeps what part 1 showed, down to the failing
+// required check; 80×24 gives its table 9 lines, two whole rows under the
+// search line, the head and their rules.
 func TestStackedPreviewKeepsPart1Lines(t *testing.T) {
 	m, _ := newTestModel(t)
 	m.Update(searchMsg{repo: "o/e2e", tab: 0, query: "is:open author:@me", res: goldenResult()})
@@ -168,11 +183,11 @@ func TestStackedPreviewKeepsPart1Lines(t *testing.T) {
 	if out := screen(m); !strings.Contains(out, ic("ci-fail")+" ci/gh  actions  required") {
 		t.Fatalf("failing required check below the fold:\n%s", out)
 	}
-	if lay := m.layout(); lay.ph-1 < 15 {
-		t.Fatalf("preview body %d lines, part 1 had 15", lay.ph-1)
+	if lay := m.layout(); lay.ph-1 < 13 { // part 1 had 15; the strip's blank row and the two rules took two
+		t.Fatalf("preview body %d lines, want 13", lay.ph-1)
 	}
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	if lay := m.layout(); lay.th != 7 || lay.ph != 11 {
+	if lay := m.layout(); lay.th != 9 || lay.ph != 8 {
 		t.Fatalf("80×24 layout %+v", lay)
 	}
 }
@@ -378,14 +393,14 @@ func TestBreadcrumb(t *testing.T) {
 	if m.log == nil {
 		t.Fatal("no log")
 	}
-	if l := strings.Split(screen(m), "\n")[1]; !strings.HasPrefix(l, " #1 › CI / pass ›") {
+	if l := strings.Split(screen(m), "\n")[2]; !strings.HasPrefix(l, " #1 › CI / pass ›") {
 		t.Fatalf("breadcrumb line %q", l)
 	}
-	if !strings.Contains(strings.Split(m.render(), "\n")[2], claySGR+"m╌") {
+	if !strings.Contains(strings.Split(m.render(), "\n")[3], claySGR+"m╌") {
 		t.Fatal("line under the breadcrumb not clay")
 	}
 	keysIn(m, "esc")
-	if l := strings.Split(screen(m), "\n")[1]; !strings.HasPrefix(l, " ◆ 1 My PRs") {
+	if l := strings.Split(screen(m), "\n")[2]; !strings.HasPrefix(l, "  ◆  1 My PRs") {
 		t.Fatalf("bases not back: %q", l)
 	}
 }
@@ -532,7 +547,7 @@ func TestFilterEditsSearchLine(t *testing.T) {
 				t.Fatalf("%v: line %d is %d cells", sz, i, w)
 			}
 		}
-		if d := ansi.Strip(m.dugout()); !strings.HasPrefix(d, "enter apply") || !strings.HasSuffix(d, "? help") {
+		if d := ansi.Strip(m.dugout()); !strings.HasPrefix(d, " enter apply") || !strings.HasSuffix(d, "? help") {
 			t.Fatalf("%v: dugout %q", sz, d)
 		}
 	}
@@ -612,8 +627,11 @@ func TestOuterGutter(t *testing.T) {
 			t.Fatalf("line %d lacks the gutter: %q", i, l)
 		}
 	}
-	if want := " " + strings.Repeat("╌", 118) + " "; lines[2] != want {
-		t.Fatalf("foul line %q", lines[2])
+	if want := " " + strings.Repeat("╌", 118) + " "; lines[3] != want {
+		t.Fatalf("foul line %q", lines[3])
+	}
+	if lines[1] != strings.Repeat(" ", 120) {
+		t.Fatalf("row under the strip not blank: %q", lines[1])
 	}
 }
 
@@ -677,7 +695,7 @@ func TestHeadsAlign(t *testing.T) {
 		m.tableRows()
 		l := &m.at().rows
 		lines := tableLines(m)
-		head, row := lines[l.first()-1], lines[l.first()]
+		head, row := lines[l.first()-2], lines[l.first()]
 		hs, he := cellsInOrder(t, head, "Title", ic("checks")+" CI", ic("rv-approved"), ic("behind"), ic("diff"), ic("age"))
 		rs, re := cellsInOrder(t, row, "#1", ic("ci-fail")+" 1/3", ic("rv-approved"), "3", "−7", "5m")
 		for i, name := range []string{"title", "CI", "review"} { // left-aligned
@@ -691,13 +709,13 @@ func TestHeadsAlign(t *testing.T) {
 			}
 		}
 		keysIn(m, "4")
-		lines = tableLines(m)
-		if h, r := lines[l.first()-1], lines[l.first()]; cellOf(h, ic("checks")+" CI") != cellOf(r, "1/1")-2 {
+		l, lines = &m.at().rows, tableLines(m)
+		if h, r := lines[l.first()-2], lines[l.first()]; cellOf(h, ic("checks")+" CI") != cellOf(r, "1/1")-2 {
 			t.Fatalf("mode %d: branches CI head\n%s\n%s", mode, h, r)
 		}
 		keysIn(m, "5")
-		lines = tableLines(m)
-		h, r := lines[l.first()-1], lines[l.first()]
+		l, lines = &m.at().rows, tableLines(m)
+		h, r := lines[l.first()-2], lines[l.first()]
 		hs, he = cellsInOrder(t, h, "Run", "Status", "Took")
 		rs, re = cellsInOrder(t, r, "#1", "running", "1m12s…")
 		if hs[1] != rs[1] || he[2] != re[2] {
@@ -788,8 +806,8 @@ func TestDugoutFocusedHints(t *testing.T) {
 	if n := len(strings.Split(hints, " · ")); n > 6 {
 		t.Fatalf("%d hints: %q", n, hints)
 	}
-	if !strings.Contains(m.dugout(), "\x1b[1;38;2;232;236;242m") {
-		t.Fatalf("keys not bold chalk: %q", m.dugout())
+	if !strings.HasPrefix(m.dugout(), " \x1b[38;2;232;236;242m") || strings.Contains(m.dugout(), "\x1b[1;") {
+		t.Fatalf("keys not plain chalk a cell in: %q", m.dugout())
 	}
 }
 

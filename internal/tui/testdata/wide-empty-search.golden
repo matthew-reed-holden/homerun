@@ -1,8 +1,9 @@
- HOMERUN  o/e2e  PRs 0 · RUNS 1 ·  1  0 · engine ●                                                     updated 0s ago 
- ◆ 1 My PRs 0  ◇ 2 Review requested 0  ◇ 3 All open 0  ◇ 4 Branches 1  ◇ 5 Runs 3                                       
+  H O M E R U N   o/e2e   PRs 0 · RUNS 1 ·  1  0 · engine ●                                           updated 0s ago  
+                                                                                                                        
+  ◆  1 My PRs 0   ◇  2 Review requested 0   ◇  3 All open 0   ◇  4 Branches 1   ◇  5 Runs 3                             
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  is:pr repo:o/e2e is:open author:@me                           ╎                                                      
-   Title                      CI                           ╎  no checks yet                                       
+   is:pr repo:o/e2e is:open author:@me                          ╎                                                      
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎   no checks yet                                      
                                                                  ╎                                                      
    No open PRs match this search.                                ╎                                                      
    / to change it · 3 for All open                               ╎                                                      
@@ -35,6 +36,5 @@
                                                                  ╎                                                      
                                                                  ╎                                                      
                                                                  ╎                                                      
-                                                                 ╎                                                      
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
- l/enter preview · r rerun · x cancel · y copy sha · o open · R repo                                             ? help 
+  l/enter preview · r rerun · x cancel · y copy sha · o open · R repo                                            ? help 

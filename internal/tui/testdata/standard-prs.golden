@@ -1,24 +1,24 @@
- HOMERUN  o/e2e  PRs 3 · RUNS 1 ·  1  0 · engine ●             updated 0s ago 
- ◆ 1 My PRs 3 ◇ 2 Review requested 2 ◇ 3 All open 2 ◇ 4 Branches 1 ◇ 5 Runs 3   
+  H O M E R U N   o/e2e   PRs 3 · RUNS 1 ·  1  0 · engine ●   updated 0s ago  
+                                                                                
+  ◆  1 Mine 3   ◇  2 Rev 2   ◇  3 All 2   ◇  4 Br 1   ◇  5 Runs 3               
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  is:pr repo:o/e2e is:open author:@me                                          
+   is:pr repo:o/e2e is:open author:@me                                         
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ 
    Title                                             CI                     
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ 
  ▌ #1 · feat · @matt                                 1/3        3     +40 −7  
  ▌  e2e PR                                                                      
                                                                                 
    #2 · @bob                                        ◇ held              +0 −0  
     typo fix                                                                    
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  o/e2e · #1                                                                    
-  e2e PR                                                                        
-   OPEN   main ← feat  @matt · 5m ago                                           
-  ◆ Overview  ◇ Checks 1/3  ◇ Reviews  ◇ Files 3  ◇ Commits                     
-  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
-  SUMMARY                                                                       
-  Makes the thing optional.                                                     
+   o/e2e · #1                                                                   
+   e2e PR                                                                       
+    OPEN   main ← feat  @matt · 5m ago                                          
+   ◆ Overview  ◇ Checks 1/3  ◇ Reviews  ◇ Files 3  ◇ Commits                    
+   ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+   SUMMARY                                                                      
+   Makes the thing optional.                                                    
                                                                                 
-  ACTIVITY                                                                      
-   2 comments · reviews: approved                                              
-  loading…                                                                      
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
- l/enter preview · / filter · r rerun · m merge                 PR 1/3   ? help 
+  l/enter preview · / filter · r rerun · m merge                PR 1/3   ? help 

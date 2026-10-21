@@ -89,16 +89,17 @@ func TestListClickSelects(t *testing.T) {
 func TestListHeadOffsetsRows(t *testing.T) {
 	l := &list{head: "  #  Title"}
 	l.set(rows(5))
-	out := strings.Split(ansi.Strip(l.view(20, 5, false)), "\n")
-	if !strings.Contains(out[1], "#  Title") || !strings.Contains(out[2], "row 0") || strings.Contains(out[3], "row 2") {
+	out := strings.Split(ansi.Strip(l.view(20, 6, false)), "\n")
+	if !strings.Contains(out[1], "#  Title") || !strings.Contains(out[2], "┄┄┄") || !strings.Contains(out[3], "row 0") || strings.Contains(out[4], "row 2") {
 		t.Fatalf("head:\n%s", strings.Join(out, "\n"))
 	}
 	l.click(1) // the head
-	l.click(3) // the gap
+	l.click(2) // the rule under it
+	l.click(4) // the gap
 	if l.cur != 0 {
 		t.Fatalf("gap click: cur %d", l.cur)
 	}
-	l.click(4)
+	l.click(5)
 	if l.cur != 1 {
 		t.Fatalf("cur %d", l.cur)
 	}

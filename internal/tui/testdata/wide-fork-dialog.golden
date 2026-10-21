@@ -1,19 +1,19 @@
- HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 · engine ●                                                     updated 0s ago 
- ◆ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◇ 5 Runs 3                                       
+  H O M E R U N   o/e2e   PRs 2 · RUNS 1 ·  1  0 · engine ●                                           updated 0s ago  
+                                                                                                                        
+  ◆  1 My PRs 2   ◇  2 Review requested 2   ◇  3 All open 2   ◇  4 Branches 1   ◇  5 Runs 3                             
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  is:pr repo:o/e2e is:open author:@me                           ╎ o/e2e · #2                                           
-   Title                      CI                           ╎ typo fix                                             
-   #1 · feat · @matt          1/2                  +0 −0    5m ╎  OPEN   main ← typo  @bob · 3h ago                   
-    e2e PR                                                       ╎ ◆ Overview ◇ Checks 0/0 ◇ Rev ◇ Files 0 ◇ Commits    
-                                                                 ╎ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
- ▌ #2 · typo · @bob          ◇ held                 +0 −0    3h ╎ SUMMARY                                              
- ▌  typo fix                                                     ╎ No description provided.                             
+   is:pr repo:o/e2e is:open author:@me                          ╎  o/e2e · #2                                          
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  typo fix                                            
+   Title                      CI                           ╎   OPEN   main ← typo  @bob · 3h ago                  
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  ◆ Overview ◇ Checks 0/0 ◇ Rev ◇ Files 0 ◇ Cmts      
+   #1 · feat · @matt          1/2                  +0 −0    5m ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+    e2e PR                                                       ╎  SUMMARY                                             
+                                                                 ╎  No description provided.                            
+ ▌ #2 · typo · @bob          ◇ held                 +0 −0    3h ╎                                                      
+ ▌  typo fix                                                     ╎  ACTIVITY                                            
+                                                                 ╎   0 comments · reviews: none                        
+                                                                 ╎  loading…                                            
                                                                  ╎                                                      
-                                                                 ╎ ACTIVITY                                             
-                                                                 ╎  0 comments · reviews: none                         
-                                                                 ╎ loading…                                             
-                                                                 ╎                                                      
-                                                                 ╎ MERGE                                                
                             ┌──────────────────────────────────────────────────────────────┐                            
                             │  Run fork PR e2e#2 from @bob?                               │                            
                             │                                                              │                            
@@ -37,4 +37,4 @@
                                                                  ╎                                                      
                                                                  ╎                                                      
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
- l/enter preview · / filter · r rerun · m merge · u update branch · o open                              PR 2/2   ? help 
+  l/enter preview · / filter · r rerun · m merge · u update branch · o open                             PR 2/2   ? help 

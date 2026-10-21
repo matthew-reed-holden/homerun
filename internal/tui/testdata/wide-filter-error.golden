@@ -1,20 +1,21 @@
- HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 · engine ●                                                     updated 0s ago 
- ◆ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◇ 5 Runs 3                                       
+  H O M E R U N   o/e2e   PRs 2 · RUNS 1 ·  1  0 · engine ●                                           updated 0s ago  
+                                                                                                                        
+  ◆  1 My PRs 2   ◇  2 Review requested 2   ◇  3 All open 2   ◇  4 Branches 1   ◇  5 Runs 3                             
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  is:pr repo:o/e2e is:open author:@me                           ╎ o/e2e · #1                                           
-   Title                      CI                           ╎ e2e PR                                               
- ▌ #1 · feat · @matt          1/2                  +0 −0    5m ╎  OPEN   main ← feat  @matt · 5m ago                  
- ▌  e2e PR                                                       ╎ ◆ Overview ◇ Checks 1/2 ◇ Rev ◇ Files 0 ◇ Commits    
-                                                                 ╎ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
-   #2 · typo · @bob          ◇ held                 +0 −0    3h ╎ SUMMARY                                              
-    typo fix                                                     ╎ No description provided.                             
+   is:pr repo:o/e2e is:open author:@me                          ╎  o/e2e · #1                                          
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  e2e PR                                              
+   GitHub rejected the query: github: Invalid search query. The…╎   OPEN   main ← feat  @matt · 5m ago                 
+   Title                      CI                           ╎  ◆ Overview ◇ Checks 1/2 ◇ Rev ◇ Files 0 ◇ Cmts      
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+ ▌ #1 · feat · @matt          1/2                  +0 −0    5m ╎  SUMMARY                                             
+ ▌  e2e PR                                                       ╎  No description provided.                            
                                                                  ╎                                                      
-                                                                 ╎ ACTIVITY                                             
-                                                                 ╎  0 comments · reviews: none                         
-                                                                 ╎ loading…                                             
+   #2 · typo · @bob          ◇ held                 +0 −0    3h ╎  ACTIVITY                                            
+    typo fix                                                     ╎   0 comments · reviews: none                        
+                                                                 ╎  loading…                                            
                                                                  ╎                                                      
-                                                                 ╎ MERGE                                                
-                                                                 ╎ loading…                                             
+                                                                 ╎  MERGE                                               
+                                                                 ╎  loading…                                            
                                                                  ╎                                                      
                                                                  ╎                                                      
                                                                  ╎                                                      
@@ -36,5 +37,4 @@
                                                                  ╎                                                      
                                                                  ╎                                                      
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  GitHub rejected the query: github: Invalid search query. The tab kept its old query.                                 
- l/enter preview · / filter · r rerun · m merge · u update branch · o open                              PR 1/2   ? help 
+  l/enter preview · / filter · r rerun · m merge · u update branch · o open                             PR 1/2   ? help 

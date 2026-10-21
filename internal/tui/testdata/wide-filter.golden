@@ -1,21 +1,21 @@
- HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 · engine ●                                                     updated 0s ago 
- ◆ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◇ 5 Runs 3                                       
+  H O M E R U N   o/e2e   PRs 2 · RUNS 1 ·  1  0 · engine ●                                           updated 0s ago  
+                                                                                                                        
+  ◆  1 My PRs 2   ◇  2 Review requested 2   ◇  3 All open 2   ◇  4 Branches 1   ◇  5 Runs 3                             
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  is:pr repo:o/e2e is:open label:bug                            ╎ o/e2e · #1                                           
-   Title                      CI                           ╎ e2e PR                                               
- ▌ #1 · feat · @matt          1/2                  +0 −0    5m ╎  OPEN   main ← feat  @matt · 5m ago                  
- ▌  e2e PR                                                       ╎ ◆ Overview ◇ Checks 1/2 ◇ Rev ◇ Files 0 ◇ Commits    
-                                                                 ╎ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
-   #2 · typo · @bob          ◇ held                 +0 −0    3h ╎ SUMMARY                                              
-    typo fix                                                     ╎ No description provided.                             
+   is:pr repo:o/e2e is:open label:bug                           ╎  o/e2e · #1                                          
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  e2e PR                                              
+   Title                      CI                           ╎   OPEN   main ← feat  @matt · 5m ago                 
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  ◆ Overview ◇ Checks 1/2 ◇ Rev ◇ Files 0 ◇ Cmts      
+ ▌ #1 · feat · @matt          1/2                  +0 −0    5m ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+ ▌  e2e PR                                                       ╎  SUMMARY                                             
+                                                                 ╎  No description provided.                            
+   #2 · typo · @bob          ◇ held                 +0 −0    3h ╎                                                      
+    typo fix                                                     ╎  ACTIVITY                                            
+                                                                 ╎   0 comments · reviews: none                        
+                                                                 ╎  loading…                                            
                                                                  ╎                                                      
-                                                                 ╎ ACTIVITY                                             
-                                                                 ╎  0 comments · reviews: none                         
-                                                                 ╎ loading…                                             
-                                                                 ╎                                                      
-                                                                 ╎ MERGE                                                
-                                                                 ╎ loading…                                             
-                                                                 ╎                                                      
+                                                                 ╎  MERGE                                               
+                                                                 ╎  loading…                                            
                                                                  ╎                                                      
                                                                  ╎                                                      
                                                                  ╎                                                      
@@ -37,4 +37,4 @@
                                                                  ╎                                                      
                                                                  ╎                                                      
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
- enter apply · esc keep old query · ctrl+u clear                                                        PR 1/2   ? help 
+  enter apply · esc keep old query · ctrl+u clear                                                       PR 1/2   ? help 

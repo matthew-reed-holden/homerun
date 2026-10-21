@@ -273,12 +273,12 @@ func TestStaleBanner(t *testing.T) {
 	m, _ := newTestModel(t)
 	m.Update(errMsg{errors.New("connection refused")})
 	out := ansi.Strip(m.render())
-	if !strings.Contains(out, "stale: daemon unreachable") || !strings.Contains(out, "o/e2e") {
+	if !strings.Contains(strings.Split(out, "\n")[1], "homerun engine unreachable since") || !strings.Contains(out, "o/e2e") {
 		t.Fatalf("stale:\n%s", out)
 	}
 	st := fixture()
 	m.Update(stateMsg{&st})
-	if strings.Contains(ansi.Strip(m.render()), "stale") {
+	if strings.Contains(ansi.Strip(m.render()), "unreachable") {
 		t.Fatal("banner stayed after recovery")
 	}
 }
@@ -289,7 +289,7 @@ func TestStackedBelow100(t *testing.T) {
 	lines := strings.Split(screen(m), "\n")
 	lay := m.layout()
 	if !strings.Contains(lines[lay.top], "is:open author:@me") || !strings.HasPrefix(lines[lay.py-1], " ╌╌╌") ||
-		!strings.HasPrefix(lines[lay.py], "  o/e2e · #1") || lay.th != 8 || lay.ph != 16 || !strings.HasSuffix(lines[29], "? help ") {
+		!strings.HasPrefix(lines[lay.py], "   o/e2e · #1") || lay.th != 9 || lay.ph != 14 || !strings.HasSuffix(lines[29], "? help ") {
 		t.Fatalf("layout %+v:\n%s", lay, strings.Join(lines, "\n"))
 	}
 }
@@ -403,19 +403,19 @@ func TestClickBounds(t *testing.T) {
 	m.Update(stateMsg{&st})
 	keysIn(m, "4")
 	lay := m.layout()
-	for _, y := range []int{lay.top, lay.top + 1, lay.top + lay.th, lay.top + lay.th + 1} { // title, column head, foul line, dugout line
+	for _, y := range []int{lay.top, lay.top + 1, lay.top + 2, lay.top + lay.th, lay.top + lay.th + 1} { // title, column head, its rule, foul line, dugout line
 		m.click(tea.Mouse{X: 5, Y: y, Button: tea.MouseLeft})
 		if m.at().rows.cur != 0 {
 			t.Fatalf("click at y=%d selected %d", y, m.at().rows.cur)
 		}
 	}
 	m.tableView(lay.tw, lay.th)
-	n := (lay.th - 2 + 1) / 3                                                     // whole two-line rows, a gap between, below the title and head
-	m.click(tea.Mouse{X: 5, Y: lay.top + 2 + 3*(n-1) + 1, Button: tea.MouseLeft}) // the last row in view, its second line
+	n := (lay.th - 3 + 1) / 3                                                     // whole two-line rows, a gap between, below the title, head and rule
+	m.click(tea.Mouse{X: 5, Y: lay.top + 3 + 3*(n-1) + 1, Button: tea.MouseLeft}) // the last row in view, its second line
 	if want := n - 1; m.at().rows.cur != want {
 		t.Fatalf("last row click selected %d, want %d", m.at().rows.cur, want)
 	}
-	if lay.th-2 > 3*n-1 { // the leftover line selects nothing
+	if lay.th-3 > 3*n-1 { // the leftover line selects nothing
 		m.click(tea.Mouse{X: 5, Y: lay.top + lay.th - 1, Button: tea.MouseLeft})
 		if m.at().rows.cur != n-1 {
 			t.Fatalf("leftover line selected %d", m.at().rows.cur)
@@ -562,14 +562,14 @@ func TestActionErrorShowsStatus(t *testing.T) {
 func TestMouseSelects(t *testing.T) {
 	m, _ := newTestModel(t)
 	keysIn(m, "5", "tab")
-	// 120×40: the strip, bases and foul line are rows 0-2, the table's title row 3,
-	// its column head row 4, and each run two lines and a gap, so row 9 is the
-	// second run's second line.
-	m.Update(tea.MouseClickMsg{X: 3, Y: 9, Button: tea.MouseLeft})
+	// 120×40: the strip, its blank row, bases and foul line are rows 0-3, the
+	// table's title row 4, its column head row 5 and the rule under it 6, and
+	// each run two lines and a gap, so row 11 is the second run's second line.
+	m.Update(tea.MouseClickMsg{X: 3, Y: 11, Button: tea.MouseLeft})
 	if m.focus != onTable || m.at().rows.cur != 1 {
 		t.Fatalf("click: focus %d cur %d", m.focus, m.at().rows.cur)
 	}
-	m.Update(tea.MouseWheelMsg{X: 3, Y: 9, Button: tea.MouseWheelDown})
+	m.Update(tea.MouseWheelMsg{X: 3, Y: 11, Button: tea.MouseWheelDown})
 	if m.at().rows.cur != 2 {
 		t.Fatalf("wheel: cur %d", m.at().rows.cur)
 	}
@@ -1024,10 +1024,10 @@ func TestStaleBannerShowsFailedRehost(t *testing.T) {
 	if strings.Contains(out, "\x1b[2J") {
 		t.Fatalf("unsafe strip: %q", out)
 	}
-	if plain := m.engineWarn(); !strings.Contains(plain, "stale: daemon unreachable (since 0s) · could not start: act not found on PATH · ctrl+r retries") {
+	if plain := m.engineWarn(); !strings.Contains(plain, "homerun engine unreachable since 12:00 · could not host: act not found on PATH · ctrl+r retry") {
 		t.Fatalf("banner: %q", plain)
 	}
-	if d := ansi.Strip(m.dugout()); !strings.HasPrefix(d, "ctrl+r retry · ") {
+	if d := ansi.Strip(m.dugout()); !strings.HasPrefix(d, " ctrl+r retry · ") {
 		t.Fatalf("dugout %q", d)
 	}
 }

@@ -1,27 +1,27 @@
- HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 · engine ●                                                     updated 0s ago 
- ◆ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◇ 5 Runs 3                                       
+  H O M E R U N   o/e2e   PRs 2 · RUNS 1 ·  1  0 · engine ●                                           updated 0s ago  
+                                                                                                                        
+  ◆  1 My PRs 2   ◇  2 Review requested 2   ◇  3 All open 2   ◇  4 Branches 1   ◇  5 Runs 3                             
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  is:open author:@me               ╎ o/e2e · #1                                                                        
-   Title                  CI      ╎ e2e PR                                                                            
- ▌ #1 · @matt             1/2     ╎  OPEN   main ← feat  @matt                                                        
- ▌  e2e PR                          ╎ ◆ Overview  ◇ Checks 2/4  ◇ Reviews 1  ◇ Files 3  ◇ Commits 1                     
-                                    ╎ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
-   #2 · @bob             ◇ held    ╎ SUMMARY                                                                           
-    typo fix                        ╎ Heading                                                                           
+   is:open author:@me              ╎  o/e2e · #1                                                                       
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  e2e PR                                                                           
+   Title                  CI      ╎   OPEN   main ← feat  @matt                                                       
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  ◆ Overview  ◇ Checks 2/4  ◇ Reviews 1  ◇ Files 3  ◇ Commits 1                    
+ ▌ #1 · @matt             1/2     ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+ ▌  e2e PR                          ╎  SUMMARY                                                                          
+                                    ╎  Heading                                                                          
+   #2 · @bob             ◇ held    ╎                                                                                   
+    typo fix                        ╎  Makes the thing b optional.                                                      
                                     ╎                                                                                   
-                                    ╎ Makes the thing b optional.                                                       
+                                    ╎  ACTIVITY                                                                         
+                                    ╎   1 comment · reviews: approved                                                  
+                                    ╎   abc1234 headline · @matt · 2h ago                                              
+                                    ╎   @bob · 1h ago                                                                  
+                                    ╎    looks good                                                                     
+                                    ╎   @bob approved · 1h ago                                                         
+                                    ╎   @matt merged · 5m ago                                                          
                                     ╎                                                                                   
-                                    ╎ ACTIVITY                                                                          
-                                    ╎  1 comment · reviews: approved                                                   
-                                    ╎  abc1234 headline · @matt · 2h ago                                               
-                                    ╎  @bob · 1h ago                                                                   
-                                    ╎   looks good                                                                      
-                                    ╎  @bob approved · 1h ago                                                          
-                                    ╎  @matt merged · 5m ago                                                           
-                                    ╎                                                                                   
-                                    ╎ MERGE                                                                             
-                                    ╎ ✔ Ready to merge                                                                  
-                                    ╎                                                                                   
+                                    ╎  MERGE                                                                            
+                                    ╎  ✔ Ready to merge                                                                 
                                     ╎                                                                                   
                                     ╎                                                                                   
                                     ╎                                                                                   
@@ -37,4 +37,4 @@
                                     ╎                                                                                   
                                     ╎                                                                                   
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
- [ ] tabs · c comment · m merge · u update branch · o open · h table                                    PR 1/2   ? help 
+  [ ] tabs · c comment · m merge · u update branch · o open · h table                                   PR 1/2   ? help 
