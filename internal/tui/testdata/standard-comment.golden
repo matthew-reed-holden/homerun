@@ -12,13 +12,13 @@
    │                                                                      │    
     │                                                                      │    
  ╌╌╌│                                                                      │╌╌╌ 
-   o│                                                                      │    
-   e│                                                                      │    
+   #│                                                                      │    
     │                                                                      │    
-   ◆│ ctrl+s send · esc keep draft and close                               │    
-   ╌└──────────────────────────────────────────────────────────────────────┘    
-   ✔ Merged into main by @matt · 6118d02                                        
-   It leaves this tab on the next refresh.                                      
+   ◆│                                                                      │    
+   ╌│ ctrl+s send · esc keep draft and close                               │    
+   I└──────────────────────────────────────────────────────────────────────┘    
                                                                                 
+   SUMMARY                                                                      
+   Heading                                                                      
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  [ ] tabs · c comment · m merge · u update branch · o open     PR 1/2   ? help 
+  [ ] tabs · c comment · m merge · u update branch · o open         0%   ? help 

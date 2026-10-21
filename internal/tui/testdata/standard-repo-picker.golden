@@ -12,13 +12,13 @@
    #2 · typo · @b│                                          │  ◇ held          
     typo fix      │ ▌ o/e2e ● 2 PRs                         │                  
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌│   o/backend                             │╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-   o/e2e · #1     │                                          │                  
-   e2e PR         │ enter pick · esc cancel                  │                  
-    OPEN   main ← └──────────────────────────────────────────┘                  
-   ◆ Overview  ◇ Checks 1/2  ◇ Reviews  ◇ Files 0  ◇ Commits                    
-   ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+   #1 e2e PR      │                                          │                  
+    OPEN   main ← │ enter pick · esc cancel                  │                  
+    CI / fail ech└──────────────────────────────────────────┘                  
    SUMMARY                                                                      
    No description provided.                                                     
                                                                                 
+   ACTIVITY                                                                     
+   loading…                                                                     
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
   l/enter preview · / filter · r rerun · m merge                PR 1/2   ? help 

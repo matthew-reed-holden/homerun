@@ -12,13 +12,13 @@
    #2 · typo · @bob                                            ◇ held          
     typo fix                                                                    
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-   o/e2e · #1 · head d954af8                                                    
-   e2e PR                                                                       
-    MERGED   main ← feat  @matt                                                 
-   ◇ Overview  ◆ Checks 2/4  ◇ Reviews 1  ◇ Files 3  ◇ Commits 1                
+   #1 e2e PR                                                                    
+    MERGED   into main by @matt · 6118d02                                       
+   ◇  Overview   ◆  Checks 2/4   ◇  Reviews 1   ◇  Files 3   ◇  Commits 1       
    ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
    2  HOMERUN  · 2  STATUS                                                      
    ─────────────────────────────────────────────────────────────────────────    
    ▌ CI / pass  HOMERUN                                                   4s   
+     CI / fail  HOMERUN  — echo bad; exit 1                               3s   
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  enter log · space fold · r rerun · x cancel · o open          PR 1/2   ? help 
+  enter log · space fold · r rerun · x cancel · o open       check 1/6   ? help 

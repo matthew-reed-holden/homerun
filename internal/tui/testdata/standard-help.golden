@@ -12,13 +12,13 @@
    │ /       filter           /     search          y      copy sha      │     
     │ ctrl+r  reload config    n     next match      m      merge         │     
  ╌╌╌│ T       theme            N     prev match      u      update branch │╌╌╌╌ 
-   o│ ?       help             e     next failure    c      comment       │     
-   e│ q       quit                                   ctrl+s send          │     
-    │                                                                     │     
-   ◆│ icons: nerd | unicode | ascii, now nerd · boxes here? set unicode   │     
-   ╌│                                                                     │╌    
-   S│ any key closes · engine: client                                     │     
-   N└─────────────────────────────────────────────────────────────────────┘     
-                                                                                
+   #│ ?       help             e     next failure    c      comment       │     
+    │ q       quit                                   ctrl+s send          │     
+   │                                                                     │     
+   S│ icons: nerd | unicode | ascii, now nerd · boxes here? set unicode   │     
+   N│                                                                     │     
+    │ any key closes · engine: client                                     │     
+   A└─────────────────────────────────────────────────────────────────────┘     
+   loading…                                                                     
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
   l/enter preview · / filter · r rerun · m merge                PR 1/2   ? help 

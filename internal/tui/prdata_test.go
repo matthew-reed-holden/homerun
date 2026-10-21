@@ -150,18 +150,18 @@ func strip(ls []string) []string {
 func TestSummaryMerge(t *testing.T) {
 	s := sumFixture()
 	want := []string{
-		"⚠ 3 commits behind main · ✔ no conflicts",
-		"Checks ✘ 1 failing (1 required) · ✔ 4 passed",
+		ic("behind") + " 3 commits behind main · " + ic("ci-pass") + " no conflicts",
+		"Checks " + ic("ci-fail") + " 1 failing (1 required) · " + ic("ci-pass") + " 4 passed",
 	}
 	if got := strip(summaryMerge(s, 3, true)); !slices.Equal(got, want) {
 		t.Fatalf("got %q", got)
 	}
 	s.Mergeable = "CONFLICTING"
-	if got := strip(summaryMerge(s, 0, true)); got[0] != "✘ conflicts" {
+	if got := strip(summaryMerge(s, 0, true)); got[0] != ic("ci-fail")+" conflicts" {
 		t.Fatalf("conflicts: %q", got)
 	}
 	s.MergeState = "BEHIND"
-	if got := strip(summaryMerge(s, 0, false)); got[0] != "⚠ behind main · ✘ conflicts" {
+	if got := strip(summaryMerge(s, 0, false)); got[0] != ic("behind")+" behind main · "+ic("ci-fail")+" conflicts" {
 		t.Fatalf("unknown behind: %q", got)
 	}
 	s.Checks = nil
@@ -177,14 +177,14 @@ func summaryModel(t *testing.T) *model {
 func TestBranchPreviewHasNoSummary(t *testing.T) {
 	m := summaryModel(t)
 	keysIn(m, "4")
-	if out := screen(m); strings.Contains(out, "Checks ✘") || strings.Contains(out, "Reviews:") || len(m.previewHead(80)) != 0 {
+	if out := screen(m); strings.Contains(out, "Checks "+ic("ci-fail")) || strings.Contains(out, "Reviews:") || len(m.previewHead(80)) != 0 {
 		t.Fatalf("summary on a branch row:\n%s", out)
 	}
 }
 
 func TestSummaryKeepsTreeFocus(t *testing.T) {
 	m := summaryModel(t)
-	if out := ansi.Strip(m.render()); !strings.Contains(out, "Checks ✘ 1 failing (1 required)") {
+	if out := ansi.Strip(m.render()); !strings.Contains(out, "Checks "+ic("ci-fail")+" 1 failing (1 required)") {
 		t.Fatalf("no summary:\n%s", out)
 	}
 	keysIn(m, "l")
@@ -211,14 +211,14 @@ func TestPreviewClickOffsetsTree(t *testing.T) {
 	keysIn(m, "]")
 	lines := previewLines(m)
 	row := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, "CI / fail") })
-	if row < prHeadH {
+	if row < m.prHeadH(lay.pw-2) {
 		t.Fatalf("no CI / fail row below the header:\n%s", strings.Join(lines, "\n"))
 	}
 	m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + row, Button: tea.MouseLeft}) // the second tree row's own line
 	if c, step, _ := m.tree.selected(); c.Name != "homerun / CI / fail" || step != -1 {
 		t.Fatalf("clicked CI / fail, selected %q step %d (cur %d)", c.Name, step, m.tree.cur)
 	}
-	for y := range prHeadH { // the where, title, state, tabs and foul lines
+	for y := range m.prHeadH(lay.pw - 2) { // the where, title, state, tabs and foul lines
 		m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + y, Button: tea.MouseLeft})
 		if c, step, _ := m.tree.selected(); c.Name != "homerun / CI / fail" || step != -1 {
 			t.Fatalf("click on header line %d selected %q step %d", y, c.Name, step)

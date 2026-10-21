@@ -8,6 +8,7 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/matthew-reed-holden/homerun/internal/pr"
 	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 )
@@ -36,17 +37,57 @@ func canMerge(d *pr.Detail) bool {
 	return d.State == "OPEN" && (d.MergeState == "CLEAN" || d.MergeState == "HAS_HOOKS" || d.MergeState == "UNSTABLE")
 }
 
-// mergeLines is the merge box, plain: blocking lines, then behind, then ready.
-func mergeLines(d *pr.Detail) []string {
+// mergeLine is one line of the merge box: an icon role, the text, and a key
+// hint shown dim at the right end.
+type mergeLine struct {
+	icon string // ci-fail, behind, ci-pass, ci-pending, pr-merged or pr-closed
+	text string
+	hint string
+}
+
+// String is the line plain, for a status or a test: icon, text, then the hint.
+func (l mergeLine) String() string {
+	s := ic(l.icon) + " " + l.text
+	if l.hint != "" {
+		s += " · " + l.hint
+	}
+	return s
+}
+
+// render is the line w wide: the icon in its colour; the text chalk, or the
+// icon's colour for behind, ready, merged and closed; the hint dim, right-aligned.
+func (l mergeLine) render(w int) string {
+	var s string
+	switch l.icon {
+	case "behind":
+		s = th.lights.Render(ic(l.icon) + " " + l.text)
+	case "ci-pass":
+		s = th.safe.Render(ic(l.icon) + " " + l.text)
+	case "ci-pending":
+		s = th.dim.Render(ic(l.icon) + " " + l.text)
+	case "pr-merged", "pr-closed":
+		s = tint(l.icon, ic(l.icon)) + " " + th.bold.Render(l.text)
+	default:
+		s = paint(l.icon) + " " + th.fg.Render(l.text)
+	}
+	if l.hint == "" {
+		return truncate(s, w)
+	}
+	h := th.dim.Render(l.hint)
+	return fit(truncate(s, w-ansi.StringWidth(h)-2), w-ansi.StringWidth(h)) + h
+}
+
+// mergeLines is the merge box: blocking lines, then behind, then ready.
+func mergeLines(d *pr.Detail) []mergeLine {
 	switch d.State {
 	case "MERGED":
-		return []string{"Merged"}
+		return []mergeLine{{"pr-merged", "Merged", ""}}
 	case "CLOSED":
-		return []string{"Closed"}
+		return []mergeLine{{"pr-closed", "Closed", ""}}
 	}
-	var out []string
+	var out []mergeLine
 	if d.Mergeable == "CONFLICTING" {
-		out = append(out, "✘ Conflicts, resolve on GitHub or locally")
+		out = append(out, mergeLine{"ci-fail", "Conflicts, resolve on GitHub or locally", ""})
 	}
 	var failing []string
 	for _, c := range d.Checks {
@@ -55,53 +96,36 @@ func mergeLines(d *pr.Detail) []string {
 		}
 	}
 	if len(failing) > 0 {
-		out = append(out, "✘ Required checks failing: "+strings.Join(failing, ", "))
+		out = append(out, mergeLine{"ci-fail", "Required checks failing: " + strings.Join(failing, ", "), ""})
 	}
 	switch d.ReviewDecision {
 	case "CHANGES_REQUESTED":
-		out = append(out, "✘ Changes requested")
+		out = append(out, mergeLine{"ci-fail", "Changes requested", ""})
 	case "REVIEW_REQUIRED":
-		out = append(out, "✘ Review required")
+		out = append(out, mergeLine{"ci-fail", "Review required", ""})
 	}
 	if d.IsDraft {
-		out = append(out, "◌ Draft")
+		out = append(out, mergeLine{"ci-pending", "Draft", ""})
 	}
 	// BEHIND with a known count is explained by the behind line.
 	if len(out) == 0 && !canMerge(d) && (d.MergeState != "BEHIND" || d.Behind <= 0) {
-		out = append(out, "✘ Not mergeable yet (GitHub: "+termsafe.Line(d.MergeState)+")")
+		out = append(out, mergeLine{"ci-fail", "Not mergeable yet (GitHub: " + termsafe.Line(d.MergeState) + ")", ""})
 	}
 	blocked := len(out) > 0
 	if d.Behind > 0 {
-		l := fmt.Sprintf("⚠ %d commits behind base", d.Behind)
+		l := mergeLine{"behind", fmt.Sprintf("%d commits behind %s", d.Behind, termsafe.Line(d.BaseRef)), ""}
 		if d.Behind == 1 {
-			l = "⚠ 1 commit behind base"
+			l.text = "1 commit behind " + termsafe.Line(d.BaseRef)
 		}
 		if d.ViewerCanUpdateBranch {
-			l += " · u update"
+			l.hint = "u update"
 		}
 		out = append(out, l)
 	}
 	if !blocked && canMerge(d) {
-		out = append(out, "✔ Ready to merge")
+		out = append(out, mergeLine{"ci-pass", "Ready to merge", ""})
 	}
 	return out
-}
-
-// paintMerge colours a merge box line by its leading mark.
-func paintMerge(l string) string {
-	switch {
-	case strings.HasPrefix(l, "✔"):
-		return th.safe.Render(l)
-	case strings.HasPrefix(l, "⚠"):
-		return th.lights.Render(l)
-	case strings.HasPrefix(l, "✘"), l == "Closed":
-		return th.out.Render(l)
-	case l == "Merged":
-		return th.clay.Bold(true).Render(l)
-	case strings.HasPrefix(l, "◌"):
-		return th.dim.Render(l)
-	}
-	return th.bold.Render(l)
 }
 
 var methodLabels = map[string]string{"MERGE": "Create a merge commit", "SQUASH": "Squash and merge", "REBASE": "Rebase and merge"}
@@ -172,7 +196,7 @@ func (m *model) mergeDetail(repo string, n int, d *pr.Detail) {
 		return
 	}
 	if !canMerge(d) {
-		m.say("Can't merge: " + mergeLines(d)[0])
+		m.say("Can't merge: " + mergeLines(d)[0].text)
 		return
 	}
 	methods := d.MergeMethods

@@ -1037,8 +1037,23 @@ func (m *model) dugout() string {
 // maxHints is as many key hints as the dugout line shows; ? help has the rest.
 const maxHints = 6
 
-// position is "PR 2/3" while the table's cursor is on a PR row, else "".
+// position is "PR 2/3" while the table's cursor is on a PR row; inside a
+// PR, how far the Overview has scrolled (when it scrolls), or "check 2/5"
+// on Checks.
 func (m *model) position() string {
+	if m.inPR() {
+		switch m.pr.section {
+		case 0:
+			if vp := &m.pr.vp; !(vp.AtTop() && vp.AtBottom()) { // nothing to scroll: nothing to say
+				return fmt.Sprintf("%d%%", int(vp.ScrollPercent()*100))
+			}
+			return ""
+		case 1:
+			if n := len(m.tree.nodes()); n > 0 {
+				return fmt.Sprintf("check %d/%d", m.tree.cur+1, n)
+			}
+		}
+	}
 	s, ok := m.selPR()
 	if !ok {
 		return ""
@@ -1074,12 +1089,12 @@ func (m *model) click(mo tea.Mouse) tea.Cmd {
 		case m.log != nil:
 		case m.pr == nil:
 			m.tree.click(y - len(m.previewHead(lay.pw-2)))
-		case y == prTabsY:
+		case y == m.prTabsY(lay.pw-2):
 			if i := m.chipAt(mo.X-lay.px, lay.pw-2); i >= 0 {
 				m.pr.section = i
 			}
 		case m.pr.section == 1:
-			m.tree.click(y - (prHeadH - 1) - len(m.checksHead(lay.pw-2))) // below the header, the tabs and the Actions lines
+			m.tree.click(y - (m.prHeadH(lay.pw-2) - 1) - len(m.checksHead(lay.pw-2))) // below the header, the tabs and the Actions lines
 		}
 		return cmd
 	}
@@ -1108,7 +1123,7 @@ func (m *model) wheel(mo tea.Mouse) tea.Cmd {
 		if m.pr.section != 0 {
 			break
 		}
-		m.syncPage(lay.pw-2, lay.ph-prHeadH)
+		m.syncPage(lay.pw-2, lay.ph-m.prHeadH(lay.pw-2))
 		if d > 0 {
 			m.pr.vp.ScrollDown(3)
 		} else {

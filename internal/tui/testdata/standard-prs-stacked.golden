@@ -12,19 +12,19 @@
    #2 · @bob                                                  ◇ held             +0 −0  
     typo fix                                                                              
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-   o/e2e · #1                                                                             
-   e2e PR                                                                                 
-    OPEN   main ← feat  @matt · 5m ago                                                    
-   ◆ Overview  ◇ Checks 1/3  ◇ Reviews  ◇ Files 3  ◇ Commits                              
-   ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+   #1 e2e PR                                                                              
+    OPEN   main ← feat · 3 behind                                                         
+    CI / fail echo bad; exit 1 · 3s ·  approved                                         
    SUMMARY                                                                                
    Makes the thing optional.                                                              
                                                                                           
    ACTIVITY                                                                               
-    2 comments · reviews: approved                                                       
    loading…                                                                               
                                                                                           
    MERGE                                                                                  
-   ⚠ 3 commits behind main · ✔ no conflicts                                               
+    3 commits behind main ·  no conflicts                                               
+   Checks  1 failing (1 required)                                                        
+                                                                                          
+                                                                                          
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
   l/enter preview · / filter · r rerun · m merge · u update branch        PR 1/3   ? help 

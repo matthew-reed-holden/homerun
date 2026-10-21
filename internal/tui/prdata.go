@@ -89,17 +89,17 @@ func summaryMerge(s pr.Summary, behind int, known bool) []string {
 	var merge []string
 	switch {
 	case known && behind == 1:
-		merge = append(merge, th.lights.Render("⚠ 1 commit behind "+base))
+		merge = append(merge, th.lights.Render(ic("behind")+" 1 commit behind "+base))
 	case known && behind > 1:
-		merge = append(merge, th.lights.Render(fmt.Sprintf("⚠ %d commits behind %s", behind, base)))
+		merge = append(merge, th.lights.Render(fmt.Sprintf("%s %d commits behind %s", ic("behind"), behind, base)))
 	case !known && s.MergeState == "BEHIND":
-		merge = append(merge, th.lights.Render("⚠ behind "+base))
+		merge = append(merge, th.lights.Render(ic("behind")+" behind "+base))
 	}
 	switch s.Mergeable {
 	case "CONFLICTING":
-		merge = append(merge, th.out.Render("✘ conflicts"))
+		merge = append(merge, th.out.Render(ic("ci-fail")+" conflicts"))
 	case "MERGEABLE":
-		merge = append(merge, th.safe.Render("✔ no conflicts"))
+		merge = append(merge, th.safe.Render(ic("ci-pass")+" no conflicts"))
 	}
 	var out []string
 	if len(merge) > 0 {
@@ -135,13 +135,13 @@ func checksPart(s pr.Summary) []string {
 		if req > 0 {
 			p += fmt.Sprintf(" (%d required)", req)
 		}
-		parts = append(parts, th.out.Render("✘ "+p))
+		parts = append(parts, th.out.Render(ic("ci-fail")+" "+p))
 	}
 	if pass > 0 {
-		parts = append(parts, th.safe.Render(fmt.Sprintf("✔ %d passed", pass)))
+		parts = append(parts, th.safe.Render(fmt.Sprintf("%s %d passed", ic("ci-pass"), pass)))
 	}
 	if wait > 0 {
-		parts = append(parts, th.lights.Render(fmt.Sprintf("◌ %d pending", wait)))
+		parts = append(parts, th.lights.Render(fmt.Sprintf("%s %d pending", ic("ci-pending"), wait)))
 	}
 	parts[0] = "Checks " + parts[0]
 	return parts

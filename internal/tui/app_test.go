@@ -192,7 +192,7 @@ func TestScreenIsExactSize(t *testing.T) {
 
 func TestPreviewFollowsTable(t *testing.T) {
 	m, _ := newTestModel(t)
-	if !strings.Contains(screen(m), "o/e2e · #1") || !strings.Contains(screen(m), "◆ Overview") {
+	if !strings.Contains(screen(m), "o/e2e · #1") || !strings.Contains(screen(m), "◆  Overview") {
 		t.Fatalf("preview title:\n%s", screen(m))
 	}
 	keysIn(m, "5", "j", "j") // runs: r1
@@ -289,7 +289,7 @@ func TestStackedBelow100(t *testing.T) {
 	lines := strings.Split(screen(m), "\n")
 	lay := m.layout()
 	if !strings.Contains(lines[lay.top], "is:open author:@me") || !strings.HasPrefix(lines[lay.py-1], " ╌╌╌") ||
-		!strings.HasPrefix(lines[lay.py], "   o/e2e · #1") || lay.th != 9 || lay.ph != 14 || !strings.HasSuffix(lines[29], "? help ") {
+		!strings.HasPrefix(lines[lay.py], "   #1 e2e PR") || lay.th != 9 || lay.ph != 14 || !strings.HasSuffix(lines[29], "? help ") {
 		t.Fatalf("layout %+v:\n%s", lay, strings.Join(lines, "\n"))
 	}
 }

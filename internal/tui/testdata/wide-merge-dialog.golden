@@ -4,8 +4,8 @@
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
    is:open author:@me              ╎  o/e2e · #1                                                                       
  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  e2e PR                                                                           
-   Title                       CI ╎   OPEN   main ← feat  @matt                                                       
- ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  ◆ Overview  ◇ Checks 2/4  ◇ Reviews 1  ◇ Files 3  ◇ Commits 1                    
+   Title                       CI ╎   OPEN   main ← feat                                         by @matt · 5m ago    
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  ◆  Overview   ◇  Checks 2/4   ◇  Reviews 1   ◇  Files 3   ◇  Commits 1           
  ▌ #1 · @matt                 1/2 ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
  ▌  e2e PR                          ╎  SUMMARY                                                                          
                                     ╎  Heading                                                                          
@@ -13,7 +13,7 @@
     typo fix                        ╎  Makes the thing b optional.                                                      
                                     ╎                                                                                   
                                     ╎  ACTIVITY                                                                         
-                                    ╎   1 comment · reviews: approved                                                  
+                                    ╎   2h  abc1234  headline                                                          
                           ┌─────────────────────────────────────────────────────────────────┐                           
                           │ Merge #1 into main?                                             │                           
                           │                                                                 │                           
@@ -21,7 +21,7 @@
                           │                                                                 │                           
                           │ [tab] switch · [y] merge · any other key cancels                │                           
                           └─────────────────────────────────────────────────────────────────┘                           
-                                    ╎  ✔ Ready to merge                                                                 
+                                    ╎                                                                                   
                                     ╎                                                                                   
                                     ╎                                                                                   
                                     ╎                                                                                   
@@ -37,4 +37,4 @@
                                     ╎                                                                                   
                                     ╎                                                                                   
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  [ ] tabs · c comment · m merge · u update branch · o open · h table                                   PR 1/2   ? help 
+  [ ] tabs · c comment · m merge · u update branch · o open · h table                                            ? help 

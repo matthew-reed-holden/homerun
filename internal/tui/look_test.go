@@ -352,7 +352,7 @@ func TestPreviewHeaderTitleOnce(t *testing.T) {
 			t.Fatalf("state line %q lacks %q", ls[2], want)
 		}
 	}
-	if !strings.Contains(ls[3], "◆ Overview") || !strings.Contains(ls[3], "◇ Checks 2/4") {
+	if !strings.Contains(ls[3], "◆  Overview") || !strings.Contains(ls[3], "◇  Checks 2/4") {
 		t.Fatalf("tabs %q", ls[3])
 	}
 	lay := m.layout()

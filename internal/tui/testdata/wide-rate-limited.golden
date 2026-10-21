@@ -4,21 +4,21 @@
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
    is:pr repo:o/e2e is:open author:@me · results from 14:02     ╎  o/e2e · #1                                          
  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  e2e PR                                              
-   Title                         CI                        ╎   OPEN   main ← feat  @matt · 2h ago                 
- ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  ◆ Overview ◇ Checks 1/3 ◇ Rev ◇ Files 3 ◇ Cmts      
+   Title                         CI                        ╎   OPEN   main ← feat            by @matt · 2h ago    
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  ◆  Overview Checks 1/3 Reviews Files 3 Commits      
  ▌ #1 · feat · @matt            1/3              +40 −7    2h ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
- ▌  e2e PR                                                       ╎  SUMMARY                                             
-                                                                 ╎  Makes the thing optional.                           
+ ▌  e2e PR                                                       ╎   CI / fail echo bad; exit 1 · 3s                   
+                                                                 ╎   approved                                          
    #2 · @bob                  ◇ held               +0 −0    5h ╎                                                      
-    typo fix                                                     ╎  ACTIVITY                                            
-                                                                 ╎   2 comments · reviews: approved                    
-   #5 · @sam · draft        not run                +0 −0    5d ╎  loading…                                            
-    pr: GraphQL page cache                                       ╎                                                      
-                                                                 ╎  MERGE                                               
-                                                                 ╎  ✔ no conflicts                                      
-                                                                 ╎  Checks ✘ 1 failing (1 required)                     
+    typo fix                                                     ╎  SUMMARY                                             
+                                                                 ╎  Makes the thing optional.                           
+   #5 · @sam · draft        not run                +0 −0    5d ╎                                                      
+    pr: GraphQL page cache                                       ╎  ACTIVITY                                            
                                                                  ╎  loading…                                            
                                                                  ╎                                                      
+                                                                 ╎  MERGE                                               
+                                                                 ╎   no conflicts                                      
+                                                                 ╎  Checks  1 failing (1 required)                     
                                                                  ╎                                                      
                                                                  ╎                                                      
                                                                  ╎                                                      

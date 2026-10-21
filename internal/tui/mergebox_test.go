@@ -31,33 +31,44 @@ func TestMergeLines(t *testing.T) {
 		set  func(d *pr.Detail)
 		want []string
 	}{
-		{"clean", func(d *pr.Detail) {}, []string{"✔ Ready to merge"}},
-		{"behind", func(d *pr.Detail) { d.Behind = 3 }, []string{"⚠ 3 commits behind base · u update", "✔ Ready to merge"}},
+		{"clean", func(d *pr.Detail) {}, []string{"+ Ready to merge"}},
+		{"behind", func(d *pr.Detail) { d.Behind = 3 }, []string{"v 3 commits behind main · u update", "+ Ready to merge"}},
 		{"behind one, can't update", func(d *pr.Detail) { d.Behind, d.ViewerCanUpdateBranch = 1, false },
-			[]string{"⚠ 1 commit behind base", "✔ Ready to merge"}},
+			[]string{"v 1 commit behind main", "+ Ready to merge"}},
 		{"conflicts", func(d *pr.Detail) { d.Mergeable, d.MergeState = "CONFLICTING", "DIRTY" },
-			[]string{"✘ Conflicts, resolve on GitHub or locally"}},
+			[]string{"x Conflicts, resolve on GitHub or locally"}},
 		{"required failing", func(d *pr.Detail) { d.Checks, d.MergeState = failing, "BLOCKED" },
-			[]string{"✘ Required checks failing: lint, test"}},
+			[]string{"x Required checks failing: lint, test"}},
 		{"review required", func(d *pr.Detail) { d.ReviewDecision, d.MergeState = "REVIEW_REQUIRED", "BLOCKED" },
-			[]string{"✘ Review required"}},
+			[]string{"x Review required"}},
 		{"changes requested", func(d *pr.Detail) { d.ReviewDecision, d.MergeState = "CHANGES_REQUESTED", "BLOCKED" },
-			[]string{"✘ Changes requested"}},
-		{"draft", func(d *pr.Detail) { d.IsDraft, d.MergeState = true, "DRAFT" }, []string{"◌ Draft"}},
-		{"blocked", func(d *pr.Detail) { d.MergeState = "BLOCKED" }, []string{"✘ Not mergeable yet (GitHub: BLOCKED)"}},
-		{"unknown", func(d *pr.Detail) { d.MergeState = "UNKNOWN" }, []string{"✘ Not mergeable yet (GitHub: UNKNOWN)"}},
+			[]string{"x Changes requested"}},
+		{"draft", func(d *pr.Detail) { d.IsDraft, d.MergeState = true, "DRAFT" }, []string{". Draft"}},
+		{"blocked", func(d *pr.Detail) { d.MergeState = "BLOCKED" }, []string{"x Not mergeable yet (GitHub: BLOCKED)"}},
+		{"unknown", func(d *pr.Detail) { d.MergeState = "UNKNOWN" }, []string{"x Not mergeable yet (GitHub: UNKNOWN)"}},
 		{"all blocking, in order", func(d *pr.Detail) {
 			d.Mergeable, d.MergeState, d.Checks, d.ReviewDecision, d.IsDraft, d.Behind = "CONFLICTING", "DIRTY", failing, "REVIEW_REQUIRED", true, 2
-		}, []string{"✘ Conflicts, resolve on GitHub or locally", "✘ Required checks failing: lint, test", "✘ Review required", "◌ Draft", "⚠ 2 commits behind base · u update"}},
-		{"merged", func(d *pr.Detail) { d.State = "MERGED" }, []string{"Merged"}},
-		{"closed", func(d *pr.Detail) { d.State = "CLOSED" }, []string{"Closed"}},
+		}, []string{"x Conflicts, resolve on GitHub or locally", "x Required checks failing: lint, test", "x Review required", ". Draft", "v 2 commits behind main · u update"}},
+		{"merged", func(d *pr.Detail) { d.State = "MERGED" }, []string{"m Merged"}},
+		{"closed", func(d *pr.Detail) { d.State = "CLOSED" }, []string{"c Closed"}},
 	}
+	useIcons(t, IconsASCII) // the lines carry icon roles; ascii pins them readably
 	for _, c := range cases {
 		d := openDetail()
 		c.set(d)
-		if got := mergeLines(d); !slices.Equal(got, c.want) {
+		var got []string
+		for _, l := range mergeLines(d) {
+			got = append(got, l.String())
+		}
+		if !slices.Equal(got, c.want) {
 			t.Errorf("%s: %q, want %q", c.name, got, c.want)
 		}
+	}
+	// Rendered, the u update hint sits dim at the right end of its line.
+	d := openDetail()
+	d.Behind = 3
+	if l := ansi.Strip(mergeLines(d)[0].render(40)); l != fit("v 3 commits behind main", 32)+"u update" {
+		t.Errorf("behind line %q", l)
 	}
 }
 
@@ -157,7 +168,7 @@ func TestMergeBlocked(t *testing.T) {
 	d.ReviewDecision, d.MergeState = "REVIEW_REQUIRED", "BLOCKED"
 	m, f := prOpenModel(t, d)
 	keysIn(m, "m")
-	if m.dlg != nil || m.status != "Can't merge: ✘ Review required" || len(f.Merges) != 0 {
+	if m.dlg != nil || m.status != "Can't merge: Review required" || len(f.Merges) != 0 {
 		t.Fatalf("dlg %v status %q", m.dlg, m.status)
 	}
 }
@@ -250,7 +261,7 @@ func TestMergeFromDashboardRow(t *testing.T) {
 	keysIn(m, "n")
 	f.Details["o/e2e#1"].MergeState, f.Details["o/e2e#1"].ReviewDecision = "BLOCKED", "REVIEW_REQUIRED"
 	step(m, keysIn(m, "m"))
-	if m.dlg != nil || m.status != "Can't merge: ✘ Review required" {
+	if m.dlg != nil || m.status != "Can't merge: Review required" {
 		t.Fatalf("blocked: %q", m.status)
 	}
 
@@ -278,9 +289,9 @@ func TestMergedViewSaysMerged(t *testing.T) {
 	f.Details["o/e2e#1"].State = "MERGED"
 	step(m, keysIn(m, "y"))
 	page := strings.Join(strip(m.prPage(80)), "\n")
-	indexAll(t, page, "Merged into main", "MERGE\nMerged")
-	if h := m.prHeader(80)[1]; !strings.Contains(h, tile("MERGED")) {
-		t.Fatalf("header %q", ansi.Strip(h))
+	indexAll(t, page, "MERGE\n"+ic("pr-merged")+" Merged")
+	if h := ansi.Strip(m.prHeader(80)[2]); !strings.Contains(m.prHeader(80)[2], tile("MERGED")) || !strings.Contains(h, "into main") {
+		t.Fatalf("header %q", h)
 	}
 	if strings.Contains(page, "Ready to merge") {
 		t.Fatalf("page:\n%s", page)

@@ -4,13 +4,13 @@
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
    is:open author:@me              ╎  o/e2e · #1                                                                       
  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  e2e PR                                                                           
-   Title                       CI ╎   MERGED   main ← feat  @matt                                                     
- ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  ◆ Overview  ◇ Checks 2/4  ◇ Reviews 1  ◇ Files 3  ◇ Commits 1                    
+   Title                       CI ╎   MERGED   into main by @matt · 6118d02                                           
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  ◆  Overview   ◇  Checks 2/4   ◇  Reviews 1   ◇  Files 3   ◇  Commits 1           
  ▌ #1 · @matt                 1/2 ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
- ▌  e2e PR                          ╎  ✔ Merged into main by @matt · 6118d02                                            
-                                    ╎  It leaves this tab on the next refresh.                                          
-   #2 · @bob                ◇ held ╎                                                                                   
-    typo fix                        ╎  SUMMARY                                                                          
+ ▌  e2e PR                          ╎  It leaves this tab on the next refresh.                                          
+                                    ╎                                                                                   
+   #2 · @bob                ◇ held ╎  SUMMARY                                                                          
+    typo fix                        ╎  Heading                                                                          
                         ┌──────────────────────────────────────────────────────────────────────┐                        
                         │ Comment on #1                                                        │                        
                         │                                                                      │                        
@@ -37,4 +37,4 @@
                                     ╎                                                                                   
                                     ╎                                                                                   
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  [ ] tabs · c comment · m merge · u update branch · o open · h table                                   PR 1/2   ? help 
+  [ ] tabs · c comment · m merge · u update branch · o open · h table                                            ? help 

@@ -522,7 +522,7 @@ func TestUpdateBehindUnknown(t *testing.T) {
 // chipsLine is the preview pane's first inner line, unstyled and trimmed.
 func chipsLine(m *model) string {
 	lay := m.layout()
-	l := strings.Split(screen(m), "\n")[lay.py+prTabsY]
+	l := strings.Split(screen(m), "\n")[lay.py+m.prTabsY(lay.pw-2)]
 	return strings.TrimSpace(strings.Trim(ansi.Cut(l, lay.px, lay.px+lay.pw), "│"))
 }
 
@@ -533,7 +533,7 @@ func TestEnterPreviewFetchesDetail(t *testing.T) {
 	if !slices.Equal(f.DetailCalls, []string{"o/e2e#1"}) || m.focus != onPreview || m.pr == nil {
 		t.Fatalf("calls %v focus %d pr %v", f.DetailCalls, m.focus, m.pr != nil)
 	}
-	if got := chipsLine(m); got != "◆ Overview  ◇ Checks 1/3  ◇ Reviews 1  ◇ Files 3  ◇ Commits 1" {
+	if got := chipsLine(m); got != "◆  Overview   ◇  Checks 1/3   ◇  Reviews 1   ◇  Files 3   ◇  Commits 1" {
 		t.Fatalf("chips %q:\n%s", got, screen(m))
 	}
 	if !strings.Contains(m.chips(80), claySGR+"m◆") || strings.Contains(m.chips(80), "\x1b[7") {
@@ -717,11 +717,11 @@ func TestPRChecksShowActionsLines(t *testing.T) {
 	}
 	// A click lands on the tree row under it, below the header, the tabs and those lines.
 	lay := m.layout()
-	m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + prHeadH + len(m.checksHead(lay.pw-2)) + 1, Button: tea.MouseLeft}) // the second row
+	m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + m.prHeadH(lay.pw-2) + len(m.checksHead(lay.pw-2)) + 1, Button: tea.MouseLeft}) // the second row
 	if m.tree.cur != 1 {
 		t.Fatalf("cur %d", m.tree.cur)
 	}
-	m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + prHeadH + len(m.checksHead(lay.pw-2)) - 1, Button: tea.MouseLeft}) // the rule above the tree
+	m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + m.prHeadH(lay.pw-2) + len(m.checksHead(lay.pw-2)) - 1, Button: tea.MouseLeft}) // the rule above the tree
 	if m.tree.cur != 1 {
 		t.Fatalf("cur %d", m.tree.cur)
 	}

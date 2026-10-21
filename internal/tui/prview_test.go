@@ -80,7 +80,7 @@ func TestEnterOpensPR(t *testing.T) {
 		t.Fatalf("detail calls %v", f.DetailCalls)
 	}
 	out := screen(m)
-	if got := chipsLine(m); got != "◆ Overview  ◇ Checks 2/4  ◇ Reviews 1  ◇ Files 3  ◇ Commits 1" {
+	if got := chipsLine(m); got != "◆  Overview   ◇  Checks 2/4   ◇  Reviews 1   ◇  Files 3   ◇  Commits 1" {
 		t.Fatalf("chips %q:\n%s", got, out)
 	}
 	if !strings.Contains(out, "ACTIVITY") || !strings.Contains(out, "Merged") {
@@ -132,14 +132,14 @@ func TestDescriptionPage(t *testing.T) {
 	m, _ := prOpenModel(t, detailFixture())
 	page := strings.Join(strip(m.prPage(80)), "\n")
 	indexAll(t, page,
-		"✔ Merged into main",
+		"It leaves this tab on the next refresh.",
 		"SUMMARY", "Heading", "Makes the thing b optional.",
 		"ACTIVITY",
-		ic("commit")+" abc1234 headline · @matt · 2h ago",
-		ic("comments")+" @bob · 1h ago", "\n  looks good",
-		ic("rv-approved")+" @bob approved · 1h ago",
-		ic("pr-merged")+" @matt merged · 5m ago",
-		"MERGE", "Merged")
+		" 2h "+ic("commit")+" abc1234  headline",
+		" 1h "+ic("comments")+" @bob: “looks good”",
+		" 1h "+ic("rv-approved")+" @bob approved",
+		" 5m "+ic("pr-merged")+" @matt merged",
+		"MERGE", ic("pr-merged")+" Merged")
 	if strings.Contains(page, "e2e PR") {
 		t.Fatalf("the header has the title; the page repeats it:\n%s", page)
 	}
@@ -150,7 +150,7 @@ func TestDescriptionPage(t *testing.T) {
 		d := detailFixture()
 		d.State = state
 		m.pr.d = d
-		if h := m.prHeader(80)[1]; !strings.Contains(h, tile(state)) {
+		if h := m.prHeader(80)[2]; !strings.Contains(h, tile(state)) {
 			t.Fatalf("%s: header %q", state, ansi.Strip(h))
 		}
 	}
@@ -393,7 +393,8 @@ func TestPRMarkdownEntitiesRenderInert(t *testing.T) {
 	for _, ks := range [][]string{nil, {"G"}} {
 		keysIn(m, ks...)
 		out := m.render()
-		for _, s := range []string{"]52;", "[2J", "\u009b", "\x07"} {
+		// The decoded escapes must not reach the screen; their tails are inert text.
+		for _, s := range []string{"\x1b]52;", "\x1b[2J", "\u009b", "\x07"} {
 			if strings.Contains(out, s) {
 				t.Fatalf("keys %v: %q reached the screen", ks, s)
 			}
@@ -639,8 +640,8 @@ func TestCommentFailureRestoresDraft(t *testing.T) {
 func TestMergedWhileOpen(t *testing.T) {
 	m, _ := prOpenModel(t, detailFixture())
 	page := strip(m.prPage(80))
-	if page[0] != "✔ Merged into main by @matt · 6118d02" || page[1] != "It leaves this tab on the next refresh." {
-		t.Fatalf("page head %q", page[:2])
+	if h := ansi.Strip(m.prHeader(80)[2]); !strings.Contains(h, " MERGED   into main by @matt · 6118d02") || page[0] != "It leaves this tab on the next refresh." {
+		t.Fatalf("header %q page head %q", h, page[:2])
 	}
 	for _, k := range []string{"m", "u"} {
 		m.status = ""
@@ -652,8 +653,8 @@ func TestMergedWhileOpen(t *testing.T) {
 	d := detailFixture()
 	d.MergedBy, d.MergeSHA = "", ""
 	m.pr.d = d
-	if got := strip(m.prPage(80))[0]; got != "✔ Merged into main" {
-		t.Fatalf("no merger known: %q", got)
+	if h := strings.TrimRight(ansi.Strip(m.prHeader(80)[2]), " "); !strings.HasSuffix(h, " MERGED   into main") {
+		t.Fatalf("no merger known: %q", h)
 	}
 }
 
@@ -704,7 +705,7 @@ func TestHoverShowsFullPreview(t *testing.T) {
 		t.Fatal("not on the table")
 	}
 	ls := strings.Join(previewLines(m), "\n")
-	indexAll(t, ls, "o/e2e · #1", "e2e PR", " OPEN ", "main ← feat", "◆ Overview", "SUMMARY", "ACTIVITY", "loading…")
+	indexAll(t, ls, "o/e2e · #1", "e2e PR", " OPEN ", "main ← feat", "◆  Overview", "SUMMARY", "ACTIVITY", "loading…")
 	if out := screen(m); strings.Contains(out, "Reviews: ") || strings.Contains(out, "Checks none") {
 		t.Fatalf("the old summary block is still drawn:\n%s", out)
 	}
@@ -770,7 +771,7 @@ func TestFiveTabs(t *testing.T) {
 		if i > 0 {
 			keysIn(m, "]")
 		}
-		if got := chipsLine(m); !strings.Contains(got, "◆ "+n) {
+		if got := chipsLine(m); !strings.Contains(got, "◆  "+n) {
 			t.Fatalf("after %d ]: %q", i, got)
 		}
 	}
@@ -815,27 +816,29 @@ func TestOverviewHeadings(t *testing.T) {
 	m, _ := prOpenModel(t, openDetail())
 	page := strings.Join(strip(m.prPage(80)), "\n")
 	indexAll(t, page, "SUMMARY", "ACTIVITY", "MERGE")
-	if v := strings.Join(m.prPage(80), "\n"); !strings.Contains(v, claySGR) {
-		t.Fatalf("headings not clay: %q", v)
+	if v := strings.Join(m.prPage(80), "\n"); !strings.Contains(v, "\x1b[1;38;2;232;236;242mSUMMARY") || strings.Contains(v, claySGR+"mSUMMARY") {
+		t.Fatalf("headings not bold chalk: %q", v)
 	}
 }
 
 func TestTabClicks(t *testing.T) {
 	m, _ := hoverModel(t)
 	lay := m.layout()
-	line := strings.Split(screen(m), "\n")[lay.py+prTabsY]
+	tabsY := m.prTabsY(lay.pw - 2)
+	line := strings.Split(screen(m), "\n")[lay.py+tabsY]
 	x := cellOf(line, "Files")
 	if x < 0 {
 		t.Fatalf("no Files tab: %q", line)
 	}
-	m.click(tea.Mouse{X: x, Y: lay.py + prTabsY, Button: tea.MouseLeft})
+	m.click(tea.Mouse{X: x, Y: lay.py + tabsY, Button: tea.MouseLeft})
 	if m.focus != onPreview || m.pr == nil || m.pr.section != 3 {
 		t.Fatalf("a click on Files while hovering: focus %d section %d", m.focus, m.pr.section)
 	}
 	for i, n := range []string{"Overview", "Checks", "Reviews", "Files", "Commits"} {
 		lay := m.layout()
-		line := strings.Split(screen(m), "\n")[lay.py+prTabsY]
-		m.click(tea.Mouse{X: cellOf(line, n), Y: lay.py + prTabsY, Button: tea.MouseLeft})
+		tabsY := m.prTabsY(lay.pw - 2)
+		line := strings.Split(screen(m), "\n")[lay.py+tabsY]
+		m.click(tea.Mouse{X: cellOf(line, n), Y: lay.py + tabsY, Button: tea.MouseLeft})
 		if m.pr.section != i {
 			t.Fatalf("click on %s: section %d", n, m.pr.section)
 		}
@@ -861,7 +864,8 @@ func TestHoverTabsKeepKnownCounts(t *testing.T) {
 	m := goldenModel(t, 120, 40)
 	lay := m.layout()
 	ls := previewLines(m)
-	tabs, rule := ls[prTabsY], ls[prTabsY+1]
+	tabsY := m.prTabsY(lay.pw - 2)
+	tabs, rule := ls[tabsY], ls[tabsY+1]
 	if !strings.Contains(tabs, "Files 3") {
 		t.Fatalf("tabs %q lack the summary's Files count", tabs)
 	}

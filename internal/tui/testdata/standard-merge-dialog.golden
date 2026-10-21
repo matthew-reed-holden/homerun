@@ -12,13 +12,13 @@
    #2│ ○ Create a merge commit  ● Squash and merge  ○ Rebase and merge │       
     ty│                                                                 │       
  ╌╌╌╌╌│ [tab] switch · [y] merge · any other key cancels                │╌╌╌╌╌╌ 
-   o/e└─────────────────────────────────────────────────────────────────┘       
-   e2e PR                                                                       
-    OPEN   main ← feat  @matt                                                   
-   ◆ Overview  ◇ Checks 2/4  ◇ Reviews 1  ◇ Files 3  ◇ Commits 1                
+   #1 └─────────────────────────────────────────────────────────────────┘       
+    OPEN   main ← feat                                                          
+   ◆  Overview   ◇  Checks 2/4   ◇  Reviews 1   ◇  Files 3   ◇  Commits 1       
    ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
    SUMMARY                                                                      
    Heading                                                                      
                                                                                 
+   Makes the thing b optional.                                                  
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  [ ] tabs · c comment · m merge · u update branch · o open     PR 1/2   ? help 
+  [ ] tabs · c comment · m merge · u update branch · o open         0%   ? help 

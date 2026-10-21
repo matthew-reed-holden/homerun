@@ -4,22 +4,22 @@
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
    is:pr repo:o/e2e is:open author:@me                          ╎  o/e2e · #1                                          
  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  e2e PR                                              
-   Title                         CI                        ╎   OPEN   main ← feat  @matt · 5m ago                 
- ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  ◆ Overview ◇ Checks 1/3 ◇ Rev ◇ Files 3 ◇ Cmts      
- ▌ #1 · feat · @matt            1/3      3       +40 −7    5m ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
- ▌  e2e PR                                                       ╎  SUMMARY                                             
-                                                                 ╎  Makes the thing optional.                           
-   #2 · @bob                  ◇ held               +0 −0    3h ╎                                                      
-    typo fix                                                     ╎  ACTIVITY                                            
-                                                                 ╎   2 comments · reviews: approved                    
-   #5 · @sam · draft        not run                +0 −0    5d ╎  loading…                                            
+   Title                         CI                        ╎   OPEN   main ← feat                                 
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  by @matt · 5m ago · 3 behind                        
+ ▌ #1 · feat · @matt            1/3      3       +40 −7    5m ╎  ◆  Overview Checks 1/3 Reviews Files 3 Commits      
+ ▌  e2e PR                                                       ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+                                                                 ╎   CI / fail echo bad; exit 1 · 3s                   
+   #2 · @bob                  ◇ held               +0 −0    3h ╎   approved                                          
+    typo fix                                                     ╎                                                      
+                                                                 ╎  SUMMARY                                             
+   #5 · @sam · draft        not run                +0 −0    5d ╎  Makes the thing optional.                           
     pr: GraphQL page cache                                       ╎                                                      
-                                                                 ╎  MERGE                                               
-                                                                 ╎  ⚠ 3 commits behind main · ✔ no conflicts            
-                                                                 ╎  Checks ✘ 1 failing (1 required)                     
+                                                                 ╎  ACTIVITY                                            
                                                                  ╎  loading…                                            
                                                                  ╎                                                      
-                                                                 ╎                                                      
+                                                                 ╎  MERGE                                               
+                                                                 ╎   3 commits behind main ·  no conflicts            
+                                                                 ╎  Checks  1 failing (1 required)                     
                                                                  ╎                                                      
                                                                  ╎                                                      
                                                                  ╎                                                      
