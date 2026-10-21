@@ -113,3 +113,49 @@ func TestThemeChangeRepaints(t *testing.T) {
 		t.Fatalf("night fg left in the table after the switch to day:\n%s", ansi.Strip(out))
 	}
 }
+
+func TestThemeCycle(t *testing.T) {
+	defer setTheme(true)
+	m := newModel(nil, time.Now, Options{})
+	m.Update(tea.BackgroundColorMsg{Color: lipgloss.Color("#000000")})
+	for i, want := range []palette{night, day, night} {
+		m.key(press("T"))
+		if th.p != want {
+			t.Fatalf("press %d: palette = %v, want %v", i+1, th.p, want)
+		}
+	}
+	if m.themeChoice != themeAuto {
+		t.Fatalf("after three presses choice = %q, want auto", m.themeChoice)
+	}
+	if !strings.Contains(m.status, "theme: auto") {
+		t.Fatalf("status = %q", m.status)
+	}
+}
+
+func TestExplicitThemeIgnoresTerminal(t *testing.T) {
+	defer setTheme(true)
+	m := newModel(nil, time.Now, Options{Theme: "night"})
+	m.Update(tea.BackgroundColorMsg{Color: lipgloss.Color("#ffffff")})
+	if th.p != night {
+		t.Fatal("a light answer overrode theme: night")
+	}
+}
+
+func TestThemeRepaintsAll(t *testing.T) {
+	defer setTheme(true)
+	m, _ := newTestModel(t)
+	m.Update(tea.ColorProfileMsg{Profile: colorprofile.TrueColor})
+	m.Update(tea.BackgroundColorMsg{Color: lipgloss.Color("#000000")})
+	m.key(press("T")) // night
+	m.key(press("T")) // day
+	out := m.render()
+	if !strings.Contains(out, "38;2;19;33;58") {
+		t.Errorf("no day ink in the render")
+	}
+	if strings.Contains(out, "48;2;9;16;32") {
+		t.Errorf("night strip still in the render")
+	}
+	if got := m.View().BackgroundColor; got != day.bg {
+		t.Errorf("View bg = %v, want day bg", got)
+	}
+}

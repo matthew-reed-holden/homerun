@@ -56,3 +56,25 @@ func TestIconsWarning(t *testing.T) {
 		}
 	}
 }
+
+func TestThemeConfigWarning(t *testing.T) {
+	for theme, want := range map[string]bool{"neon": true, "day": false} {
+		p := filepath.Join(t.TempDir(), "config.yml")
+		if err := os.WriteFile(p, []byte("theme: "+theme+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		u, warns, err := LoadUser(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := false
+		for _, w := range warns {
+			if strings.Contains(w, `theme: "neon" is not auto, night or day; using auto`) {
+				got = true
+			}
+		}
+		if got != want || (!want && (len(warns) != 0 || u.Theme != "day")) {
+			t.Errorf("theme %s: warns %q", theme, warns)
+		}
+	}
+}

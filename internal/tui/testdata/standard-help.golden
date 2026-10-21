@@ -11,9 +11,9 @@ is:o│  Keys                                                              �
 #1 e│ R       repo             enter log             o      open          │     
 #1 e│ /       filter           /     search          y      copy sha      │     
 Chec│ ctrl+r  reload config    n     next match      m      merge         │     
-Revi│ ?       help             N     prev match      u      update branch │     
-2  h│ q       quit             e     next failure    c      comment       │     
-────│                                                ctrl+s send          │───  
+Revi│ T       theme            N     prev match      u      update branch │     
+2  h│ ?       help             e     next failure    c      comment       │     
+────│ q       quit                                   ctrl+s send          │───  
   C│                                                                     │  4s 
   C│ icons: nerd | unicode | ascii, now nerd · boxes here? set unicode   │  3s 
    e│                                                                     │     

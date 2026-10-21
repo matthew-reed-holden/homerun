@@ -64,6 +64,7 @@ type User struct {
 	Repos        map[string]UserRepo `yaml:"repos"`
 	Tabs         []Tab               `yaml:"tabs"`
 	Icons        string              `yaml:"icons"`
+	Theme        string              `yaml:"theme"`
 }
 
 // UserTokenSecret is where the TUI gets the user's own GitHub token: the gh CLI unless configured.
@@ -146,6 +147,11 @@ func LoadUser(path string) (*User, []string, error) {
 	case "", "nerd", "unicode", "ascii":
 	default:
 		warns = append(warns, fmt.Sprintf("icons: %q is not nerd, unicode or ascii; using nerd", u.Icons))
+	}
+	switch u.Theme {
+	case "", "auto", "night", "day":
+	default:
+		warns = append(warns, fmt.Sprintf("theme: %q is not auto, night or day; using auto", u.Theme))
 	}
 	names := make([]string, 0, len(u.Repos))
 	for name := range u.Repos {

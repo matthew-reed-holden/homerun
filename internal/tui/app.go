@@ -70,6 +70,7 @@ type Options struct {
 	Log     string          // where the engine logs while the TUI runs
 	Tabs    []Tab           // PR searches; nil or empty: DefaultTabs
 	Icons   string          // icons: nerd (default), unicode or ascii
+	Theme   string          // theme: auto (default), night or day
 }
 
 // Tab is one saved PR search.
@@ -94,24 +95,26 @@ type model struct {
 	err       error
 	errSince  time.Time
 
-	focus    area
-	tabs     []tab
-	tab      int // the active tab
-	tree     tree
-	treeKey  string
-	log      *logView
-	crumbs   []string // the breadcrumb shown in place of the bases while log is open
-	zoom     bool
-	dlg      *dialog
-	pk       *picker
-	flt      *textinput.Model // the query bar, open on a PR tab; it takes every key
-	fltErr   string           // GitHub's rejection of an edited query, until the next key
-	status   string
-	statusAt time.Time
-	w, h     int
-	help     help.Model
-	profile  colorprofile.Profile // from tea.ColorProfileMsg; zero is Unknown, which gets no fill
-	bgKnown  bool                 // the terminal answered the background query, or the wait for it ran out
+	focus       area
+	tabs        []tab
+	tab         int // the active tab
+	tree        tree
+	treeKey     string
+	log         *logView
+	crumbs      []string // the breadcrumb shown in place of the bases while log is open
+	zoom        bool
+	dlg         *dialog
+	pk          *picker
+	flt         *textinput.Model // the query bar, open on a PR tab; it takes every key
+	fltErr      string           // GitHub's rejection of an edited query, until the next key
+	status      string
+	statusAt    time.Time
+	w, h        int
+	help        help.Model
+	profile     colorprofile.Profile // from tea.ColorProfileMsg; zero is Unknown, which gets no fill
+	themeChoice ThemeChoice          // auto follows the terminal; night or day ignores it
+	termDark    bool                 // what the terminal last said its background was
+	bgKnown     bool                 // the terminal answered the background query, or the wait for it ran out
 
 	behind   map[string]int           // "repo#n" -> commits behind base
 	prRepo   string                   // the repo the searches last ran for
@@ -135,6 +138,9 @@ type model struct {
 func newModel(c *api.Client, now func() time.Time, o Options) *model {
 	m := &model{c: c, now: now, o: o, hostErr: o.HostErr, prDelay: prPoll, w: 120, h: 40, help: help.New(), tabs: newTabs(o.Tabs), draft: newDraft()}
 	icons, _ = ParseIcons(o.Icons)
+	m.themeChoice, _ = parseTheme(o.Theme)
+	m.termDark = true
+	m.applyTheme()
 	m.sizeDraft()
 	for m.off(m.tab) { // without a token, open on Branches
 		m.tab++
@@ -265,6 +271,18 @@ func (m *model) pickRepo(name string) tea.Cmd {
 
 // repaint rebuilds what holds rendered colours after the theme changed: the
 // rows and the PR page.
+// applyTheme sets the palette the choice names, or the terminal's when auto.
+func (m *model) applyTheme() {
+	switch m.themeChoice {
+	case themeNight:
+		setTheme(true)
+	case themeDay:
+		setTheme(false)
+	default:
+		setTheme(m.termDark)
+	}
+}
+
 func (m *model) repaint() {
 	m.tableRows()
 	if m.pr != nil {
@@ -374,7 +392,8 @@ func (m *model) syncMain() {
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.BackgroundColorMsg:
-		setTheme(msg.IsDark())
+		m.termDark = msg.IsDark()
+		m.applyTheme()
 		m.bgKnown = true
 		m.repaint()
 	case bgWaitMsg:
@@ -521,6 +540,11 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 		return tea.Quit
 	case key.Matches(k, keys.Help):
 		m.dlg = helpDialog(m.notes()...)
+	case key.Matches(k, keys.Theme):
+		m.themeChoice = m.themeChoice.next()
+		m.applyTheme()
+		m.repaint()
+		m.say("theme: " + string(m.themeChoice))
 	case key.Matches(k, keys.Tab):
 		return m.switchTab(int(k.String()[0] - '1'))
 	case key.Matches(k, keys.Next), key.Matches(k, keys.Prev):

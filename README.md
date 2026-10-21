@@ -52,6 +52,8 @@ To run a commit by hand: `homerun run [--pr N] OWNER/NAME [BRANCH]`. It exits no
 
 Icons need a Nerd Font. If they show as boxes, set `icons: unicode` (or `ascii`) in the user config; `nerd` is the default, and `?` names the setting.
 
+The theme follows your terminal (`theme: auto`); set `theme: night` or `theme: day` to pin it, or press `T` to cycle auto, night, day for the session.
+
 ## When this machine is off
 
 Required checks stay pending while the daemon is down. Re-enabling hosted Actions is not enough: hosted Actions never produce the `homerun / ...` check names, so those required checks would still never complete. Also swap the required checks in branch protection for the hosted ones, or remove the `homerun / ...` ones temporarily. Restore them when the machine is back.

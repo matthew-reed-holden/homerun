@@ -9,9 +9,9 @@ br│ [ ]     tabs             k/↑   up              f      follow            
   │ R       repo             enter log             o      open               │  
 ╌╌│ /       filter           /     search          y      copy sha           │╌╌
 ma│ ctrl+r  reload config    n     next match      m      merge              │  
- │ ?       help             N     prev match      u      update branch      │s 
-  │ q       quit             e     next failure    c      comment            │  
-  │                                                ctrl+s send               │  
+ │ T       theme            N     prev match      u      update branch      │s 
+  │ ?       help             e     next failure    c      comment            │  
+  │ q       quit                                   ctrl+s send               │  
   │                                                                          │  
   │  PR tabs off: exec "gh auth token": exit status 1: You are not logged   │  
   │ into any GitHub hosts. To log in, run: gh auth login                     │  

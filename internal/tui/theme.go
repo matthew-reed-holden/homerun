@@ -42,11 +42,45 @@ func newTheme(p palette) *theme {
 
 var th = newTheme(night)
 
+// themes are the games a theme: setting can name.
+var themes = map[string]palette{"night": night, "day": day}
+
+// ThemeChoice is auto (follow the terminal), night or day.
+type ThemeChoice string
+
+const (
+	themeAuto  ThemeChoice = "auto"
+	themeNight ThemeChoice = "night"
+	themeDay   ThemeChoice = "day"
+)
+
+// parseTheme reads the theme: setting; empty means auto, unknown is reported.
+func parseTheme(s string) (ThemeChoice, bool) {
+	switch c := ThemeChoice(s); c {
+	case themeNight, themeDay, themeAuto:
+		return c, true
+	case "":
+		return themeAuto, true
+	}
+	return themeAuto, false
+}
+
+// next is the choice after c in the T cycle.
+func (c ThemeChoice) next() ThemeChoice {
+	switch c {
+	case themeAuto:
+		return themeNight
+	case themeNight:
+		return themeDay
+	}
+	return themeAuto
+}
+
 // setTheme switches between the night and day game.
 func setTheme(dark bool) {
 	if dark {
-		th = newTheme(night)
+		th = newTheme(themes["night"])
 	} else {
-		th = newTheme(day)
+		th = newTheme(themes["day"])
 	}
 }
