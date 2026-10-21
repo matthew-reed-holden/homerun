@@ -2,7 +2,7 @@ HOMERUN  o/e2e    stale: daemon unreachable (since 0s) · could not start: ac
 ◆ 1 My PRs 3  ◇ 2 Review requested 3  ◇ 3 All open 3  ◇ 4 Branches 1  ◇ 5 Runs 3                                        
 ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
 is:open author:@me                                                ╎ #1 e2e PR · d954af8 · @matt · 5m ago                
-   Title                                                     ╎ #1 e2e PR  @matt · feat → main                      
+   Title                                                     ╎ #1 e2e PR  @matt · main ← feat                      
 ▌? #1 · feat · @matt    0/1 github only        +40 −7        5m ╎ ✔ no conflicts                                      
 ▌  e2e PR                                                         ╎ Checks ✘ 1 failing (1 required)                     
  ? #2 · @bob           · github only             +0 −0        3h ╎ Reviews: approved · Files 3 (+40 −7) ·  2          

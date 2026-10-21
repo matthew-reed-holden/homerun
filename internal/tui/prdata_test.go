@@ -150,7 +150,7 @@ func strip(ls []string) []string {
 func TestSummaryLines(t *testing.T) {
 	s := sumFixture()
 	want := []string{
-		"#1 Make the daemon optional  @matt · feat → main",
+		"#1 Make the daemon optional  @matt · main ← feat",
 		"⚠ 3 commits behind main · ✔ no conflicts",
 		"Checks ✘ 1 failing (1 required) · ✔ 4 passed",
 		"Reviews: review required · Files 12 (+302 −88) · " + ic("comments") + " 3",

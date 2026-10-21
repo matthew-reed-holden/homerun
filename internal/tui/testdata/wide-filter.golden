@@ -2,7 +2,7 @@ HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 ·  client
 ◆ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◇ 5 Runs 3                                        
 ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
 ┌───────────────────────────────────────────────────────────────┐ ╎ #1 e2e PR · d954af8 · @matt · 5m ago                
-│  is:pr repo:o/e2e is:open label:bug                          │ ╎ #1 e2e PR  @matt · feat → main                      
+│  is:pr repo:o/e2e is:open label:bug                          │ ╎ #1 e2e PR  @matt · main ← feat                      
 └───────────────────────────────────────────────────────────────┘ ╎ Checks none                                         
 is:open author:@me                                                ╎ Reviews: none · Files 0 (+0 −0) ·  0               
    Title                                                     ╎ 2  homerun                                          

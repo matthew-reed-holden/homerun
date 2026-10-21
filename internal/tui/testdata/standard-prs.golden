@@ -9,7 +9,7 @@ is:open author:@me
    typo fix                                                                     
 ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
 #1 e2e PR · d954af8 · @matt · 5m ago                                            
-#1 e2e PR  @matt · feat → main                                                  
+#1 e2e PR  @matt · main ← feat                                                  
 ⚠ 3 commits behind main · ✔ no conflicts                                        
 Checks ✘ 1 failing (1 required)                                                 
 Reviews: approved · Files 3 (+40 −7) ·  2                                      

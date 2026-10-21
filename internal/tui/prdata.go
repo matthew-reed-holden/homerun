@@ -116,7 +116,7 @@ func summaryLines(s pr.Summary, behind int, known bool, w int) []string {
 	line := func(parts ...string) string { return truncate(strings.Join(parts, " · "), w) }
 	out := []string{line(
 		fmt.Sprintf("#%d %s", s.Number, termsafe.Line(s.Title))+"  @"+termsafe.Line(s.Author),
-		termsafe.Line(s.HeadRef)+" → "+termsafe.Line(s.BaseRef))}
+		termsafe.Line(s.BaseRef)+" ← "+termsafe.Line(s.HeadRef))}
 	base := termsafe.Line(s.BaseRef)
 	var merge []string
 	switch {
