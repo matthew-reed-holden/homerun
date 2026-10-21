@@ -177,7 +177,7 @@ func summaryModel(t *testing.T) *model {
 func TestBranchPreviewHasNoSummary(t *testing.T) {
 	m := summaryModel(t)
 	keysIn(m, "4")
-	if out := screen(m); strings.Contains(out, "Checks "+ic("ci-fail")) || strings.Contains(out, "Reviews:") || len(m.previewHead(80)) != 0 {
+	if out := screen(m); strings.Contains(out, "Checks "+ic("ci-fail")) || strings.Contains(out, "Reviews:") || len(m.previewFoot(80)) != 0 {
 		t.Fatalf("summary on a branch row:\n%s", out)
 	}
 }

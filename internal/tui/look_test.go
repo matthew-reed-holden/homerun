@@ -180,7 +180,7 @@ func TestStackedPreviewKeepsPart1Lines(t *testing.T) {
 	m.Update(searchMsg{repo: "o/e2e", tab: 0, query: "is:open author:@me", res: goldenResult()})
 	m.Update(tea.WindowSizeMsg{Width: 90, Height: 30})
 	keysIn(m, "l", "]")
-	if out := screen(m); !strings.Contains(out, ic("ci-fail")+" ci/gh  ACTIONS  required") {
+	if out := screen(m); !strings.Contains(squash(out), ic("ci-fail")+" ci/gh ACTIONS required") {
 		t.Fatalf("failing required check below the fold:\n%s", out)
 	}
 	if lay := m.layout(); lay.ph-1 < 13 { // part 1 had 15; the strip's blank row and the two rules took two
@@ -193,6 +193,10 @@ func TestStackedPreviewKeepsPart1Lines(t *testing.T) {
 }
 
 const outSGR = "38;2;229;72;77"
+
+// squash joins runs of spaces, so a row laid out in columns compares by
+// its words.
+func squash(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // cellOf is the display cell where sub starts in s, -1 when absent.
 func cellOf(s, sub string) int {

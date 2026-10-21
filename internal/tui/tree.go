@@ -180,47 +180,82 @@ func (t *tree) toggle() {
 	}
 }
 
-const timeW = 9
+// Column widths of the tree's rows: the time at the right end; the name
+// and tile columns are as wide as the widest in view, up to these.
+const (
+	timeW    = 7
+	nameWMax = 24
+	tileWMax = 12
+	reqW     = 8
+)
 
 func (t *tree) view(title string, w, h int, now time.Time, focused bool) string {
 	return section(title, t.rows(w, max(0, h-1), now, focused), w, h, focused)
 }
 
-// rows are the tree's lines for inner rows of room.
+// rows are the tree's lines for inner rows of room, laid out in columns
+// left-packed with two cells between: the icon and name (steps under a
+// job prefixed ├ or └), the source tile, required, the time right-aligned,
+// then a failed job's reason in what room is left.
 func (t *tree) rows(w, inner int, now time.Time, focused bool) []string {
 	ns := t.nodes()
 	t.scroll(ns, inner)
+	nameW, tileW, anyReq := 0, 0, false
+	for _, n := range ns {
+		c := t.checks[n.check]
+		name := displayName(c.Name)
+		if n.step >= 0 {
+			first, _, _ := strings.Cut(c.Steps[n.step].Name, "\n")
+			name = "  " + termsafe.Line(first) // behind its ├ or └
+		}
+		nameW = max(nameW, ansi.StringWidth(name))
+		if n.step < 0 {
+			tileW = max(tileW, ansi.StringWidth(paintSource(source(c, c.App == ""))))
+			anyReq = anyReq || t.req[c.Name]
+		}
+	}
+	nameW, tileW = min(nameW, nameWMax), min(tileW, tileWMax)
+	req := 0
+	if anyReq {
+		req = reqW
+	}
+	// The name gives way when the pane is too narrow for every column.
+	nameW = max(1, min(nameW, w-2-4-2-tileW-2-req-2-timeW))
 	var lines []string
 	for i := t.off; i < len(ns) && len(lines) < inner; i++ {
 		n := ns[i]
 		c := t.checks[n.check]
-		indent, icon, name := "", Icon(c.Status, c.Conclusion), displayName(c.Name)
+		lead, icon, name := "", Icon(c.Status, c.Conclusion), displayName(c.Name)
 		tm := timing(c.Status, c.Started, c.Completed, now)
+		tileCell, reqCell := "", ""
 		if n.step >= 0 {
 			s := c.Steps[n.step]
 			first, _, _ := strings.Cut(s.Name, "\n")
-			indent, icon, name = "  ", Icon(s.Status, s.Conclusion), termsafe.Line(first)
+			lead = th.dim.Render("├ ")
+			if n.step == len(c.Steps)-1 {
+				lead = th.dim.Render("└ ")
+			}
+			icon, name = Icon(s.Status, s.Conclusion), termsafe.Line(first)
 			tm = timing(s.Status, s.Started, s.Completed, now)
-		}
-		if n.step < 0 {
-			name += " " + paintSource(source(c, c.App == ""))
-		}
-		if n.step < 0 && t.req[c.Name] {
-			name += " " + th.dim.Render("required")
-		}
-		why := ""
-		if n.step < 0 && c.Status == "completed" && c.Conclusion == "failure" {
-			why = failReason(c)
-		}
-		line := fit(indent+paint(icon)+" "+name, w-2-timeW) + rfit(tm, timeW)
-		if why != "" {
-			// The reason takes the room the name leaves free in the row.
-			room := w - 2 - timeW - ansi.StringWidth(indent+ic(icon)+" "+name) - 1
-			if room > 3 {
-				line = fit(indent+paint(icon)+" "+name+" "+th.dim.Render(truncate("— "+why, room)), w-2-timeW) + rfit(tm, timeW)
+		} else {
+			tileCell = paintSource(source(c, c.App == ""))
+			if t.req[c.Name] {
+				reqCell = th.dim.Render("required")
 			}
 		}
-		lines = append(lines, box(line, w, i == t.cur && focused, focused))
+		line := lead + paint(icon) + " " + fit(name, nameW-ansi.StringWidth(lead)) + "  " + fit(tileCell, tileW)
+		if req > 0 {
+			line += "  " + fit(reqCell, req)
+		}
+		line += "  " + rfit(tm, timeW)
+		if n.step < 0 && c.Status == "completed" && c.Conclusion == "failure" {
+			if why := failReason(c); why != "" {
+				if room := w - 2 - ansi.StringWidth(line) - 2; room > 3 {
+					line += "  " + th.dim.Render(truncate("— "+why, room))
+				}
+			}
+		}
+		lines = append(lines, box(truncate(line, w-2), w, i == t.cur && focused, focused))
 		if l := lastLine(c, n); l != "" && len(lines) < inner {
 			lines = append(lines, " "+th.dim.Render(truncate("  "+l, w-2)))
 		}

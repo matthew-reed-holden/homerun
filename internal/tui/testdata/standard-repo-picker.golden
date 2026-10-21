@@ -15,10 +15,10 @@
    #1 e2e PR      │                                          │                  
     OPEN   main ← │ enter pick · esc cancel                  │                  
     CI / fail ech└──────────────────────────────────────────┘                  
+                                                                                
    SUMMARY                                                                      
    No description provided.                                                     
                                                                                 
    ACTIVITY                                                                     
-   loading…                                                                     
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
   l/enter preview · / filter · r rerun · m merge                PR 1/2   ? help 

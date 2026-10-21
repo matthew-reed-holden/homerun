@@ -391,27 +391,6 @@ func source(c api.Check, fromDaemon bool) string {
 // paintSource is a check's source as a tile: homerun in clay, the rest dim.
 func paintSource(s string) string { return tile(s) }
 
-// sourceCounts is "3 homerun · 2 actions · 1 codecov": homerun and actions
-// first, then the others as they come.
-func sourceCounts(cs []api.Check) string {
-	order := []string{"homerun", "actions"}
-	n := map[string]int{}
-	for _, c := range cs {
-		s := source(c, c.App == "")
-		if !slices.Contains(order, s) {
-			order = append(order, s)
-		}
-		n[s]++
-	}
-	var parts []string
-	for _, s := range order {
-		if n[s] > 0 {
-			parts = append(parts, fmt.Sprintf("%d %s", n[s], paintSource(s)))
-		}
-	}
-	return strings.Join(parts, " · ")
-}
-
 // doubled is the workflows both homerun and GitHub Actions run: the active
 // Actions workflows homerun handles (not in r.Unhandled). When flows is nil
 // (the token may not read them) it is the workflows of the actions checks in

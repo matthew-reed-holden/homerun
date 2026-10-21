@@ -551,8 +551,8 @@ func (m *model) prPreviewView(w, h int) string {
 	lines := m.prHeader(w - 2)
 	switch {
 	case m.stackedHover():
-		lines = append(lines, truncate(strings.Join(m.prStatus(w-2), th.dim.Render(" · ")), w-2))
-		m.syncPage(w-2, inner)
+		lines = append(lines, truncate(strings.Join(m.prStatus(w-2), th.dim.Render(" · ")), w-2), "")
+		m.syncPage(w-2, inner-1)
 		lines = append(lines, strings.Split(m.pr.vp.View(), "\n")...)
 	case m.pr.section == 0:
 		lines = append(lines, m.chips(w-2), foul(w-2, false))
@@ -560,9 +560,9 @@ func (m *model) prPreviewView(w, h int) string {
 		lines = append(lines, strings.Split(m.pr.vp.View(), "\n")...)
 	case m.pr.section == 1:
 		lines = append(lines, m.chips(w-2), foul(w-2, false))
-		head := m.checksHead(w - 2)
-		lines = append(lines, head...)
-		lines = append(lines, m.tree.rows(w, max(0, inner-len(head)), m.now(), focused)...)
+		foot := m.checksFoot(w - 2)
+		lines = append(lines, m.tree.rows(w, max(0, inner-len(foot)), m.now(), focused)...)
+		lines = append(lines, foot...)
 	default:
 		lines = append(lines, m.chips(w-2), foul(w-2, false))
 		lines = append(lines, m.tabLines(w-2)...)
@@ -697,21 +697,17 @@ func (m *model) reviewState() string {
 	return ""
 }
 
-// checksHead is what the Checks tab shows above the tree: the checks'
-// sources, why homerun has not run a PR it has no item for, and the doubled
+// checksFoot is what the Checks tab says under the tree, after a blank
+// row: why homerun has not run a PR it has no item for, and the doubled
 // and left-to-Actions lines, judged by the detail's checks or, before it
-// lands, the search's; a rule under them, or nil when there are none.
-func (m *model) checksHead(inner int) []string {
+// lands, the search's; nil when there is nothing to say.
+func (m *model) checksFoot(inner int) []string {
 	var gh []pr.Check
 	if s, ok := m.prSummary(); ok {
 		gh = s.Checks
 	}
-	cs, _ := m.prChecks()
 	_, it := m.prItem()
 	var out []string
-	if l := sourceCounts(cs); l != "" {
-		out = append(out, truncate(l, inner))
-	}
 	if it == nil {
 		out = append(out, th.dim.Render(truncate("· not run by homerun: its branch has no workflow homerun handles, or the PR was opened before homerun watched it.", inner)))
 	}
@@ -719,7 +715,7 @@ func (m *model) checksHead(inner int) []string {
 	if len(out) == 0 {
 		return nil
 	}
-	return append(out, th.dim.Render(strings.Repeat("─", max(0, inner))))
+	return append([]string{""}, out...)
 }
 
 // syncPage sizes the viewport and rebuilds the page when the width, the

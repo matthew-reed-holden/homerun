@@ -7,15 +7,15 @@
    Title                       CI ╎   MERGED   into main by @matt · 6118d02                                           
  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  ◇  Overview   ◆  Checks 2/4   ◇  Reviews 1   ◇  Files 3   ◇  Commits 1           
  ▌ #1 · @matt                 1/2 ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
- ▌  e2e PR                          ╎  2  HOMERUN  · 2  STATUS                                                          
-                                    ╎  ─────────────────────────────────────────────────────────────────────────────    
-   #2 · @bob                ◇ held ╎  ▌ CI / pass  HOMERUN                                                       4s   
-    typo fix                        ╎    CI / fail  HOMERUN  — echo bad; exit 1                                   3s   
-                                    ╎     exit status 1                                                                 
-                                    ╎      Set up job                                                             1s   
-                                    ╎      echo bad; exit 1                                                       0s   
-                                    ╎    lint  STATUS  required                                                        
-                                    ╎    build  STATUS                                                        queued   
+ ▌  e2e PR                          ╎  ▌ CI / pass            HOMERUN                  4s                              
+                                    ╎    CI / fail            HOMERUN                  3s  — echo bad; exit 1          
+   #2 · @bob                ◇ held ╎     exit status 1                                                                 
+    typo fix                        ╎   ├  Set up job                                  1s                              
+                                    ╎   └  echo bad; exit 1                            0s                              
+                                    ╎    lint                 STATUS    required                                       
+                                    ╎    build                STATUS               queued                              
+                                    ╎                                                                                   
+                                    ╎                                                                                   
                                     ╎                                                                                   
                                     ╎                                                                                   
                                     ╎                                                                                   

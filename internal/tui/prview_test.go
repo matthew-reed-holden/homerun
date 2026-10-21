@@ -444,13 +444,13 @@ func checksModel(t *testing.T) (*model, *fakeDaemon) {
 
 func TestChecksSection(t *testing.T) {
 	m, _ := checksModel(t)
-	out := screen(m)
-	for _, want := range []string{"pass  HOMERUN  required", "ci/gh  STATUS  required", ic("ci-fail") + " ci/gh", "docs  STATUS ", "Checks 1/5"} {
+	out := squash(screen(m))
+	for _, want := range []string{"pass HOMERUN required", "ci/gh STATUS required", ic("ci-fail") + " ci/gh", "docs STATUS ", "Checks 1/5"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("lacks %q:\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "docs required") || strings.Contains(out, "fail required") {
+	if strings.Contains(out, "docs STATUS required") || strings.Contains(out, "fail HOMERUN required") {
 		t.Fatalf("stray required:\n%s", out)
 	}
 	if n := strings.Count(out, "CI / pass"); n != 1 {

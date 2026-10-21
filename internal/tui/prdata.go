@@ -68,10 +68,10 @@ func (m *model) behindOf(n int) (int, bool) {
 	return b, ok
 }
 
-// previewHead is what a branch row's preview shows above the tree: its
-// Actions lines with a rule under them; nil for anything else. A PR row's
-// preview is the PR's own.
-func (m *model) previewHead(inner int) []string {
+// previewFoot is what a branch row's preview says under the tree, after a
+// blank row: its Actions lines; nil for anything else. A PR row's preview
+// is the PR's own.
+func (m *model) previewFoot(inner int) []string {
 	if _, _, _, errText := m.previewSource(); m.pr != nil || m.log != nil || errText != "" || m.at().kind != tabBranches {
 		return nil
 	}
@@ -79,7 +79,31 @@ func (m *model) previewHead(inner int) []string {
 	if len(out) == 0 {
 		return nil
 	}
-	return append(out, th.dim.Render(strings.Repeat("─", max(0, inner))))
+	return append([]string{""}, out...)
+}
+
+// previewHead is the bold title over a branch's or run's tree: the item's
+// title, or the PR title a run answers; nil when there is none.
+func (m *model) previewHead(w int) []string {
+	title := ""
+	switch {
+	case m.pr != nil || m.log != nil:
+		return nil
+	case m.at().kind == tabBranches:
+		if it := m.selBranch(); it != nil {
+			title = it.Title
+		}
+	case m.at().kind == tabRuns:
+		if r := m.run(); r != nil && r.PR != 0 {
+			if s, ok := m.summary(r.Repo, r.PR); ok {
+				title = s.Title
+			}
+		}
+	}
+	if title == "" {
+		return nil
+	}
+	return []string{th.fg.Bold(true).Render(truncate(termsafe.Line(title), w))}
 }
 
 // summaryMerge is what the search says of merging before the detail lands:

@@ -174,7 +174,7 @@ func TestFailedJobShowsLastLineBelow(t *testing.T) {
 	})
 	tr.open["j"] = false
 	r := treeRows(tr.view("t", 60, 6, now, false))
-	if !strings.Contains(r[0], "j  HOMERUN  — go test") || r[1] != "FAIL TestX (0.01s)" || !strings.Contains(r[2], "k") || strings.Contains(r[2], "ok") {
+	if !strings.Contains(squash(r[0]), "j HOMERUN — go test") || r[1] != "FAIL TestX (0.01s)" || !strings.Contains(r[2], "k") || strings.Contains(r[2], "ok") {
 		t.Fatalf("rows: %q", r)
 	}
 	if len(tr.nodes()) != 2 {

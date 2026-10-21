@@ -16,9 +16,9 @@
     MERGED   into main by @matt · 6118d02                                       
    ◇  Overview   ◆  Checks 2/4   ◇  Reviews 1   ◇  Files 3   ◇  Commits 1       
    ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
-   2  HOMERUN  · 2  STATUS                                                      
-   ─────────────────────────────────────────────────────────────────────────    
-   ▌ CI / pass  HOMERUN                                                   4s   
-     CI / fail  HOMERUN  — echo bad; exit 1                               3s   
+   ▌ CI / pass            HOMERUN                  4s                          
+     CI / fail            HOMERUN                  3s  — echo bad; exit 1      
+      exit status 1                                                             
+    ├  Set up job                                  1s                          
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
   enter log · space fold · r rerun · x cancel · o open       check 1/6   ? help 

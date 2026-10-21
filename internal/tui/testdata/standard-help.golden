@@ -15,10 +15,10 @@
    #│ ?       help             e     next failure    c      comment       │     
     │ q       quit                                   ctrl+s send          │     
    │                                                                     │     
-   S│ icons: nerd | unicode | ascii, now nerd · boxes here? set unicode   │     
-   N│                                                                     │     
-    │ any key closes · engine: client                                     │     
-   A└─────────────────────────────────────────────────────────────────────┘     
-   loading…                                                                     
+    │ icons: nerd | unicode | ascii, now nerd · boxes here? set unicode   │     
+   S│                                                                     │     
+   N│ any key closes · engine: client                                     │     
+    └─────────────────────────────────────────────────────────────────────┘     
+   ACTIVITY                                                                     
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
   l/enter preview · / filter · r rerun · m merge                PR 1/2   ? help 

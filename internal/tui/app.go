@@ -306,19 +306,11 @@ func (m *model) refresh() {
 	m.syncMain()
 }
 
-func itemSource(r api.Repo, it api.Item, now time.Time) (string, string, []api.Check, string) {
-	t := it.Label
-	if it.Title != "" {
-		t += " " + it.Title
-	}
-	t += " · " + short(it.SHA)
-	if it.Author != "" {
-		t += " · @" + it.Author
-	}
-	if a := age(it.Updated, now); a != "" {
-		t += " · " + a + " ago"
-	}
-	return "item:" + r.Name + ":" + it.Label, termsafe.Line(t), it.Checks, ""
+// itemSource is a daemon item's preview source: its key, the crumb (label
+// · sha; the title has a row of its own, the author and age the table row),
+// its checks and no error.
+func itemSource(r api.Repo, it api.Item) (string, string, []api.Check, string) {
+	return "item:" + r.Name + ":" + it.Label, termsafe.Line(it.Label + " · " + short(it.SHA)), it.Checks, ""
 }
 
 // previewSource is what the preview shows: a key naming its owner (so a
@@ -330,7 +322,7 @@ func (m *model) previewSource() (key, title string, cs []api.Check, errText stri
 		cs, _ := m.prChecks()
 		title := fmt.Sprintf("#%d", p.number)
 		if r, it := m.prItem(); it != nil {
-			k, _, _, _ := itemSource(r, *it, m.now())
+			k, _, _, _ := itemSource(r, *it)
 			return k, title, cs, ""
 		}
 		return "pr:" + m.prRef(), title, cs, ""
@@ -343,7 +335,7 @@ func (m *model) previewSource() (key, title string, cs []api.Check, errText stri
 		}
 	case tabBranches:
 		if it := m.selBranch(); it != nil {
-			return itemSource(r, *it, m.now())
+			return itemSource(r, *it)
 		}
 		if r.Error != "" {
 			return "repo:" + r.Name, termsafe.Line(r.Name), nil, termsafe.Line(r.Error)
@@ -355,7 +347,7 @@ func (m *model) previewSource() (key, title string, cs []api.Check, errText stri
 		}
 		it := m.itemFor(r.Name, s.Number)
 		if it != nil {
-			k, t, _, e := itemSource(r, *it, m.now())
+			k, t, _, e := itemSource(r, *it)
 			return k, t, mergedChecks(it, s.Checks), e
 		}
 		t := fmt.Sprintf("#%d %s · @%s", s.Number, s.Title, s.Author)
@@ -982,12 +974,13 @@ func (m *model) mainView(w, h int) string {
 	case m.log != nil:
 		return m.log.view(title+" · log", w, h, focused)
 	}
-	head := m.previewHead(w - 2)
-	if len(head) == 0 {
+	head, foot := m.previewHead(w-2), m.previewFoot(w-2)
+	if len(head) == 0 && len(foot) == 0 {
 		return m.tree.view(title, w, h, m.now(), focused)
 	}
-	inner := max(0, h-1-len(head))
-	return section(title, append(head, m.tree.rows(w, inner, m.now(), focused)...), w, h, focused)
+	inner := max(0, h-1-len(head)-len(foot))
+	lines := append(head, m.tree.rows(w, inner, m.now(), focused)...)
+	return section(title, append(lines, foot...), w, h, focused)
 }
 
 // dugout is the bottom line, a cell in from the gutter: the focused
@@ -1094,7 +1087,7 @@ func (m *model) click(mo tea.Mouse) tea.Cmd {
 				m.pr.section = i
 			}
 		case m.pr.section == 1:
-			m.tree.click(y - (m.prHeadH(lay.pw-2) - 1) - len(m.checksHead(lay.pw-2))) // below the header, the tabs and the Actions lines
+			m.tree.click(y - (m.prHeadH(lay.pw-2) - 1)) // below the header and the tabs
 		}
 		return cmd
 	}

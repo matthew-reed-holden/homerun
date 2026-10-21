@@ -365,11 +365,14 @@ func TestCheckSources(t *testing.T) {
 	}
 	m := searchModel(t, &pr.Fake{Results: e2eResults(res)})
 	keysIn(m, "l", "]")
-	out := screen(m)
-	for _, want := range []string{"3  HOMERUN  · 2  ACTIONS  · 1  CODECOV ", "CI / pass  HOMERUN ", "build  ACTIONS ", "codecov/patch  CODECOV "} {
+	out := squash(screen(m))
+	for _, want := range []string{"CI / pass HOMERUN ", "build ACTIONS ", "codecov/patch CODECOV "} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("lacks %q:\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "3 HOMERUN ·") || strings.Contains(out, "────") {
+		t.Fatalf("source counts or a solid rule above the list:\n%s", out)
 	}
 }
 
@@ -554,7 +557,7 @@ func TestPreviewTabsSwitch(t *testing.T) {
 		t.Fatalf("not on Overview:\n%s", screen(m))
 	}
 	keysIn(m, "]")
-	if out := screen(m); m.pr.section != 1 || !strings.Contains(out, "lint  STATUS  required") || strings.Contains(out, "ACTIVITY") {
+	if out := squash(screen(m)); m.pr.section != 1 || !strings.Contains(out, "lint STATUS required") || strings.Contains(out, "ACTIVITY") {
 		t.Fatalf("] to Checks: section %d\n%s", m.pr.section, out)
 	}
 	keysIn(m, "[")
@@ -715,13 +718,18 @@ func TestPRChecksShowActionsLines(t *testing.T) {
 			t.Fatalf("PR Checks lacks %q:\n%s", want, out)
 		}
 	}
-	// A click lands on the tree row under it, below the header, the tabs and those lines.
+	// Those lines sit under the tree; a click lands on the tree row under
+	// it, below the header and the tabs.
 	lay := m.layout()
-	m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + m.prHeadH(lay.pw-2) + len(m.checksHead(lay.pw-2)) + 1, Button: tea.MouseLeft}) // the second row
+	ls := previewLines(m)
+	if i := slices.IndexFunc(ls, func(l string) bool { return strings.Contains(l, "also runs on GitHub Actions") }); i < 0 || strings.TrimSpace(ls[i-1]) != "" || strings.TrimSpace(ls[i-2]) == "" {
+		t.Fatalf("Actions lines not under the tree after a blank row:\n%s", strings.Join(ls, "\n"))
+	}
+	m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + m.prHeadH(lay.pw-2) + 1, Button: tea.MouseLeft}) // the second row
 	if m.tree.cur != 1 {
 		t.Fatalf("cur %d", m.tree.cur)
 	}
-	m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + m.prHeadH(lay.pw-2) + len(m.checksHead(lay.pw-2)) - 1, Button: tea.MouseLeft}) // the rule above the tree
+	m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + m.prHeadH(lay.pw-2) - 1, Button: tea.MouseLeft}) // the rule under the tabs
 	if m.tree.cur != 1 {
 		t.Fatalf("cur %d", m.tree.cur)
 	}
