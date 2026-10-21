@@ -475,13 +475,26 @@ func actionsLines(paths []string, r api.Repo, w int) []string {
 	return out
 }
 
-// ciCell is a rollup and passing/total count, "·" with no checks.
+// ciRole is the icon role for a rollup glyph.
+func ciRole(rollup string) string {
+	switch rollup {
+	case "✔":
+		return "ci-pass"
+	case "✘":
+		return "ci-fail"
+	case "⟳":
+		return "ci-run"
+	}
+	return "ci-pending"
+}
+
+// ciCell is the rollup's CI icon and the passing/total count, "·" with no checks.
 func ciCell(cs []api.Check) string {
 	if len(cs) == 0 {
 		return th.dim.Render("·")
 	}
 	icon := Rollup(cs)
-	return tint(icon, fmt.Sprintf("%s %d/%d", icon, passing(cs), len(cs)))
+	return tint(icon, fmt.Sprintf("%s %d/%d", ic(ciRole(icon)), passing(cs), len(cs)))
 }
 
 func mark(paths []string) string {
@@ -491,27 +504,36 @@ func mark(paths []string) string {
 	return th.lights.Render("⚠2")
 }
 
-// prLine lays out a PR row w wide; narrow screens drop Age, then Rev.
-func (m *model) prLine(w int, num, title, ci, rev, behind, age string) string {
+// The right-hand columns' widths. Every glyph is one cell, so the columns
+// stay put in every icon mode.
+const (
+	diffW = 9 // "+1.0k −40"
+	ageW  = 4
+	tailW = 2 + 9 + 1 + ageW // two spaces, a 9-cell column, a space and the age
+)
+
+// prLine lays out a PR row's first line w wide: who and where on the left,
+// then CI, review, diff, behind and age. Narrow screens drop Age, then Rev.
+func (m *model) prLine(w int, left, ci, rev, diff, behind, age string) string {
 	showRev, showAge := m.w >= 90, m.w >= 100
 	ciW := 9
 	if m.err != nil {
 		ciW = 20 // room for "github only"
 	}
-	fixed := 4 + 2 + 2 + ciW + 5
+	fixed := 2 + ciW + 1 + diffW + 1 + 4
 	if showRev {
-		fixed += 4
+		fixed += 2
 	}
 	if showAge {
-		fixed += 5
+		fixed += 1 + ageW
 	}
-	s := rfit(num, 4) + "  " + fit(title, max(1, w-fixed)) + "  " + fit(ci, ciW)
+	s := fit(left, max(1, w-fixed)) + "  " + fit(ci, ciW)
 	if showRev {
-		s += " " + fit(rev, 3)
+		s += " " + fit(rev, 1)
 	}
-	s += " " + fit(behind, 4)
+	s += " " + rfit(diff, diffW) + " " + rfit(behind, 4)
 	if showAge {
-		s += " " + fit(age, 4)
+		s += " " + rfit(age, ageW)
 	}
 	return s
 }
@@ -519,24 +541,54 @@ func (m *model) prLine(w int, num, title, ci, rev, behind, age string) string {
 func reviewMark(d string) string {
 	switch d {
 	case "APPROVED":
-		return th.safe.Render("✔")
+		return th.safe.Render(ic("rv-approved"))
 	case "CHANGES_REQUESTED":
-		return th.out.Render("✘")
+		return th.out.Render(ic("rv-changes"))
 	case "REVIEW_REQUIRED":
-		return th.lights.Render("○")
+		return th.lights.Render(ic("rv-none"))
 	}
 	return ""
 }
 
+// count is n in at most four characters: 999, 1.2k, 12k, 999k, 1m.
+func count(n int) string {
+	switch {
+	case n < 1000:
+		return strconv.Itoa(n)
+	case n < 10_000:
+		return fmt.Sprintf("%d.%dk", n/1000, n%1000/100)
+	case n < 1_000_000:
+		return fmt.Sprintf("%dk", n/1000)
+	}
+	return fmt.Sprintf("%dm", n/1_000_000)
+}
+
+// diffCell is "+a −d", additions green and deletions red.
+func diffCell(add, del int) string {
+	return th.safe.Render("+"+count(add)) + " " + th.out.Render("−"+count(del))
+}
+
+// dot joins the parts that show something with a dim " · ".
+func dot(parts ...string) string {
+	var out []string
+	for _, p := range parts {
+		if ansi.Strip(p) != "" {
+			out = append(out, p)
+		}
+	}
+	return strings.Join(out, th.dim.Render(" · "))
+}
+
 // prRows are a search tab's rows for the picked repo, w wide, and a dim last
-// row for the matches past the first page.
+// row for the matches past the first page. A PR is two lines: number, branch
+// and author over the title.
 func (m *model) prRows(t *tab, w int) []entry {
 	repo := m.repo().Name
 	res := t.res[repo]
 	var out []entry
 	for _, s := range res.PRs {
 		it := m.itemFor(repo, s.Number)
-		icon, ci := "·", th.dim.Render("· not run")
+		icon, ci := "·", th.dim.Render(ic("ci-skip")+" not run")
 		switch {
 		case m.err != nil: // the engine's checks are unknown, not absent
 			icon, ci = "?", ciCell(mergedChecks(nil, s.Checks))+" "+th.dim.Render("github only")
@@ -546,40 +598,69 @@ func (m *model) prRows(t *tab, w int) []entry {
 				icon = "◇"
 			}
 		}
-		title := termsafe.Line(s.Title)
+		left := th.amber.Render(fmt.Sprintf("#%d", s.Number))
+		if s.HeadRef != "" {
+			left = dot(left, th.fg.Render(termsafe.Line(s.HeadRef)))
+		}
+		if s.Author != "" {
+			left = dot(left, th.dim.Render("@"+termsafe.Line(s.Author)))
+		}
+		title := th.fg.Render(termsafe.Line(s.Title))
 		if s.IsDraft {
-			title = th.dim.Render("◌ draft") + " " + title
+			title = th.tile.Render(" DRAFT ") + " " + title
 		}
 		behind := ""
 		if b, ok := m.behindOf(s.Number); ok && b > 0 {
-			behind = th.lights.Render(fmt.Sprintf("↓%d", b))
+			behind = th.amber.Render(fmt.Sprintf("↓%d", b))
 		}
-		out = append(out, entry{icon, m.prLine(w, strconv.Itoa(s.Number), title, ci, reviewMark(s.ReviewDecision), behind, age(s.Updated, m.now())), fmt.Sprintf("pr:%d", s.Number)})
+		line := m.prLine(w, left, ci, reviewMark(s.ReviewDecision), diffCell(s.Additions, s.Deletions), behind, th.dim.Render(age(s.Updated, m.now())))
+		out = append(out, entry{icon, line, truncate(title, w), fmt.Sprintf("pr:%d", s.Number)})
 	}
 	if more := res.Total - len(res.PRs); more > 0 {
-		out = append(out, entry{"…", th.dim.Render(fmt.Sprintf("%d more on GitHub · o opens the search", more)), "more"})
+		out = append(out, entry{"…", th.dim.Render(fmt.Sprintf("%d more on GitHub · o opens the search", more)), "", "more"})
 	}
 	return out
 }
 
-func branchLine(w int, name, sha, ci, age string) string {
-	return fit(name, max(1, w-25)) + "  " + fit(sha, 7) + "  " + fit(ci, 9) + " " + fit(age, 4)
+// tail lays out a row's left part, a 9-cell column and the age, w wide.
+func tail(w int, left, col, age string) string {
+	return fit(left, max(1, w-tailW)) + "  " + fit(col, 9) + " " + rfit(age, ageW)
 }
 
+// blank is the second line of a row with nothing to say there: it keeps the
+// row two lines high.
+const blank = " "
+
+// branchRows are the branches homerun runs: the name and SHA over the item's
+// title, when it has one.
 func (m *model) branchRows(r api.Repo, w int) []entry {
 	var out []entry
 	for _, it := range branches(r) {
 		ci := ciCell(it.Checks) + mark(m.rowDoubled(&it, nil))
-		out = append(out, entry{Rollup(it.Checks), branchLine(w, termsafe.Line(it.Label), short(it.SHA), ci, age(it.Updated, m.now())), "item:" + it.Label})
+		left := dot(th.fg.Render(termsafe.Line(it.Label)), th.sha.Render(short(it.SHA)))
+		sub := blank
+		if it.Title != "" {
+			sub = truncate(th.fg.Render(termsafe.Line(it.Title)), w)
+		}
+		out = append(out, entry{Rollup(it.Checks), tail(w, left, ci, th.dim.Render(age(it.Updated, m.now()))), sub, "item:" + it.Label})
 	}
 	return out
 }
 
-func runLine(w int, target, sha, status, took, age string) string {
-	return fit(target, max(1, w-34)) + "  " + fit(sha, 7) + "  " + fit(status, 9) + " " + rfit(took, 7) + "  " + fit(age, 4)
+// trigger is the event a run answered: a PR's, with its branch when known,
+// or a push to the branch.
+func (m *model) trigger(r api.Run) string {
+	if r.PR == 0 {
+		return dot("push", termsafe.Line(r.Label))
+	}
+	if it := m.itemFor(r.Repo, r.PR); it != nil && it.Ref != "" {
+		return dot("pull_request", termsafe.Line(it.Ref))
+	}
+	return "pull_request"
 }
 
-// runRows are the picked repo's runs, w wide; a finished run says passed or
+// runRows are the picked repo's runs, w wide: the target and SHA, status and
+// age over the trigger and how long it took. A finished run says passed or
 // failed by its checks.
 func (m *model) runRows(w int) []entry {
 	now := m.now()
@@ -601,7 +682,13 @@ func (m *model) runRows(w int) []entry {
 				status = "passed"
 			}
 		}
-		out = append(out, entry{icon, runLine(w, termsafe.Line(r.Label), short(r.SHA), status, took, ago), "run:" + r.ID})
+		target := th.fg.Render(termsafe.Line(r.Label))
+		if r.PR != 0 {
+			target = th.amber.Render(termsafe.Line(r.Label))
+		}
+		line := tail(w, dot(target, th.sha.Render(short(r.SHA))), tint(icon, status), th.dim.Render(ago))
+		sub := tail(w, th.dim.Render(m.trigger(r)), took, "")
+		out = append(out, entry{icon, line, sub, "run:" + r.ID})
 	}
 	return out
 }
@@ -618,17 +705,17 @@ func (m *model) tableRows() {
 			if at := t.at[r.Name]; t.err != "" && !at.IsZero() {
 				t.rows.title += " · results from " + at.Format("15:04")
 			}
-			t.rows.head = th.dim.Render("   " + m.prLine(w, "#", "Title", "CI", "Rev", "↓", "Age"))
+			t.rows.head = th.dim.Render("   " + m.prLine(w, "Title", ic("checks"), ic("rv-approved"), ic("diff"), ic("behind"), ic("age")))
 			t.rows.empty = nil
 			if res, ok := t.res[r.Name]; ok && res.Total == 0 {
 				t.rows.empty = m.emptyLines(i)
 			}
 			t.rows.set(m.prRows(t, w))
 		case tabBranches:
-			t.rows.title, t.rows.head = "branches homerun runs", th.dim.Render("   "+branchLine(w, "Branch", "SHA", "Checks", "Age"))
+			t.rows.title, t.rows.head = "branches homerun runs", th.dim.Render("   "+tail(w, "Branch", ic("checks"), ic("age")))
 			t.rows.set(m.branchRows(r, w))
 		case tabRuns:
-			t.rows.title, t.rows.head = "runs, newest first", th.dim.Render("   "+runLine(w, "Target", "SHA", "Status", "Took", "Age"))
+			t.rows.title, t.rows.head = "runs, newest first", th.dim.Render("   "+tail(w, "Run", "Status", ic("age")))
 			t.rows.set(m.runRows(w))
 		}
 	}

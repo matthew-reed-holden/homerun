@@ -58,10 +58,15 @@ func searchModelDaemon(t *testing.T, f *pr.Fake, st api.State) (*model, *fakeDae
 	return m, fd
 }
 
-// rowText is row i of the active tab as drawn, unstyled.
+// rowText is row i of the active tab as drawn, unstyled: its first line,
+// then its second when it has one.
 func rowText(m *model, i int) string {
 	r := m.at().rows.rows[i]
-	return ansi.Strip(r.icon + " " + r.text)
+	s := r.icon + " " + r.text
+	if r.sub != "" {
+		s += "\n  " + r.sub
+	}
+	return ansi.Strip(s)
 }
 
 func rowKeys(m *model) []string {
@@ -134,25 +139,25 @@ func TestTableColumns(t *testing.T) {
 	}}
 	m := searchModel(t, &pr.Fake{Results: e2eResults(res)})
 	row := rowText(m, 0)
-	indexAll(t, row, "✘    1  e2e PR", "  ✘ 1/3 ", " ✔ ", "  2h")
+	indexAll(t, row, "✘ #1", "  "+ic("ci-fail")+" 1/3 ", " "+ic("rv-approved")+" ", "+0 −0", "  2h", "\n  e2e PR")
 	if strings.Contains(row, "↓") {
 		t.Fatalf("behind shown before it is known: %q", row)
 	}
 	m.behind = map[string]int{"o/e2e#1": 3}
 	m.refresh()
-	indexAll(t, rowText(m, 0), "✘ 1/3", "✔", "↓3", "2h")
+	indexAll(t, rowText(m, 0), ic("ci-fail")+" 1/3", ic("rv-approved"), "↓3", "2h")
 	row = rowText(m, 1)
-	indexAll(t, row, "·    7  ◌ draft not run here", "· not run", "○", "2d")
-	if !strings.Contains(ansi.Strip(m.at().rows.head), "#  Title") {
+	indexAll(t, row, "· #7", ic("ci-skip")+" not run", ic("rv-none"), "2d", "\n   DRAFT  not run here")
+	if h := ansi.Strip(m.at().rows.head); !strings.Contains(h, "Title") || strings.Contains(h, "CI") {
 		t.Fatalf("head %q", ansi.Strip(m.at().rows.head))
 	}
 	// Narrow screens drop Age, then Rev.
 	m.Update(tea.WindowSizeMsg{Width: 95, Height: 40})
-	if r := rowText(m, 1); !strings.Contains(r, "○") || strings.Contains(r, "2d") {
+	if r := rowText(m, 1); !strings.Contains(r, ic("rv-none")) || strings.Contains(r, "2d") {
 		t.Fatalf("95 wide: %q", r)
 	}
 	m.Update(tea.WindowSizeMsg{Width: 85, Height: 40})
-	if r := rowText(m, 1); strings.Contains(r, "○") {
+	if r := rowText(m, 1); strings.Contains(r, ic("rv-none")) {
 		t.Fatalf("85 wide: %q", r)
 	}
 }
@@ -185,8 +190,8 @@ func TestTableSanitisesAndAligns(t *testing.T) {
 		lines := strings.Split(out, "\n")
 		lines[len(lines)-1] = fit(lines[len(lines)-1], w)
 		dims(t, strings.Join(lines, "\n"), w, 24)
-		ci := col(t, ansi.Strip(m.at().rows.head), "CI")
-		for i, sub := range []string{"· not run", "✘ 1/2", "· not run"} {
+		ci := col(t, ansi.Strip(m.at().rows.head), ic("checks"))
+		for i, sub := range []string{ic("ci-skip") + " not run", ic("ci-fail") + " 1/2", ic("ci-skip") + " not run"} {
 			if c := 1 + col(t, rowText(m, i), sub); c != ci { // 1: the gutter
 				t.Fatalf("%d: row %d CI at %d, head at %d: %q", w, i, c, ci, rowText(m, i))
 			}
@@ -305,8 +310,8 @@ func TestBranchesAndRunsArePickedRepoOnly(t *testing.T) {
 	if got := rowKeys(m); !slices.Equal(got, []string{"run:r2", "run:r3", "run:r1"}) {
 		t.Fatalf("runs %v", got)
 	}
-	indexAll(t, rowText(m, 0), "⟳ #1", "d954af8", "running", "1m12s…")
-	indexAll(t, rowText(m, 2), "✔ main", "fd387ab", "passed", "1m00s", "10m")
+	indexAll(t, rowText(m, 0), "⟳ #1", "d954af8", "running", "\n", "pull_request", "1m12s…")
+	indexAll(t, rowText(m, 2), "✔ main", "fd387ab", "passed", "10m", "\n", "push · main", "1m00s")
 	if h := ansi.Strip(m.strip()); !strings.Contains(h, "RUNS 1") || !strings.Contains(h, "client") {
 		t.Fatalf("strip %q", h)
 	}
@@ -379,14 +384,14 @@ func TestDoubledWorkflows(t *testing.T) {
 	st := fixture()
 	st.Repos[0].Unhandled = r.Unhandled
 	m := searchModelState(t, &pr.Fake{Results: e2eResults(e2eResult()), Flows: map[string][]pr.Workflow{"o/e2e": flows}}, st)
-	if row := rowText(m, 0); !strings.Contains(row, "✘ 1/2⚠2") {
+	if row := rowText(m, 0); !strings.Contains(row, ic("ci-fail")+" 1/2⚠2") {
 		t.Fatalf("PR row %q", row)
 	}
 	if row := rowText(m, 1); strings.Contains(row, "⚠2") { // #2 has never run here
 		t.Fatalf("not-run row marked: %q", row)
 	}
 	keysIn(m, "4")
-	if row := rowText(m, 0); !strings.Contains(row, "✔ 1/1⚠2") {
+	if row := rowText(m, 0); !strings.Contains(row, ic("ci-pass")+" 1/1⚠2") {
 		t.Fatalf("branch row %q", row)
 	}
 	out := screen(m)
@@ -531,7 +536,7 @@ func TestEnterPreviewFetchesDetail(t *testing.T) {
 	if top := strings.Split(screen(m), "\n")[lay.py]; strings.TrimSpace(ansi.Cut(top, lay.px, lay.px+lay.pw)) != "#1" {
 		t.Fatalf("pane title %q", top)
 	}
-	if !strings.Contains(screen(m), "#  Title") {
+	if !strings.Contains(screen(m), "Title") {
 		t.Fatalf("the table must stay:\n%s", screen(m))
 	}
 }
@@ -750,7 +755,7 @@ func TestEngineUnreachableMarksRollup(t *testing.T) {
 	if len(out) != 40 {
 		t.Fatalf("%d lines", len(out))
 	}
-	indexAll(t, rowText(m, 0), "? ", "✘ 0/1", "github only")
+	indexAll(t, rowText(m, 0), "? ", ic("ci-fail")+" 0/1", "github only")
 	indexAll(t, rowText(m, 1), "? ", "· github only")
 	if got := rowText(m, 1); strings.Contains(got, "not run") {
 		t.Fatalf("a row looks unhandled while the engine is down: %q", got)

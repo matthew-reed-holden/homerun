@@ -29,7 +29,7 @@ func dims(t *testing.T, s string, w, h int) {
 func rows(n int) []entry {
 	var out []entry
 	for i := range n {
-		out = append(out, entry{"✔", fmt.Sprintf("row %d", i), fmt.Sprint(i)})
+		out = append(out, entry{icon: "✔", text: fmt.Sprintf("row %d", i), key: fmt.Sprint(i)})
 	}
 	return out
 }
@@ -104,14 +104,14 @@ func TestBranchAndPRRows(t *testing.T) {
 	st := fixture()
 	st.Repos[0].Items = append(st.Repos[0].Items, api.Item{Label: "spike/\x1b]52;c;aGk=\x07x", Ref: "spike", SHA: "0c41e9a0000", Updated: now.Add(-50 * time.Hour)})
 	m := searchModelState(t, &pr.Fake{Results: e2eResults(e2eResult())}, st)
-	if !strings.HasPrefix(rowText(m, 1), "◇    2  typo fix") { // a fork PR awaiting the owner
+	if r := rowText(m, 1); !strings.HasPrefix(r, "◇ #2 · typo · @bob") || !strings.Contains(r, "\n  typo fix") { // a fork PR awaiting the owner
 		t.Fatalf("fork row %q", rowText(m, 1))
 	}
 	keysIn(m, "4")
 	if got := rowKeys(m); len(got) != 2 {
 		t.Fatalf("branch rows %v", got)
 	}
-	indexAll(t, rowText(m, 0), "✔ main", "fd387ab", "✔ 1/1")
+	indexAll(t, rowText(m, 0), "✔ main", "fd387ab", ic("ci-pass")+" 1/1")
 	if r := m.at().rows.rows[1]; strings.Contains(r.text, "]52") || !strings.Contains(rowText(m, 1), "· spike/") || !strings.HasSuffix(strings.TrimSpace(rowText(m, 1)), "2d") {
 		t.Fatalf("branch row %q", rowText(m, 1))
 	}
@@ -122,8 +122,8 @@ func TestRepoAndRunRows(t *testing.T) {
 	st.Repos = append(st.Repos, api.Repo{Name: "o/a", Items: []api.Item{{Checks: []api.Check{{Status: "completed", Conclusion: "failure"}}}}}, api.Repo{Name: "o/b", Error: "bad config"})
 	st.Runs = []api.Run{
 		{ID: "q", Repo: "o/e2e", Label: "main", Status: "queued", Created: now.Add(-time.Minute)},
-		{ID: "c", Repo: "o/e2e", Label: "#2", Status: "cancelled", Started: now.Add(-11 * time.Minute), Finished: now.Add(-10 * time.Minute)},
-		{ID: "f", Repo: "o/e2e", Label: "#1", Status: "done", Started: now.Add(-11 * time.Minute), Finished: now.Add(-10 * time.Minute),
+		{ID: "c", Repo: "o/e2e", Label: "#2", PR: 2, Status: "cancelled", Started: now.Add(-11 * time.Minute), Finished: now.Add(-10 * time.Minute)},
+		{ID: "f", Repo: "o/e2e", Label: "#1", PR: 1, Status: "done", Started: now.Add(-11 * time.Minute), Finished: now.Add(-10 * time.Minute),
 			Checks: []api.Check{{Status: "completed", Conclusion: "failure"}}},
 	}
 	m := searchModelState(t, &pr.Fake{Results: e2eResults(e2eResult())}, st)
@@ -138,6 +138,6 @@ func TestRepoAndRunRows(t *testing.T) {
 	}
 	keysIn(m, "5")
 	indexAll(t, rowText(m, 0), "· main", "queued", "1m")
-	indexAll(t, rowText(m, 1), "○ #2", "cancelled", "1m00s", "10m")
-	indexAll(t, rowText(m, 2), "✘ #1", "failed", "1m00s", "10m")
+	indexAll(t, rowText(m, 1), "○ #2", "cancelled", "10m", "\n", "1m00s")
+	indexAll(t, rowText(m, 2), "✘ #1", "failed", "10m", "\n", "pull_request", "1m00s")
 }

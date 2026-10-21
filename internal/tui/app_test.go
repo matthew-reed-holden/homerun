@@ -409,9 +409,17 @@ func TestClickBounds(t *testing.T) {
 			t.Fatalf("click at y=%d selected %d", y, m.at().rows.cur)
 		}
 	}
-	m.click(tea.Mouse{X: 5, Y: lay.top + lay.th - 1, Button: tea.MouseLeft}) // the last row in view
-	if want := lay.th - 3; m.at().rows.cur != want {
+	m.tableView(lay.tw, lay.th)
+	n := (lay.th - 2) / 2                                                 // whole two-line rows below the title and head
+	m.click(tea.Mouse{X: 5, Y: lay.top + 1 + 2*n, Button: tea.MouseLeft}) // the last row in view, its second line
+	if want := n - 1; m.at().rows.cur != want {
 		t.Fatalf("last row click selected %d, want %d", m.at().rows.cur, want)
+	}
+	if (lay.th-2)%2 == 1 { // the leftover line selects nothing
+		m.click(tea.Mouse{X: 5, Y: lay.top + lay.th - 1, Button: tea.MouseLeft})
+		if m.at().rows.cur != n-1 {
+			t.Fatalf("leftover line selected %d", m.at().rows.cur)
+		}
 	}
 	m.at().rows.home()
 	m.syncMain()
@@ -555,12 +563,12 @@ func TestMouseSelects(t *testing.T) {
 	m, _ := newTestModel(t)
 	keysIn(m, "5", "tab")
 	// 120×40: the strip, bases and foul line are rows 0-2, the table's title row 3,
-	// its column head row 4, so row 6 is the second run.
-	m.Update(tea.MouseClickMsg{X: 3, Y: 6, Button: tea.MouseLeft})
+	// its column head row 4, and each run two lines, so row 7 is the second run.
+	m.Update(tea.MouseClickMsg{X: 3, Y: 7, Button: tea.MouseLeft})
 	if m.focus != onTable || m.at().rows.cur != 1 {
 		t.Fatalf("click: focus %d cur %d", m.focus, m.at().rows.cur)
 	}
-	m.Update(tea.MouseWheelMsg{X: 3, Y: 6, Button: tea.MouseWheelDown})
+	m.Update(tea.MouseWheelMsg{X: 3, Y: 7, Button: tea.MouseWheelDown})
 	if m.at().rows.cur != 2 {
 		t.Fatalf("wheel: cur %d", m.at().rows.cur)
 	}

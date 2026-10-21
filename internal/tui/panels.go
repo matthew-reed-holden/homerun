@@ -9,13 +9,22 @@ import (
 	"github.com/matthew-reed-holden/homerun/internal/api"
 )
 
-// entry is one row; key names what it shows, so a refresh that inserts or
-// reorders rows keeps the cursor on the same thing.
-type entry struct{ icon, text, key string }
+// entry is one row: text, and under it sub when sub is not empty. key names
+// what it shows, so a refresh that inserts or reorders rows keeps the cursor
+// on the same thing.
+type entry struct{ icon, text, sub, key string }
+
+// height is the lines the row takes.
+func (e entry) height() int {
+	if e.sub == "" {
+		return 1
+	}
+	return 2
+}
 
 // list is a sectioned list of rows, numbered unless n is 0, under an optional
-// column head. It owns its cursor and scroll offset so a state refresh never
-// moves the user's place.
+// column head. It owns its cursor and scroll offset, in rows, so a state
+// refresh never moves the user's place.
 type list struct {
 	n     int
 	title string
@@ -24,6 +33,7 @@ type list struct {
 	empty []string // shown in place of rows when there are none
 	cur   int
 	off   int
+	inner int // body lines the last view had; 0 before any view
 }
 
 func (l *list) set(rows []entry) {
@@ -52,22 +62,50 @@ func (l *list) first() int {
 	return 1
 }
 
-// click selects the row y lines below the section's title line.
+// span is the lines rows[from..to] take.
+func (l *list) span(from, to int) int {
+	h := 0
+	for i := from; i <= to && i < len(l.rows); i++ {
+		h += l.rows[i].height()
+	}
+	return h
+}
+
+// scroll keeps the cursor's row whole in view, without blank lines below the
+// last row while earlier ones are hidden.
+func (l *list) scroll(inner int) {
+	if l.cur < l.off {
+		l.off = l.cur
+	}
+	for l.off < l.cur && l.span(l.off, l.cur) > inner {
+		l.off++
+	}
+	for l.off > 0 && l.span(l.off-1, len(l.rows)-1) <= inner {
+		l.off--
+	}
+	l.off = clampInt(l.off, 0, max(0, len(l.rows)-1))
+}
+
+// click selects the row on the line y lines below the section's title line.
+// Once a view has drawn the list, only the rows it showed whole take clicks.
 func (l *list) click(y int) {
-	if i := l.off + y - l.first(); y >= l.first() && i < len(l.rows) {
-		l.cur = i
+	y -= l.first()
+	for i, top := l.off, 0; y >= 0 && i < len(l.rows); i++ {
+		bottom := top + l.rows[i].height()
+		if l.inner > 0 && bottom > l.inner && i != l.cur {
+			return
+		}
+		if y < bottom {
+			l.cur = i
+			return
+		}
+		top = bottom
 	}
 }
 
 func (l *list) view(w, h int, focused bool) string {
 	inner := max(0, h-l.first())
-	if l.cur < l.off {
-		l.off = l.cur
-	}
-	if l.cur >= l.off+inner {
-		l.off = l.cur - inner + 1
-	}
-	l.off = clampInt(l.off, 0, len(l.rows)-inner)
+	l.scroll(inner)
 	var lines []string
 	if l.head != "" {
 		lines = append(lines, l.head)
@@ -75,9 +113,15 @@ func (l *list) view(w, h int, focused bool) string {
 	if len(l.rows) == 0 {
 		lines = append(lines, l.empty...)
 	}
-	for i := l.off; i < len(l.rows) && i < l.off+inner; i++ {
+	// Only whole rows, but always the cursor's first line.
+	l.inner = inner
+	for i, used := l.off, 0; i < len(l.rows) && (used+l.rows[i].height() <= inner || i == l.cur); i++ {
 		r := l.rows[i]
 		lines = append(lines, box(paint(r.icon)+" "+r.text, w, i == l.cur, focused))
+		if r.sub != "" {
+			lines = append(lines, box("  "+r.sub, w, i == l.cur, focused))
+		}
+		used += r.height()
 	}
 	title := l.title
 	if l.n > 0 {

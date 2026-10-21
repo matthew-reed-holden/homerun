@@ -134,7 +134,7 @@ func (m *model) repoEntry(r api.Repo) entry {
 		t += " ●"
 	}
 	if r.Error != "" {
-		return entry{"✘", t + " (error)", r.Name}
+		return entry{icon: "✘", text: t + " (error)", key: r.Name}
 	}
 	for _, tb := range m.tabs {
 		if res, ok := tb.res[r.Name]; ok && tb.q() == "is:open" {
@@ -146,5 +146,5 @@ func (m *model) repoEntry(r api.Repo) entry {
 	for _, it := range r.Items {
 		all = append(all, it.Checks...)
 	}
-	return entry{Rollup(all), t, r.Name}
+	return entry{icon: Rollup(all), text: t, key: r.Name}
 }
