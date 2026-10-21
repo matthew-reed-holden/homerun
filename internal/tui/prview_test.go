@@ -526,7 +526,7 @@ func TestCommentSends(t *testing.T) {
 	}
 	keysIn(m, "c")
 	out := screen(m)
-	if !strings.Contains(out, "Comment on #1") || !strings.Contains(out, "ctrl+s send · esc close") {
+	if !strings.Contains(out, "Comment on #1") || !strings.Contains(out, "ctrl+s send · esc keep draft and close") {
 		t.Fatalf("no comment box:\n%s", out)
 	}
 	typeIn(m, "quit now")

@@ -413,3 +413,95 @@ func TestLeadGlyphFollowsIcons(t *testing.T) {
 		}
 	}
 }
+
+const dimSGR = "38;2;91;107;133"
+
+func TestFilterShowsScopeDim(t *testing.T) {
+	m := searchModel(t, &pr.Fake{Results: e2eResults(e2eResult())})
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	keysIn(m, "/", "ctrl+u")
+	bar := m.filterBar()
+	if s := ansi.Strip(bar); !strings.Contains(s, ic("search")+" is:pr repo:o/e2e") {
+		t.Fatalf("bar %q", s)
+	}
+	if !strings.Contains(bar, dimSGR+"m"+"is:pr repo:o/e2e") {
+		t.Fatalf("scope not dim: %q", bar)
+	}
+	if !strings.Contains(bar, claySGR) || !strings.Contains(bar, "┌") {
+		t.Fatalf("bar not in a clay box: %q", bar)
+	}
+	keysIn(m, "backspace", "backspace")
+	typeFilter(m, "label:bug")
+	if s := ansi.Strip(m.filterBar()); !strings.Contains(s, "is:pr repo:o/e2e label:bug") {
+		t.Fatalf("typed: %q", s)
+	}
+	if m.flt.Value() != "label:bug" {
+		t.Fatalf("value %q", m.flt.Value())
+	}
+	keysIn(m, "ctrl+u", "backspace", "backspace")
+	if s := ansi.Strip(m.filterBar()); !strings.Contains(s, "is:pr repo:o/e2e") || m.flt.Value() != "" {
+		t.Fatalf("backspace on empty: %q / %q", s, m.flt.Value())
+	}
+	if d := ansi.Strip(m.dugout()); !strings.Contains(d, "enter apply") || !strings.HasSuffix(d, "? help") {
+		t.Fatalf("dugout %q", d)
+	}
+}
+
+func TestDialogClayBorder(t *testing.T) {
+	d := quitDialog(2)
+	v := d.view(80)
+	if !strings.Contains(v, claySGR) || !strings.Contains(v, "┌") || strings.Contains(v, "╭") {
+		t.Fatalf("dialog %q", v)
+	}
+	m, _ := prOpenModel(t, detailFixture())
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m.openComment()
+	if v := m.commentView(); !strings.Contains(v, claySGR) || !strings.Contains(v, "┌") {
+		t.Fatalf("comment %q", v)
+	}
+	p, _ := newTestModel(t)
+	keysIn(p, "R")
+	if v := p.pickerView(); !strings.Contains(v, claySGR) || !strings.Contains(v, "┌") {
+		t.Fatalf("picker %q", v)
+	}
+}
+
+func TestHelpNamesIcons(t *testing.T) {
+	s := ansi.Strip(helpDialog().view(100))
+	if !strings.Contains(s, "icons: nerd | unicode | ascii") {
+		t.Fatalf("help %q", s)
+	}
+}
+
+func TestStatesShowWordmark(t *testing.T) {
+	m, _ := newTestModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
+	lines := strings.Split(ansi.Strip(m.render()), "\n")
+	if len(lines) != 20 {
+		t.Fatalf("too small not centred: %d lines", len(lines))
+	}
+	s := strings.Join(lines, "\n")
+	if i, j := strings.Index(s, "HOMERUN"), strings.Index(s, "terminal too small"); i < 0 || j < i {
+		t.Fatalf("too small %q", s)
+	}
+}
+
+// A long repo shortens in the filter bar, so the box stays three lines and
+// the query keeps room.
+func TestFilterLongRepoFits(t *testing.T) {
+	st := fixture()
+	st.Repos[0].Name = "owner/" + strings.Repeat("r", 60)
+	m := searchModelState(t, &pr.Fake{}, st)
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	keysIn(m, "/")
+	typeFilter(m, strings.Repeat(" label:x", 12))
+	bar := strings.Split(ansi.Strip(m.filterBar()), "\n")
+	if len(bar) != 3 || !strings.Contains(bar[1], "is:pr repo:…/rrr") {
+		t.Fatalf("bar %q", bar)
+	}
+	for i, l := range strings.Split(m.render(), "\n") {
+		if w := ansi.StringWidth(l); w > 80 {
+			t.Fatalf("line %d is %d cells", i, w)
+		}
+	}
+}

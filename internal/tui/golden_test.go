@@ -187,3 +187,30 @@ func TestGoldenFilter(t *testing.T) {
 		})
 	}
 }
+
+// TestGoldenLook pins the day palette, ascii icons and the log's breadcrumb.
+func TestGoldenLook(t *testing.T) {
+	for _, name := range []string{"wide-prs-day", "wide-prs-ascii", "standard-log-breadcrumb"} {
+		t.Run(name, func(t *testing.T) {
+			m, f := newTestModel(t)
+			switch name {
+			case "wide-prs-day":
+				setTheme(false)
+				t.Cleanup(func() { setTheme(true) })
+			case "wide-prs-ascii":
+				useIcons(t, IconsASCII)
+			}
+			if name == "standard-log-breadcrumb" {
+				f.logs["r1"] = runLog
+				m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+				keysIn(m, "l", "]", "j", "j", "j")
+				drain(m, keysIn(m, "enter"))
+			} else {
+				m.Update(searchMsg{repo: "o/e2e", tab: 0, query: "is:open author:@me", res: goldenResult()})
+				m.behind = map[string]int{"o/e2e#1": 3}
+				m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+			}
+			golden(t, name, ansi.Strip(m.render()))
+		})
+	}
+}

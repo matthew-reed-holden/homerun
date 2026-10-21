@@ -6,16 +6,37 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 )
 
 // openFilter opens the query bar on the active PR tab, filled with its query.
 func (m *model) openFilter() {
 	in := textinput.New()
-	in.Prompt = th.lights.Render("/") + " "
 	in.SetValue(m.at().q())
 	in.Focus()
 	m.flt = &in
+	m.sizeFilter()
+}
+
+// filterW is the filter box's width, its border included.
+func filterW(w int) int { return min(max(20, w-4), 100) }
+
+// sizeFilter fits the bar to the screen: the clay search icon, then the
+// scope homerun adds, dim and outside the input so no key can edit it, then
+// the query. The repo shortens to …/name, then truncates, so the query keeps
+// 20 cells.
+func (m *model) sizeFilter() {
+	if m.flt == nil {
+		return
+	}
+	inner := filterW(m.w) - 4
+	scope := "is:pr repo:" + termsafe.Line(m.repo().Name) + " "
+	if inner-ansi.StringWidth(scope)-3 < 20 {
+		scope = truncate("is:pr repo:…/"+termsafe.Line(repoShort(m.repo().Name)), inner-24) + " "
+	}
+	m.flt.Prompt = th.clay.Render(ic("search")) + " " + th.dim.Render(scope)
+	m.flt.SetWidth(max(1, inner-ansi.StringWidth(scope)-3))
 }
 
 // filterKey is the bar's keys while it is open. Enter makes the typed query
@@ -41,8 +62,15 @@ func (m *model) filterKey(k tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
+// filterBar is the floating query box, drawn over the top of the body.
 func (m *model) filterBar() string {
-	return truncate(m.flt.View()+"  "+th.dim.Render("enter apply · esc keep old · ctrl+u clear"), m.w)
+	m.sizeFilter()
+	return clayBox(filterW(m.w)).Render(m.flt.View())
+}
+
+// filterHints is the dugout line's left side while the bar is open.
+func filterHints() []key.Binding {
+	return []key.Binding{bind("enter", "apply", "enter"), bind("esc", "keep old query", "esc"), bind("ctrl+u", "clear", "ctrl+u")}
 }
 
 func (m *model) filterErrLine() string {

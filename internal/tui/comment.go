@@ -8,7 +8,6 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	"github.com/matthew-reed-holden/homerun/internal/pr"
 )
 
@@ -16,14 +15,22 @@ import (
 // and blink is off, so nothing here waits on the clock.
 func newDraft() textarea.Model {
 	ta := textarea.New()
-	st := textarea.DefaultDarkStyles()
-	st.Cursor.Blink = false
-	ta.SetStyles(st)
+	ta.SetStyles(draftStyles())
 	ta.ShowLineNumbers = false
 	ta.Prompt = ""
 	ta.SetHeight(8)
 	ta.Focus()
 	return ta
+}
+
+// draftStyles paints the editor from the palette: chalk text, no cursor-line
+// bar, a clay cursor that does not blink.
+func draftStyles() textarea.Styles {
+	st := textarea.DefaultDarkStyles()
+	st.Focused.CursorLine, st.Focused.Text, st.Focused.Placeholder = th.fg, th.fg, th.dim
+	st.Focused.EndOfBuffer = th.dim
+	st.Cursor.Color, st.Cursor.Blink = th.p.clay, false
+	return st
 }
 
 // commenting is whether the comment box is open and so takes every key.
@@ -114,6 +121,6 @@ func (m *model) restoreDraft(ref, body string) {
 }
 
 func (m *model) commentView() string {
-	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("3")).Padding(0, 1).Width(commentW(m.w))
-	return box.Render(th.bold.Render("Comment on #"+strconv.Itoa(m.pr.number)) + "\n\n" + m.draft.View() + "\n\n" + th.dim.Render("ctrl+s send · esc close"))
+	m.draft.SetStyles(draftStyles()) // the palette may have turned to day since
+	return clayBox(commentW(m.w)).Render(th.bold.Render("Comment on #"+strconv.Itoa(m.pr.number)) + "\n\n" + m.draft.View() + "\n\n" + th.dim.Render("ctrl+s send · esc keep draft and close"))
 }

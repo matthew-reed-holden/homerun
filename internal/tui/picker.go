@@ -43,7 +43,7 @@ func fuzzy(q, s string) bool {
 
 func (m *model) openPicker() {
 	in := textinput.New()
-	in.Prompt = "› "
+	in.Prompt = th.clay.Render(ic("search")) + " "
 	in.Focus()
 	p := &picker{in: in}
 	for _, r := range m.state.Repos {
@@ -122,7 +122,7 @@ func (m *model) pickerView() string {
 		lines = append(lines, th.dim.Render("no matching repo"))
 	}
 	lines = append(lines, "", th.dim.Render("enter pick · esc cancel"))
-	d := dialog{title: "Pick a repo", body: strings.Join(lines, "\n")}
+	d := dialog{icon: "repo", title: "Pick a repo", body: strings.Join(lines, "\n")}
 	return d.view(m.w)
 }
 
@@ -131,7 +131,7 @@ func (m *model) pickerView() string {
 func (m *model) repoEntry(r api.Repo) entry {
 	t := termsafe.Line(r.Name)
 	if r.Name == m.repo().Name {
-		t += " ●"
+		t += " " + th.clay.Render("●")
 	}
 	if r.Error != "" {
 		return entry{icon: "ci-fail", text: t + " (error)", key: r.Name}

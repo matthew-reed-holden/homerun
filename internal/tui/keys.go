@@ -79,11 +79,18 @@ func (k keyMap) bar(c barCtx) []key.Binding {
 	return []key.Binding{k.Tabs, k.Into, k.Rerun, k.Cancel, k.Copy, k.Open, k.Repo, k.Quit}
 }
 
+// groups are help's columns: moving around, the tree and the log, actions.
+// Three columns keep the popup inside 80 columns.
 func (k keyMap) groups() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Tabs, k.Tab, k.Next, k.Into, k.Back, k.Repo, k.Filter, k.Reload, k.Help, k.Quit},
-		{k.Up, k.Down, k.Top, k.Bottom, k.Fold, k.Enter},
-		{k.Search, k.NextMatch, k.PrevMatch, k.NextFail, k.Follow, k.Zoom, k.Esc},
+		{k.Up, k.Down, k.Top, k.Bottom, k.Fold, k.Enter, k.Search, k.NextMatch, k.PrevMatch, k.NextFail, k.Follow, k.Zoom, k.Esc},
 		{k.Rerun, k.Cancel, k.Open, k.Copy, k.Merge, k.Update, k.Comment, k.Send},
 	}
+}
+
+// iconsNote is help's line on the icons: setting, naming the one in use.
+func iconsNote() string {
+	now := [...]string{"nerd", "unicode", "ascii"}[icons]
+	return "icons: nerd | unicode | ascii, now " + now + " · boxes here? set unicode"
 }

@@ -14,13 +14,13 @@ is:open author:@me                                                ╎ o/e2e · #
                                                                   ╎                                                     
                                                                   ╎ Makes the thing b optional.                         
                                                                   ╎                                                     
-                          ╭─────────────────────────────────────────────────────────────────╮                           
+                          ┌─────────────────────────────────────────────────────────────────┐                           
                           │ Merge #1 into main?                                             │t · 2h ago                 
                           │                                                                 │                           
                           │ ○ Create a merge commit  ● Squash and merge  ○ Rebase and merge │                           
                           │                                                                 │                           
                           │ [tab] switch · [y] merge · any other key cancels                │                           
-                          ╰─────────────────────────────────────────────────────────────────╯                           
+                          └─────────────────────────────────────────────────────────────────┘                           
                                                                   ╎ Checks                                              
                                                                   ╎  lint required                                     
                                                                   ╎  build                                             

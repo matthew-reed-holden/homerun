@@ -795,20 +795,20 @@ func (m *model) View() tea.View {
 
 func (m *model) render() string {
 	if m.w < 80 || m.h < 24 {
-		return "terminal too small (need 80×24)"
+		return m.sign("terminal too small (need 80×24)")
 	}
 	if !m.connected {
-		msg := "Start the daemon: homerun daemon\n\n(q to quit)"
+		msg := "Start the daemon: homerun daemon\n\n" + th.dim.Render("(q to quit)")
 		if m.o.Host != nil {
-			msg = "Starting homerun…\n\n(q to quit)"
+			msg = "Starting homerun…\n\n" + th.dim.Render("(q to quit)")
 		}
 		switch {
 		case m.hostErr != nil:
-			msg = "homerun could not start: " + termsafe.Line(m.hostErr.Error()) + "\n\n(ctrl+r to retry · q to quit)"
+			msg = th.out.Render(ic("ci-fail")) + " homerun could not start: " + termsafe.Line(m.hostErr.Error()) + "\n\n" + th.dim.Render("(ctrl+r to retry · q to quit)")
 		case m.err != nil:
 			msg = termsafe.Line(m.err.Error()) + "\n\n" + msg
 		}
-		return lipgloss.Place(m.w, m.h, lipgloss.Center, lipgloss.Center, msg)
+		return m.sign(msg)
 	}
 	lay := m.layout()
 	body := m.mainView(lay.pw, lay.ph)
@@ -831,6 +831,9 @@ func (m *model) render() string {
 		screen += "\n" + m.filterErrLine()
 	}
 	screen += "\n" + m.dugout()
+	if m.flt != nil {
+		screen = overlayAt(screen, m.filterBar(), m.w, lay.top, false)
+	}
 	if m.dlg != nil {
 		screen = overlay(screen, m.dlg.view(m.w), m.w, m.h)
 	}
@@ -841,6 +844,13 @@ func (m *model) render() string {
 		screen = overlay(screen, m.commentView(), m.w, m.h)
 	}
 	return screen
+}
+
+// sign is a whole-screen message, centred under the HOMERUN wordmark, for
+// the screens drawn before or instead of the dashboard.
+func (m *model) sign(msg string) string {
+	block := lipgloss.JoinVertical(lipgloss.Center, th.clay.Bold(true).Render("HOMERUN"), "", msg)
+	return lipgloss.Place(m.w, m.h, lipgloss.Center, lipgloss.Center, block)
 }
 
 // tableView is the active tab's table.
@@ -871,9 +881,6 @@ func (m *model) mainView(w, h int) string {
 // dugout is the bottom line: the context's key hints, the position on a PR
 // row, and ? help, which never drops; hints drop from the right first.
 func (m *model) dugout() string {
-	if m.flt != nil {
-		return m.filterBar()
-	}
 	ctx := inTable
 	switch {
 	case m.focus == onPreview && m.log != nil:
@@ -894,7 +901,9 @@ func (m *model) dugout() string {
 	m.help.Styles.ShortKey, m.help.Styles.ShortDesc, m.help.Styles.ShortSeparator = th.fg, th.dim, th.dim
 	m.help.ShortSeparator = " · "
 	bs := keys.bar(ctx)
-	if m.hostErr != nil { // the strip's warning may be cut short of saying so
+	if m.flt != nil {
+		bs = filterHints()
+	} else if m.hostErr != nil { // the strip's warning may be cut short of saying so
 		bs = append([]key.Binding{bind("ctrl+r", "retry", "ctrl+r")}, bs...)
 	}
 	room := m.w - ansi.StringWidth(right) - 2

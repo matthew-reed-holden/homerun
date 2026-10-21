@@ -1,9 +1,9 @@
 HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 ·  client                                                                     
 ◆ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◇ 5 Runs 3                                        
 ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
-is:open author:@me                                                ╎ #1 e2e PR · d954af8 · @matt · 5m ago                
-   Title                                                     ╎ #1 e2e PR  @matt · feat → main                      
-▌ #1 · feat · @matt               1/2           +0 −0        5m ╎ Checks none                                         
+is:open au┌──────────────────────────────────────────────────────────────────────────────────────────────────┐          
+   Title  │  is:pr repo:o/e2e is:open label:bug                                                             │          
+▌ #1 · fe└──────────────────────────────────────────────────────────────────────────────────────────────────┘          
 ▌  e2e PR                                                         ╎ Reviews: none · Files 0 (+0 −0) ·  0               
  ◇ #2 · typo · @bob               ·               +0 −0        3h ╎ 2  homerun                                          
    typo fix                                                       ╎ ──────────────────────────────────────────────────  
@@ -37,4 +37,4 @@ is:open author:@me                                                ╎ #1 e2e PR 
                                                                   ╎                                                     
                                                                   ╎                                                     
 ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
-/ is:open label:bug   enter apply · esc keep old · ctrl+u clear
+enter apply · esc keep old query · ctrl+u clear                                                          PR 1/2   ? help
