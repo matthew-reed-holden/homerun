@@ -401,7 +401,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.closeLog()
 		return m, tea.Quit
 	case tea.PasteMsg:
-		if m.commenting() {
+		if m.flt != nil {
+			in, _ := m.flt.Update(msg)
+			m.flt = &in
+		} else if m.commenting() {
 			m.draft, _ = m.draft.Update(msg)
 		}
 	case statusMsg:

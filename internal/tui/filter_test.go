@@ -1,6 +1,7 @@
 package tui
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"errors"
 	"strings"
 	"testing"
@@ -141,5 +142,40 @@ func TestEditedQueryKeptPerTab(t *testing.T) {
 	keysIn(m, "3", "1")
 	if got := m.at().rows.title; got != "is:open author:@mex" {
 		t.Fatalf("title %q", got)
+	}
+}
+
+func TestFilterPaste(t *testing.T) {
+	f := &pr.Fake{Results: e2eResults(e2eResult())}
+	m := searchModel(t, f)
+	keysIn(m, "/", "ctrl+u")
+	m.Update(tea.PasteMsg{Content: "is:open label:bug"})
+	run(m, m.key(press("enter")))
+	f.Lock()
+	last := f.Searches[len(f.Searches)-1]
+	f.Unlock()
+	if last.Query != "is:open label:bug" || m.at().rows.title != "is:open label:bug" {
+		t.Fatalf("last %+v title %q", last, m.at().rows.title)
+	}
+}
+
+func TestLongRejectionKeepsScreenSize(t *testing.T) {
+	f := &pr.Fake{Results: e2eResults(e2eResult())}
+	m := searchModel(t, f)
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	f.Lock()
+	f.SearchErr = errors.New("github: " + strings.Repeat("bad ", 75))
+	f.Unlock()
+	keysIn(m, "/", "x")
+	run(m, m.key(press("enter")))
+	s := m.render()
+	lines := strings.Split(s, "\n")
+	if len(lines) != 24 || !strings.Contains(ansi.Strip(s), "GitHub rejected") {
+		t.Fatalf("%d lines:\n%s", len(lines), ansi.Strip(s))
+	}
+	for i, l := range lines {
+		if w := ansi.StringWidth(l); w > 80 {
+			t.Fatalf("line %d width %d", i, w)
+		}
 	}
 }
