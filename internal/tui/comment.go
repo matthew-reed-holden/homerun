@@ -29,24 +29,47 @@ func newDraft() textarea.Model {
 // commenting is whether the comment box is open and so takes every key.
 func (m *model) commenting() bool { return m.pr != nil && m.pr.typing }
 
+// loadDraft puts the open PR's saved draft in the editor.
+func (m *model) loadDraft() {
+	ref := m.prRef()
+	m.draft.Reset()
+	m.draft.SetValue(m.drafts[ref])
+	delete(m.drafts, ref)
+}
+
+// saveDraft keeps the open PR's draft for when it is opened again.
+func (m *model) saveDraft() {
+	if v := m.draft.Value(); v != "" {
+		if m.drafts == nil {
+			m.drafts = map[string]string{}
+		}
+		m.drafts[m.prRef()] = v
+	}
+	m.draft.Reset()
+}
+
+// sizeDraft fits the editor to the comment box, as the screen width changes.
+func (m *model) sizeDraft() { m.draft.SetWidth(commentW(m.w) - 4) }
+
+func commentW(w int) int { return min(max(20, w-4), 72) }
+
 func (m *model) openComment() {
 	if m.pr.d == nil {
 		m.say("still loading #" + strconv.Itoa(m.pr.number))
 		return
 	}
 	m.pr.typing = true
-	m.pr.draft.Focus()
+	m.draft.Focus()
 }
 
 func (m *model) commentKey(k tea.KeyPressMsg) tea.Cmd {
-	p := m.pr
 	switch {
 	case key.Matches(k, keys.Esc):
-		p.typing = false
+		m.pr.typing = false
 	case key.Matches(k, keys.Send):
 		return m.sendComment()
 	default:
-		p.draft, _ = p.draft.Update(k)
+		m.draft, _ = m.draft.Update(k)
 	}
 	return nil
 }
@@ -55,13 +78,13 @@ func (m *model) commentKey(k tea.KeyPressMsg) tea.Cmd {
 // reopening cannot post it twice; a failed send puts it back.
 func (m *model) sendComment() tea.Cmd {
 	p := m.pr
-	body := strings.TrimSpace(p.draft.Value())
+	body := strings.TrimSpace(m.draft.Value())
 	if body == "" {
 		m.say("comment is empty")
 		return nil
 	}
 	p.typing = false
-	p.draft.Reset()
+	m.draft.Reset()
 	id := p.d.ID
 	send := m.mutate("comment", "comment sent", p.repo, p.number, func(ctx context.Context, api pr.API) error { return api.Comment(ctx, id, body) })
 	return func() tea.Msg {
@@ -71,17 +94,26 @@ func (m *model) sendComment() tea.Cmd {
 	}
 }
 
-// restoreDraft puts a failed comment back ahead of anything typed since.
-func (p *prView) restoreDraft(body string) {
-	if v := p.draft.Value(); v != "" {
+// restoreDraft puts a failed comment on ref back ahead of anything typed
+// since: in the editor while ref is open, else in its saved draft.
+func (m *model) restoreDraft(ref, body string) {
+	if m.pr != nil && m.prRef() == ref {
+		if v := m.draft.Value(); v != "" {
+			body += "\n" + v
+		}
+		m.draft.SetValue(body)
+		return
+	}
+	if v := m.drafts[ref]; v != "" {
 		body += "\n" + v
 	}
-	p.draft.SetValue(body)
+	if m.drafts == nil {
+		m.drafts = map[string]string{}
+	}
+	m.drafts[ref] = body
 }
 
 func (m *model) commentView() string {
-	bw := min(max(20, m.w-4), 72)
-	m.pr.draft.SetWidth(bw - 4)
-	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("3")).Padding(0, 1).Width(bw)
-	return box.Render(bold.Render("Comment on #"+strconv.Itoa(m.pr.number)) + "\n\n" + m.pr.draft.View() + "\n\n" + dim.Render("ctrl+s send · esc close"))
+	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("3")).Padding(0, 1).Width(commentW(m.w))
+	return box.Render(bold.Render("Comment on #"+strconv.Itoa(m.pr.number)) + "\n\n" + m.draft.View() + "\n\n" + dim.Render("ctrl+s send · esc close"))
 }

@@ -140,13 +140,13 @@ func TestMergeDialog(t *testing.T) {
 	}
 }
 
-func TestMergeFromDescriptionPane(t *testing.T) {
+func TestMergeFromOverview(t *testing.T) {
 	m, _ := prOpenModel(t, openDetail())
-	keysIn(m, "l", "m")
+	keysIn(m, "m")
 	if m.dlg == nil || m.dlg.title != "Merge #1 into main?" {
-		t.Fatalf("no dialog from the page: %q", m.status)
+		t.Fatalf("no dialog from Overview: %q", m.status)
 	}
-	keysIn(m, "esc", "esc", "j", "l") // Checks preview: m is not bound there
+	keysIn(m, "esc", "]") // Checks: m is not bound there
 	if keysIn(m, "m"); m.dlg != nil {
 		t.Fatal("m in the Checks pane")
 	}

@@ -220,7 +220,7 @@ func TestPreviewFollowsTable(t *testing.T) {
 func TestOpenLogAtFailedStep(t *testing.T) {
 	m, f := newTestModel(t)
 	f.logs["r1"] = runLog
-	keysIn(m, "l", "j", "j", "j") // #1 → main: pass, fail, Set up job, echo bad
+	keysIn(m, "l", "]", "j", "j", "j") // #1 → main: pass, fail, Set up job, echo bad
 	cmd := keysIn(m, "enter")
 	drain(m, cmd)
 	if m.log == nil || m.log.lines[m.log.top] != "⭐ Run Main echo bad; exit 1" || m.log.ended != "run finished" {
@@ -304,7 +304,7 @@ func TestQuitKey(t *testing.T) {
 func TestStaleLogMessagesIgnored(t *testing.T) {
 	m, f := newTestModel(t)
 	f.logs["r1"] = runLog
-	keysIn(m, "l", "j", "j", "j")
+	keysIn(m, "l", "]", "j", "j", "j")
 	drain(m, keysIn(m, "enter"))
 	lines, ended := len(m.log.lines), m.log.ended
 	m.Update(logMsg{m.gen - 1, "stale"})
@@ -324,7 +324,7 @@ func TestStaleLogMessagesIgnored(t *testing.T) {
 func TestLogErrorEndsStream(t *testing.T) {
 	m, _ := newTestModel(t)
 	m.c = api.NewClient(filepath.Join(t.TempDir(), "missing"))
-	keysIn(m, "l", "j", "j", "j")
+	keysIn(m, "l", "]", "j", "j", "j")
 	drain(m, keysIn(m, "enter"))
 	if m.log == nil || !strings.HasPrefix(m.log.ended, "stream ended") {
 		t.Fatalf("ended: %+v", m.log)
@@ -334,7 +334,7 @@ func TestLogErrorEndsStream(t *testing.T) {
 func TestRefreshKeepsLogOpen(t *testing.T) {
 	m, f := newTestModel(t)
 	f.logs["r1"] = runLog
-	keysIn(m, "l", "j", "j", "j")
+	keysIn(m, "l", "]", "j", "j", "j")
 	drain(m, keysIn(m, "enter"))
 	st := fixture()
 	m.Update(stateMsg{&st})
@@ -346,7 +346,7 @@ func TestRefreshKeepsLogOpen(t *testing.T) {
 func TestSearchTypingDoesNotQuit(t *testing.T) {
 	m, f := newTestModel(t)
 	f.logs["r1"] = runLog
-	keysIn(m, "l", "j", "j", "j")
+	keysIn(m, "l", "]", "j", "j", "j")
 	drain(m, keysIn(m, "enter"))
 	keysIn(m, "/")
 	if !m.log.typing {
@@ -479,8 +479,8 @@ func TestOpenCopyReload(t *testing.T) {
 	t.Cleanup(func() { openURL = old })
 	cmd := keysIn(m, "o") // #1 item URL
 	m.Update(cmd())
-	keysIn(m, "l")
-	cmd = keysIn(m, "o") // tree: pass check URL
+	keysIn(m, "l", "]")
+	cmd = keysIn(m, "o") // Checks: pass check URL
 	m.Update(cmd())
 	if len(opened) != 2 || opened[0] != "https://github.com/o/e2e/pull/1" || opened[1] != "https://github.com/o/e2e/runs/1" {
 		t.Fatalf("opened %v", opened)
@@ -607,7 +607,7 @@ func TestOpenLogAtRepeatedStepName(t *testing.T) {
 	steps[0].Name, steps[0].Stage, steps[1].Name = "make", "Main", "make"
 	m.Update(stateMsg{&st})
 	f.logs["r1"] = "[CI / fail] ⭐ Run Main make\n[CI / fail] ok\n[CI / fail] ⭐ Run Main make\n[CI / fail] bad"
-	keysIn(m, "l", "j", "j", "j") // the second make
+	keysIn(m, "l", "]", "j", "j", "j") // the second make
 	drain(m, keysIn(m, "enter"))
 	if m.log == nil || m.log.top != 2 {
 		t.Fatalf("log top: %v", m.log != nil && m.log.top == 2)
@@ -658,7 +658,7 @@ func TestRepeatedStepCountUsesFirstLine(t *testing.T) {
 	}
 	m, f := searchModelDaemon(t, &pr.Fake{Results: e2eResults(e2eResult())}, st)
 	f.logs["r1"] = "[CI / fail] ⭐ Run Main make\n[CI / fail] ⭐ Run Main make"
-	keysIn(m, "l", "j", "j", "j") // #1 → preview: pass, fail, make foo, make bar
+	keysIn(m, "l", "]", "j", "j", "j") // #1 → preview: pass, fail, make foo, make bar
 	keysIn(m, "enter")
 	if m.log == nil || m.log.skip != 1 {
 		t.Fatalf("log: %+v", m.log)

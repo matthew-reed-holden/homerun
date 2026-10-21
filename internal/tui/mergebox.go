@@ -148,8 +148,8 @@ func (m *model) onMutated(msg mutatedMsg) tea.Cmd {
 	mine := m.pr != nil && m.pr.repo == msg.repo && m.pr.number == msg.n
 	if msg.err != nil {
 		m.say(msg.verb + " failed: " + msg.err.Error())
-		if mine && msg.body != "" {
-			m.pr.restoreDraft(msg.body)
+		if msg.body != "" {
+			m.restoreDraft(fmt.Sprintf("%s#%d", msg.repo, msg.n), msg.body)
 		}
 	} else {
 		m.say(msg.done)
@@ -209,7 +209,7 @@ func (m *model) updateDetail(repo string, n int, d *pr.Detail) {
 	})
 }
 
-// prMutate is m or u inside a PR.
+// prMutate is m or u on a PR's Overview.
 func (m *model) prMutate(merge bool) {
 	p := m.pr
 	switch {
@@ -248,7 +248,7 @@ func (m *model) rowMutate(merge bool) tea.Cmd {
 }
 
 // onRowDetail opens the dialog unless the user has moved on since: another
-// row or repo, a dialog, the preview or a PR.
+// row or repo, a dialog or into the preview.
 func (m *model) onRowDetail(msg rowDetailMsg) {
 	if m.pr != nil || m.dlg != nil || m.focus != onTable || m.repo().Name != msg.repo {
 		return

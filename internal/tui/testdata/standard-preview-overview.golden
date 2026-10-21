@@ -1,14 +1,15 @@
 homerun  repo o/e2e ▾                                    engine: client · 1 runs
 1 My PRs 2 · 2 Review requested 2 · 3 All open 2 · 4 Branches 1 · 5 Runs 3      
-╭─#1 e2e PR────────────────────────────────────────────────────────────────────╮
-│  Description                                                                 │
-│✘ Checks 2/4                                                                  │
-│                                                                              │
+╭─is:open author:@me───────────────────────────────────────────────────────────╮
+│     #  Title                                                   CI        ↓   │
+│✘    1  e2e PR                                                  ✘ 1/2     ↓2  │
+│◇    2  typo fix                                                ·             │
 │                                                                              │
 │                                                                              │
 │                                                                              │
 ╰──────────────────────────────────────────────────────────────────────────────╯
-╭─Description──────────────────────────────────────────────────────────────────╮
+╭─#1───────────────────────────────────────────────────────────────────────────╮
+│Overview  Checks 2/4                                                          │
 │#1 e2e PR  @matt · feat → main                                                │
 │⚠ 2 commits behind main · ✔ no conflicts                                      │
 │Checks ✔ 1 passed · ◌ 1 pending                                               │
@@ -19,6 +20,5 @@ homerun  repo o/e2e ▾                                    engine: client · 1 r
 │ Heading                                                                      │
 │                                                                              │
 │Makes the thing b optional.                                                   │
-│                                                                              │
 ╰──────────────────────────────────────────────────────────────────────────────╯
-j/k up/down • m merge • u update branch • c comment • o open • esc back • ? hel…
+[ ] tabs • m merge • u update branch • c comment • o open • h table • ? help • …

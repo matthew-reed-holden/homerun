@@ -3,6 +3,7 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"slices"
 	"strings"
@@ -492,5 +493,186 @@ func TestUpdateBehindUnknown(t *testing.T) {
 	step(m, keysIn(m, "u"))
 	if m.dlg != nil || m.status != "commits behind unknown; try again" {
 		t.Fatalf("dlg %v status %q", m.dlg, m.status)
+	}
+}
+
+// chipsLine is the preview pane's first inner line, unstyled and trimmed.
+func chipsLine(m *model) string {
+	lay := m.layout()
+	l := strings.Split(screen(m), "\n")[lay.py+1]
+	return strings.TrimSpace(strings.Trim(ansi.Cut(l, lay.px, lay.px+lay.pw), "│"))
+}
+
+func TestEnterPreviewFetchesDetail(t *testing.T) {
+	d := detailFixture()
+	d.Checks = []pr.Check{{Name: "ci/gh", Status: "completed", Conclusion: "failure", Required: true, App: "github-actions"}}
+	m, f := prOpenModel(t, d)
+	if !slices.Equal(f.DetailCalls, []string{"o/e2e#1"}) || m.focus != onPreview || m.pr == nil {
+		t.Fatalf("calls %v focus %d pr %v", f.DetailCalls, m.focus, m.pr != nil)
+	}
+	if got := chipsLine(m); got != "Overview  Checks 1/3" {
+		t.Fatalf("chips %q:\n%s", got, screen(m))
+	}
+	if !strings.Contains(m.chips(), chipOn.Render("Overview")) || strings.Contains(m.chips(), chipOn.Render("Checks 1/3")) {
+		t.Fatalf("active chip not marked: %q", m.chips())
+	}
+	lay := m.layout()
+	if top := strings.Split(screen(m), "\n")[lay.py]; !strings.Contains(top, "╭─#1─") {
+		t.Fatalf("pane title %q", top)
+	}
+	if !strings.Contains(screen(m), "#  Title") {
+		t.Fatalf("the table must stay:\n%s", screen(m))
+	}
+}
+
+func TestPreviewTabsSwitch(t *testing.T) {
+	m, _ := prOpenModel(t, detailFixture())
+	if m.pr.section != 0 || !strings.Contains(screen(m), "Timeline") {
+		t.Fatalf("not on Overview:\n%s", screen(m))
+	}
+	keysIn(m, "]")
+	if out := screen(m); m.pr.section != 1 || !strings.Contains(out, "lint status required") || strings.Contains(out, "Timeline") {
+		t.Fatalf("] to Checks: section %d\n%s", m.pr.section, out)
+	}
+	keysIn(m, "[")
+	if m.pr.section != 0 || m.at().kind != tabSearch || m.tab != 0 {
+		t.Fatalf("[ to Overview: section %d tab %d", m.pr.section, m.tab)
+	}
+	keysIn(m, "esc")
+	if m.focus != onTable || m.pr != nil || m.rowKey() != "pr:1" {
+		t.Fatalf("esc: focus %d pr %v row %q", m.focus, m.pr, m.rowKey())
+	}
+}
+
+func TestStateRefreshKeepsPreview(t *testing.T) {
+	d := detailFixture()
+	d.Body = strings.Repeat("line\n\n", 100)
+	m, _ := prOpenModel(t, d)
+	keysIn(m, "j", "j", "j")
+	off := m.pr.vp.YOffset()
+	keysIn(m, "]", "j", "j", "space")
+	cur, open := m.tree.cur, maps.Clone(m.tree.open)
+	for range 3 {
+		st := fixture()
+		m.Update(stateMsg{&st})
+	}
+	if m.pr.section != 1 || m.tree.cur != cur || !maps.Equal(m.tree.open, open) || m.pr.vp.YOffset() != off || off == 0 {
+		t.Fatalf("section %d cur %d/%d open %v/%v offset %d/%d", m.pr.section, m.tree.cur, cur, m.tree.open, open, m.pr.vp.YOffset(), off)
+	}
+}
+
+func TestResizeKeepsPreviewFocus(t *testing.T) {
+	m, _ := prOpenModel(t, detailFixture())
+	keysIn(m, "]", "j")
+	cur := m.tree.cur
+	for _, w := range []int{120, 90, 120} {
+		m.Update(tea.WindowSizeMsg{Width: w, Height: 40})
+		if m.focus != onPreview || m.pr == nil || m.pr.section != 1 || m.tree.cur != cur || m.rowKey() != "pr:1" {
+			t.Fatalf("%d: focus %d section %d cur %d", w, m.focus, m.pr.section, m.tree.cur)
+		}
+		lines := strings.Split(m.render(), "\n")
+		lines[len(lines)-1] = fit(lines[len(lines)-1], w)
+		dims(t, strings.Join(lines, "\n"), w, 40)
+	}
+}
+
+func TestBranchPreviewHasNoPRTabs(t *testing.T) {
+	st := fixture()
+	fail := st.Repos[0].Items[1].Checks[1]
+	st.Repos[0].Items[0].Checks = []api.Check{fail}
+	f := &pr.Fake{Results: e2eResults(e2eResult())}
+	m := searchModelState(t, f, st)
+	keysIn(m, "4", "enter")
+	if m.focus != onPreview || m.pr != nil || len(f.DetailCalls) != 0 {
+		t.Fatalf("focus %d pr %v calls %v", m.focus, m.pr, f.DetailCalls)
+	}
+	if out := screen(m); strings.Contains(out, "Overview") {
+		t.Fatalf("PR tabs on a branch:\n%s", out)
+	}
+	keysIn(m, "j", "enter")
+	if m.log == nil || m.log.marker != "⭐ Run Set up job" {
+		t.Fatalf("enter on a step: %+v", m.log)
+	}
+}
+
+func TestCommentDraftKeptAcrossLeaving(t *testing.T) {
+	m, _ := prOpenModel(t, openDetail())
+	keysIn(m, "c")
+	typeIn(m, "hi")
+	keysIn(m, "esc", "esc")
+	if m.pr != nil || m.focus != onTable {
+		t.Fatalf("not left: pr %v focus %d", m.pr, m.focus)
+	}
+	run(m, keysIn(m, "enter"))
+	keysIn(m, "c")
+	if !m.commenting() || m.draft.Value() != "hi" {
+		t.Fatalf("draft %q", m.draft.Value())
+	}
+}
+
+func TestHInChecksClosesLog(t *testing.T) {
+	recordDetailTicks(t)
+	f := &pr.Fake{Results: e2eResults(e2eResult()), Details: map[string]*pr.Detail{"o/e2e#1": openDetail()}}
+	m := prModel(t, f)
+	run(m, keysIn(m, "enter"))
+	keysIn(m, "]", "j", "enter")
+	if m.log == nil {
+		t.Fatal("no log")
+	}
+	keysIn(m, "h")
+	if m.log != nil || m.focus != onTable || m.pr != nil {
+		t.Fatalf("h: log %v focus %d pr %v", m.log, m.focus, m.pr)
+	}
+	// m now merges the table's row; no log is left under the dialog.
+	step(m, keysIn(m, "m"))
+	if m.dlg == nil || m.dlg.title != "Merge #1 into main?" || m.log != nil {
+		t.Fatalf("m after h: dlg %v log %v status %q", m.dlg, m.log, m.status)
+	}
+}
+
+func TestOpenFallsBackToPRURL(t *testing.T) {
+	m, _ := checksModel(t)
+	st := fixture()
+	st.Repos[0].Items[1].URL = "https://github.com/o/e2e/tree/feat"
+	m.Update(stateMsg{&st})
+	for m.tree.checks[m.tree.nodes()[m.tree.cur].check].Name != "docs" {
+		keysIn(m, "j")
+	}
+	var opened []string
+	old := openURL
+	openURL = func(u string) error { opened = append(opened, u); return nil }
+	t.Cleanup(func() { openURL = old })
+	m.Update(keysIn(m, "o")())
+	if !slices.Equal(opened, []string{"https://github.com/o/e2e/pull/1"}) {
+		t.Fatalf("opened %v", opened)
+	}
+}
+
+func TestOverviewRebuiltAfterDetailError(t *testing.T) {
+	recordDetailTicks(t)
+	f := &pr.Fake{Details: map[string]*pr.Detail{"o/e2e#1": detailFixture()}}
+	m := prModel(t, f)
+	f.Err = errors.New("boom")
+	run(m, keysIn(m, "enter"))
+	if out := screen(m); !strings.Contains(out, "boom") {
+		t.Fatalf("no error:\n%s", out)
+	}
+	res := e2eResult()
+	res.PRs[0].Body = "fresh summary body"
+	m.Update(searchMsg{repo: "o/e2e", tab: 0, query: "is:open author:@me", res: res})
+	if out := screen(m); !strings.Contains(out, "fresh summary body") {
+		t.Fatalf("summary not rebuilt:\n%s", out)
+	}
+	f.Err = nil
+	run(m, m.refetchPR())
+	if out := screen(m); !strings.Contains(out, "Makes the thing b optional.") || strings.Contains(out, "boom") {
+		t.Fatalf("detail not shown:\n%s", out)
+	}
+}
+
+func TestPRRowBarHasCancel(t *testing.T) {
+	m := searchModel(t, &pr.Fake{Results: e2eResults(e2eResult())})
+	if b := barText(m); !strings.Contains(b, "x cancel") || !strings.Contains(b, "m merge") {
+		t.Fatalf("PR row bar %q", b)
 	}
 }

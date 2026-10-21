@@ -1,14 +1,15 @@
 homerun  repo o/e2e ▾                                    engine: client · 1 runs
 1 My PRs 2 · 2 Review requested 2 · 3 All open 2 · 4 Branches 1 · 5 Runs 3      
-╭─#1 e2e PR────────────────────────────────────────────────────────────────────╮
-│  Description                                                                 │
-│✘ Checks 2/4                                                                  │
-│                                                                              │
+╭─is:open author:@me───────────────────────────────────────────────────────────╮
+│     #  Title                                                   CI        ↓   │
+│✘    1  e2e PR                                                  ✘ 1/2     ↓2  │
+│◇    2  typo fix                                                ·             │
 │                                                                              │
 │                                                                              │
 │                                                                              │
 ╰──────────────────────────────────────────────────────────────────────────────╯
-╭─#1 e2e PR · d954af8 · @matt · 5m ago─────────────────────────────────────────╮
+╭─#1───────────────────────────────────────────────────────────────────────────╮
+│Overview  Checks 2/4                                                          │
 │✔ CI / pass homerun                                                         4s│
 │✘ CI / fail homerun — echo bad; exit 1                                      3s│
 │  exit status 1                                                               │
@@ -19,6 +20,5 @@ homerun  repo o/e2e ▾                                    engine: client · 1 r
 │                                                                              │
 │                                                                              │
 │                                                                              │
-│                                                                              │
 ╰──────────────────────────────────────────────────────────────────────────────╯
-j/k up/down • enter log • space fold • r rerun • x cancel • o open • esc back •…
+[ ] tabs • enter log • space fold • r rerun • x cancel • o open • h table • ? h…

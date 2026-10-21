@@ -192,10 +192,10 @@ func TestSummaryKeepsTreeFocus(t *testing.T) {
 		t.Fatalf("no summary:\n%s", out)
 	}
 	keysIn(m, "l")
-	if m.focus != onPreview {
-		t.Fatal("l did not focus the preview")
+	if m.focus != onPreview || m.pr == nil {
+		t.Fatal("l did not enter the preview")
 	}
-	keysIn(m, "j")
+	keysIn(m, "]", "j")
 	if m.tree.cur != 1 {
 		t.Fatalf("cur %d", m.tree.cur)
 	}
@@ -205,13 +205,21 @@ func TestSummaryKeepsTreeFocus(t *testing.T) {
 	}
 }
 
-func TestSummaryClickOffsetsTree(t *testing.T) {
+// A click on the preview enters it; on Checks a click picks the row under it.
+func TestPreviewClickOffsetsTree(t *testing.T) {
 	m := summaryModel(t)
 	lay := m.layout()
-	h := len(m.previewHead(lay.pw - 2))
-	m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + h + 3, Button: tea.MouseLeft}) // second tree row
+	if cmd := m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + 3, Button: tea.MouseLeft}); cmd == nil || m.pr == nil || m.focus != onPreview {
+		t.Fatalf("click did not enter the PR: cmd %v focus %d", cmd, m.focus)
+	}
+	keysIn(m, "]")
+	m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + 3, Button: tea.MouseLeft}) // below the chips, the second tree row
 	if m.tree.cur != 1 {
 		t.Fatalf("cur %d", m.tree.cur)
+	}
+	m.click(tea.Mouse{X: 5, Y: lay.top + 3, Button: tea.MouseLeft}) // the table
+	if m.pr != nil || m.focus != onTable {
+		t.Fatalf("table click: pr %v focus %d", m.pr != nil, m.focus)
 	}
 }
 
@@ -254,12 +262,11 @@ func TestBarStatusAheadOfHints(t *testing.T) {
 	for _, w := range []int{80, 120} {
 		m, _ := prOpenModel(t, openDetail())
 		m.Update(tea.WindowSizeMsg{Width: w, Height: 40})
-		keysIn(m, "l") // Description
-		m.say(msg)
+		m.say(msg) // Overview
 		if b := barText(m); !strings.HasPrefix(b, msg+"  ") {
-			t.Fatalf("%d Description bar %q", w, b)
+			t.Fatalf("%d Overview bar %q", w, b)
 		}
-		keysIn(m, "h", "j", "l") // Checks
+		keysIn(m, "]") // Checks
 		m.say(msg)
 		if b := barText(m); !strings.HasPrefix(b, msg+"  ") {
 			t.Fatalf("%d Checks bar %q", w, b)
@@ -273,10 +280,9 @@ func TestBarStatusAheadOfHints(t *testing.T) {
 	}
 }
 
-func TestBarDescriptionHasHelpAndQuit(t *testing.T) {
+func TestBarOverviewHasHelpAndQuit(t *testing.T) {
 	m, _ := prOpenModel(t, openDetail())
 	m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
-	keysIn(m, "l")
 	if b := barText(m); !strings.Contains(b, "? help") || !strings.Contains(b, "q quit") {
 		t.Fatalf("bar %q", b)
 	}

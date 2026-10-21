@@ -11,6 +11,7 @@ import (
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/matthew-reed-holden/homerun/internal/api"
@@ -24,7 +25,6 @@ type area int
 const (
 	onTable area = iota
 	onPreview
-	paneSections // inside a PR, its sections in the table pane's place
 )
 
 type (
@@ -111,7 +111,9 @@ type model struct {
 	tickLow  bool                     // one of them found the rate limit low
 	flows    map[string][]pr.Workflow // Actions workflows by repo; nil: the token may not read them
 	flowsAt  map[string]time.Time     // when they were last asked for
-	pr       *prView                  // the open PR; nil on the dashboard
+	pr       *prView                  // the PR the preview is inside; nil otherwise
+	draft    textarea.Model           // the open PR's comment; kept across esc and failed sends
+	drafts   map[string]string        // "repo#n" -> the draft of a PR left with one
 	picked   string                   // the picked repo; "" or gone means the first
 	prGen    int                      // identifies the open PR so a stale fetch or tick is ignored
 
@@ -121,7 +123,8 @@ type model struct {
 }
 
 func newModel(c *api.Client, now func() time.Time, o Options) *model {
-	m := &model{c: c, now: now, o: o, hostErr: o.HostErr, prDelay: prPoll, w: 120, h: 40, help: help.New(), tabs: newTabs(o.Tabs)}
+	m := &model{c: c, now: now, o: o, hostErr: o.HostErr, prDelay: prPoll, w: 120, h: 40, help: help.New(), tabs: newTabs(o.Tabs), draft: newDraft()}
+	m.sizeDraft()
 	for m.off(m.tab) { // without a token, open on Branches
 		m.tab++
 	}
@@ -232,7 +235,8 @@ func (m *model) repo() api.Repo {
 
 // pickRepo scopes the dashboard to the named repo.
 func (m *model) pickRepo(name string) tea.Cmd {
-	m.picked, m.focus = name, onTable
+	m.leavePreview()
+	m.picked = name
 	for i := range m.tabs {
 		m.tabs[i].rows.home()
 	}
@@ -241,10 +245,11 @@ func (m *model) pickRepo(name string) tea.Cmd {
 }
 
 // refresh rebuilds the rows for the current state and width, and the preview.
+// Without a detail the Overview shows the search summary, which may have changed.
 func (m *model) refresh() {
 	m.tableRows()
-	if m.pr != nil {
-		m.syncSections()
+	if m.pr != nil && m.pr.d == nil {
+		m.pr.pageW = 0
 	}
 	m.syncMain()
 }
@@ -269,15 +274,14 @@ func itemSource(r api.Repo, it api.Item, now time.Time) (string, string, []api.C
 // or an error.
 func (m *model) previewSource() (key, title string, cs []api.Check, errText string) {
 	if p := m.pr; p != nil {
-		if p.section == 1 {
-			cs, _ := m.prChecks()
-			if r, it := m.prItem(); it != nil {
-				k, t, _, e := itemSource(r, *it, m.now())
-				return k, t, cs, e
-			}
-			return fmt.Sprintf("pr:%s:%d", m.prRef(), p.section), m.prTitle(), cs, ""
+		// The keys match the table's for the row, so entering keeps fold state.
+		cs, _ := m.prChecks()
+		title := fmt.Sprintf("#%d", p.number)
+		if r, it := m.prItem(); it != nil {
+			k, _, _, _ := itemSource(r, *it, m.now())
+			return k, title, cs, ""
 		}
-		return fmt.Sprintf("pr:%s:%d", m.prRef(), p.section), m.prTitle(), nil, ""
+		return "pr:" + m.prRef(), title, cs, ""
 	}
 	r := m.repo()
 	switch m.at().kind {
@@ -343,6 +347,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
+		m.sizeDraft()
 		m.refresh()
 	case stateMsg:
 		m.state, m.connected, m.err, m.hostErr = *msg.s, true, nil, nil
@@ -394,7 +399,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case tea.PasteMsg:
 		if m.commenting() {
-			m.pr.draft, _ = m.pr.draft.Update(msg)
+			m.draft, _ = m.draft.Update(msg)
 		}
 	case statusMsg:
 		// A confirmation whose prompt is covered must not stay armed.
@@ -459,9 +464,6 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 	if m.log != nil && m.log.typing {
 		return m.log.typeKey(k)
 	}
-	if m.pr != nil && !key.Matches(k, keys.Quit) && !key.Matches(k, keys.Help) {
-		return m.prKeyPress(k)
-	}
 	switch {
 	case key.Matches(k, keys.Quit):
 		if n := m.activeRuns(); n > 0 && m.hosting() {
@@ -472,18 +474,13 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 		return tea.Quit
 	case key.Matches(k, keys.Help):
 		m.dlg = helpDialog(m.notes()...)
-	case key.Matches(k, keys.NextTab):
-		return m.stepTab(1)
-	case key.Matches(k, keys.PrevTab):
-		return m.stepTab(-1)
 	case key.Matches(k, keys.Tab):
 		return m.switchTab(int(k.String()[0] - '1'))
 	case key.Matches(k, keys.Next), key.Matches(k, keys.Prev):
 		if m.focus == onTable {
-			m.focus = onPreview
-		} else {
-			m.focus = onTable
+			return m.enterPreview()
 		}
+		m.leavePreview()
 	case key.Matches(k, keys.Repo) && m.connected:
 		m.openPicker()
 	case key.Matches(k, keys.Reload):
@@ -491,20 +488,8 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 			return m.host()
 		}
 		return m.reload()
-	case key.Matches(k, keys.Rerun):
-		return m.rerun()
-	case key.Matches(k, keys.Cancel):
-		m.cancel()
-	case key.Matches(k, keys.Open):
-		return m.open()
-	case key.Matches(k, keys.Copy):
-		return m.copySHA()
-	case key.Matches(k, keys.Merge) && m.focus == onTable:
-		return m.rowMutate(true)
-	case key.Matches(k, keys.Update) && m.focus == onTable:
-		return m.rowMutate(false)
 	case m.focus == onPreview:
-		return m.mainKey(k)
+		return m.previewKey(k)
 	default:
 		return m.tableKey(k)
 	}
@@ -514,6 +499,10 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 func (m *model) tableKey(k tea.KeyPressMsg) tea.Cmd {
 	l := &m.at().rows
 	switch {
+	case key.Matches(k, keys.NextTab):
+		return m.stepTab(1)
+	case key.Matches(k, keys.PrevTab):
+		return m.stepTab(-1)
 	case key.Matches(k, keys.Down):
 		l.move(1)
 	case key.Matches(k, keys.Up):
@@ -523,11 +512,19 @@ func (m *model) tableKey(k tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(k, keys.Bottom):
 		l.end()
 	case key.Matches(k, keys.Into):
-		if s, ok := m.selPR(); key.Matches(k, keys.Enter) && m.o.PRs != nil && ok {
-			return m.openPR(m.repo().Name, s.Number)
-		}
-		m.focus = onPreview
-		return nil
+		return m.enterPreview()
+	case key.Matches(k, keys.Rerun):
+		return m.rerun()
+	case key.Matches(k, keys.Cancel):
+		m.cancel()
+	case key.Matches(k, keys.Open):
+		return m.open()
+	case key.Matches(k, keys.Copy):
+		return m.copySHA()
+	case key.Matches(k, keys.Merge):
+		return m.rowMutate(true)
+	case key.Matches(k, keys.Update):
+		return m.rowMutate(false)
 	default:
 		return nil
 	}
@@ -535,10 +532,24 @@ func (m *model) tableKey(k tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
-func (m *model) mainKey(k tea.KeyPressMsg) tea.Cmd {
-	if m.log != nil {
+// previewKey routes a key inside the preview: a log's keys, a PR's tabs, or
+// the check tree. Outside a PR, [ and ] switch the dashboard's tabs.
+func (m *model) previewKey(k tea.KeyPressMsg) tea.Cmd {
+	switch {
+	case m.log != nil:
 		return m.logKey(k)
+	case m.pr != nil:
+		return m.prKey(k)
+	case key.Matches(k, keys.NextTab):
+		return m.stepTab(1)
+	case key.Matches(k, keys.PrevTab):
+		return m.stepTab(-1)
 	}
+	return m.checksKey(k)
+}
+
+// checksKey is the check tree's keys: a PR's Checks tab, or a branch or run.
+func (m *model) checksKey(k tea.KeyPressMsg) tea.Cmd {
 	switch {
 	case key.Matches(k, keys.Down):
 		m.tree.move(1)
@@ -553,18 +564,27 @@ func (m *model) mainKey(k tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(k, keys.Enter):
 		return m.openLog()
 	case key.Matches(k, keys.Back), key.Matches(k, keys.Esc):
-		m.focus = onTable
+		m.leavePreview()
+	case key.Matches(k, keys.Rerun):
+		return m.rerun()
+	case key.Matches(k, keys.Cancel):
+		m.cancel()
+	case key.Matches(k, keys.Open):
+		return m.open()
+	case key.Matches(k, keys.Copy):
+		return m.copySHA()
 	}
 	return nil
 }
 
+// logKey is a log's keys: esc closes it, h closes it and leaves the preview.
 func (m *model) logKey(k tea.KeyPressMsg) tea.Cmd {
 	l := m.log
 	switch {
 	case key.Matches(k, keys.Esc):
 		m.closeLog()
 	case key.Matches(k, keys.Back):
-		m.focus = onTable
+		m.leavePreview()
 	case key.Matches(k, keys.Down):
 		l.scroll(1)
 	case key.Matches(k, keys.Up):
@@ -764,17 +784,14 @@ func (m *model) render() string {
 	return screen
 }
 
-// tableView is the active tab's table, or an open PR's sections in its place.
+// tableView is the active tab's table.
 func (m *model) tableView(w, h int) string {
-	if m.pr != nil {
-		return m.pr.secs.view(w, h, m.focus == paneSections)
-	}
 	return m.at().rows.view(w, h, m.focus == onTable)
 }
 
 func (m *model) mainView(w, h int) string {
-	if m.pr != nil && m.pr.section == 0 {
-		return m.descView(w, h)
+	if m.pr != nil && m.log == nil {
+		return m.prPreviewView(w, h)
 	}
 	_, title, _, errText := m.previewSource()
 	focused := m.focus == onPreview
@@ -795,16 +812,12 @@ func (m *model) mainView(w, h int) string {
 func (m *model) bar() string {
 	ctx := inTable
 	switch {
-	case m.pr != nil && m.focus != onPreview:
-		ctx = inPRSections
-	case m.pr != nil && m.pr.section == 0:
-		ctx = inPRDesc
 	case m.focus == onPreview && m.log != nil:
 		ctx = inLog
-	case m.focus == onPreview && m.pr != nil:
-		ctx = inPRChecks
+	case m.focus == onPreview && m.pr != nil && m.pr.section == 0:
+		ctx = inPreviewOverview
 	case m.focus == onPreview:
-		ctx = inTree
+		ctx = inPreviewChecks
 	case m.o.PRs != nil:
 		if _, ok := m.selPR(); ok {
 			ctx = inTablePR
@@ -837,22 +850,29 @@ func (m *model) click(mo tea.Mouse) tea.Cmd {
 		return nil
 	}
 	lay := m.layout()
-	if m.pr != nil {
-		m.prClick(mo, lay)
-		return nil
-	}
 	switch {
 	case lay.inTable(mo.X, mo.Y):
-		m.focus = onTable
+		m.leavePreview()
 		if y := mo.Y - lay.top; y < lay.th-1 {
 			m.at().rows.click(y)
 		}
 		m.syncMain()
 	case lay.inPreview(mo.X, mo.Y):
-		m.focus = onPreview
-		if y := mo.Y - lay.py; m.log == nil && y < lay.ph-1 {
-			m.tree.click(y - len(m.previewHead(lay.pw-2)))
+		var cmd tea.Cmd
+		if m.focus == onTable {
+			if cmd = m.enterPreview(); m.pr != nil {
+				return cmd // a PR opens on Overview
+			}
 		}
+		y := mo.Y - lay.py
+		switch {
+		case m.log != nil || y >= lay.ph-1:
+		case m.pr == nil:
+			m.tree.click(y - len(m.previewHead(lay.pw-2)))
+		case m.pr.section == 1:
+			m.tree.click(y - 1) // below the chips
+		}
+		return cmd
 	}
 	return nil
 }
@@ -866,17 +886,22 @@ func (m *model) wheel(mo tea.Mouse) tea.Cmd {
 		d = -1
 	}
 	lay := m.layout()
-	if m.pr != nil {
-		m.prWheel(d, lay, mo.X, mo.Y)
-		return nil
-	}
 	switch {
 	case lay.inTable(mo.X, mo.Y):
-		m.at().rows.move(d)
-		m.syncMain()
+		if m.pr == nil { // inside a PR the table keeps its row
+			m.at().rows.move(d)
+			m.syncMain()
+		}
 	case !lay.inPreview(mo.X, mo.Y):
 	case m.log != nil:
 		m.log.scroll(3 * d)
+	case m.pr != nil && m.pr.section == 0:
+		m.syncPage(lay.pw-2, lay.ph-3)
+		if d > 0 {
+			m.pr.vp.ScrollDown(3)
+		} else {
+			m.pr.vp.ScrollUp(3)
+		}
 	default:
 		m.tree.move(d)
 	}
@@ -884,8 +909,8 @@ func (m *model) wheel(mo tea.Mouse) tea.Cmd {
 }
 
 // selectedItem is the daemon item the preview shows, so actions never
-// disagree with it: the open PR's own item inside a PR (nil once the daemon
-// drops it), else the selected PR's or branch's item.
+// disagree with it: the PR's own item inside one (nil once the daemon drops
+// it), else the selected PR's or branch's item.
 func (m *model) selectedItem() *api.Item {
 	if m.pr != nil {
 		_, it := m.prItem()
@@ -1035,15 +1060,18 @@ func (m *model) open() tea.Cmd {
 	if c, _, ok := m.tree.selected(); ok && m.focus == onPreview {
 		u = c.URL
 	}
-	if u == "" && m.pr == nil && m.focus == onTable && m.rowKey() == "more" {
+	switch {
+	case u != "":
+	case m.pr != nil: // a check without a URL opens the PR, never a guess
+		if m.pr.d != nil {
+			u = m.pr.d.URL
+		}
+	case m.focus == onTable && m.rowKey() == "more":
 		u = m.searchURL()
-	}
-	if u == "" {
+	default:
 		if it := m.selectedItem(); it != nil {
 			u = it.URL
-		} else if m.pr != nil && m.pr.d != nil {
-			u = m.pr.d.URL
-		} else if s, ok := m.selPR(); ok && m.pr == nil {
+		} else if s, ok := m.selPR(); ok {
 			u = fmt.Sprintf("https://github.com/%s/pull/%d", m.repo().Name, s.Number)
 		}
 	}

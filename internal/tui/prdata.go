@@ -102,7 +102,7 @@ func (m *model) previewHead(inner int) []string {
 }
 
 // summaryLines is the PR's headline, merge state, checks, reviews and the start
-// of its body, each at most w wide. The Description header reuses it.
+// of its body, each at most w wide. The Overview header reuses it.
 func summaryLines(s pr.Summary, behind int, known bool, w int) []string {
 	line := func(parts ...string) string { return truncate(strings.Join(parts, " · "), w) }
 	out := []string{line(

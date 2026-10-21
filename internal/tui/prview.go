@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/key"
-	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/glamour/v2"
@@ -22,23 +21,20 @@ import (
 
 const prDetailPoll = 30 * time.Second
 
-// prView is an open PR: its sections panel and the page beside it.
+// prView is the PR the preview is inside: its Overview and Checks tabs.
 type prView struct {
 	repo    string
 	number  int
-	section int // 0 Description, 1 Checks
+	section int // 0 Overview, 1 Checks
 	d       *pr.Detail
 	err     error
 	vp      viewport.Model
-	pageW   int // the width vp's content was built for; 0 forces a rebuild
-	secs    list
-	delay   time.Duration  // the next detail poll interval
-	retry   time.Time      // when a raised detail poll runs next
-	seq     int            // numbers detail fetches in the order issued
-	shown   int            // the seq of the detail result applied last
-	back    area           // the focus esc restores
-	draft   textarea.Model // the comment being written; kept across esc and failed sends
-	typing  bool           // the comment box is open
+	pageW   int           // the width vp's content was built for; 0 forces a rebuild
+	delay   time.Duration // the next detail poll interval
+	retry   time.Time     // when a raised detail poll runs next
+	seq     int           // numbers detail fetches in the order issued
+	shown   int           // the seq of the detail result applied last
+	typing  bool          // the comment box is open
 }
 
 type (
@@ -59,23 +55,41 @@ var detailTick = func(d time.Duration, gen int) tea.Cmd {
 	return tea.Tick(d, func(time.Time) tea.Msg { return detailTickMsg{gen} })
 }
 
-// openPR puts repo#n's sections in the table pane's place and fetches its detail.
+// openPR shows repo#n in the preview, on Overview, and fetches its detail.
 func (m *model) openPR(repo string, n int) tea.Cmd {
 	m.prGen++
-	m.pr = &prView{repo: repo, number: n, delay: prDetailPoll, back: m.focus, vp: viewport.New(), draft: newDraft()}
-	m.focus = paneSections
-	m.syncSections()
+	m.pr = &prView{repo: repo, number: n, delay: prDetailPoll, vp: viewport.New()}
+	m.loadDraft()
 	m.syncMain()
 	return tea.Batch(m.fetchDetail(false), detailTick(prDetailPoll, m.prGen))
 }
 
-// closePR returns to the dashboard with the previous selection and focus.
+// closePR leaves the PR, keeping its comment draft.
 func (m *model) closePR() {
-	m.focus = m.pr.back
+	m.saveDraft()
 	m.pr = nil
 	m.prGen++
 	m.closeLog()
 	m.syncMain()
+}
+
+// enterPreview moves focus into the preview; on a PR row it opens the PR.
+func (m *model) enterPreview() tea.Cmd {
+	m.focus = onPreview
+	if s, ok := m.selPR(); ok && m.o.PRs != nil {
+		return m.openPR(m.repo().Name, s.Number)
+	}
+	return nil
+}
+
+// leavePreview returns focus to the table, on the row it left.
+func (m *model) leavePreview() {
+	if m.pr != nil {
+		m.closePR()
+	} else {
+		m.closeLog()
+	}
+	m.focus = onTable
 }
 
 // refetchPR fetches the open PR's detail now, as after a mutation.
@@ -160,17 +174,7 @@ func (m *model) prItem() (api.Repo, *api.Item) {
 	return api.Repo{}, nil
 }
 
-func (m *model) prTitle() string {
-	t := ""
-	if m.pr.d != nil {
-		t = m.pr.d.Title
-	} else if _, it := m.prItem(); it != nil {
-		t = it.Title
-	}
-	return termsafe.Line(fmt.Sprintf("#%d %s", m.pr.number, t))
-}
-
-// prChecks is the Checks section: the daemon's checks for the PR's head and
+// prChecks is the Checks tab: the daemon's checks for the PR's head and
 // GitHub's (mergedChecks). req names the checks the rollup marks required.
 func (m *model) prChecks() (cs []api.Check, req map[string]bool) {
 	_, it := m.prItem()
@@ -180,88 +184,36 @@ func (m *model) prChecks() (cs []api.Check, req map[string]bool) {
 	return mergedChecks(it, m.pr.d.Checks), required(m.pr.d.Checks)
 }
 
-// syncSections rebuilds the sections rows; Checks counts the checks its page shows.
-func (m *model) syncSections() {
-	cs, _ := m.prChecks()
-	pass := 0
-	for _, c := range cs {
-		if c.Status == "completed" && passed(c.Conclusion) {
-			pass++
-		}
-	}
-	m.pr.secs.title = m.prTitle()
-	m.pr.secs.set([]entry{{" ", "Description", "desc"}, {Rollup(cs), fmt.Sprintf("Checks %d/%d", pass, len(cs)), "checks"}})
-}
-
 func passed(conclusion string) bool {
 	return conclusion == "success" || conclusion == "neutral" || conclusion == "skipped"
 }
 
-// pickSection follows the sections cursor.
-func (m *model) pickSection() {
-	if p := m.pr; p.secs.cur != p.section {
-		p.section = p.secs.cur
-		m.syncMain()
+// passing counts the checks that finished and passed.
+func passing(cs []api.Check) int {
+	n := 0
+	for _, c := range cs {
+		if c.Status == "completed" && passed(c.Conclusion) {
+			n++
+		}
 	}
+	return n
 }
 
-// prKeyPress routes a key inside a PR; quit and help are handled before it.
-func (m *model) prKeyPress(k tea.KeyPressMsg) tea.Cmd {
-	p := m.pr
-	inChecks := m.focus == onPreview && p.section == 1
+// prKey routes a key inside a PR's preview, outside a log.
+func (m *model) prKey(k tea.KeyPressMsg) tea.Cmd {
 	switch {
-	case key.Matches(k, keys.Next), key.Matches(k, keys.Prev):
-		if m.focus == onPreview {
-			m.focus = paneSections
-		} else {
-			m.focus = onPreview
-		}
+	case key.Matches(k, keys.PrevTab), key.Matches(k, keys.NextTab):
+		m.pr.section = 1 - m.pr.section
 		return nil
-	case key.Matches(k, keys.Open) && !inChecks:
-		return m.openPRURL()
-	case m.focus != onPreview:
-		return m.sectionsKey(k)
-	case p.section == 0:
-		return m.descKey(k)
+	case m.pr.section == 0:
+		return m.overviewKey(k)
 	}
 	return m.checksKey(k)
 }
 
-func (m *model) sectionsKey(k tea.KeyPressMsg) tea.Cmd {
-	l := &m.pr.secs
-	switch {
-	case key.Matches(k, keys.Down):
-		l.move(1)
-	case key.Matches(k, keys.Up):
-		l.move(-1)
-	case key.Matches(k, keys.Top):
-		l.home()
-	case key.Matches(k, keys.Bottom):
-		l.end()
-	case key.Matches(k, keys.Into):
-		m.focus = onPreview
-	case key.Matches(k, keys.Esc):
-		m.closePR()
-	case key.Matches(k, keys.Rerun) && m.pr.section == 1:
-		return m.rerun()
-	case key.Matches(k, keys.Cancel) && m.pr.section == 1:
-		m.cancel()
-	case key.Matches(k, keys.Merge):
-		m.prMutate(true)
-	case key.Matches(k, keys.Update):
-		m.prMutate(false)
-	case key.Matches(k, keys.Comment) && m.pr.section == 0:
-		m.openComment()
-	}
-	if m.pr != nil {
-		m.pickSection()
-	}
-	return nil
-}
-
-func (m *model) descKey(k tea.KeyPressMsg) tea.Cmd {
+func (m *model) overviewKey(k tea.KeyPressMsg) tea.Cmd {
 	lay := m.layout()
-	m.syncPage(lay.pw-2, lay.ph-2)
+	m.syncPage(lay.pw-2, lay.ph-3)
 	vp := &m.pr.vp
 	switch {
 	case key.Matches(k, keys.Down):
@@ -273,33 +225,17 @@ func (m *model) descKey(k tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(k, keys.Bottom):
 		vp.GotoBottom()
 	case key.Matches(k, keys.Esc), key.Matches(k, keys.Back):
-		m.focus = paneSections
+		m.leavePreview()
 	case key.Matches(k, keys.Merge):
 		m.prMutate(true)
 	case key.Matches(k, keys.Update):
 		m.prMutate(false)
 	case key.Matches(k, keys.Comment):
 		m.openComment()
-	}
-	return nil
-}
-
-// checksKey is the dashboard's tree and log keys, with esc and h leading back
-// to the sections panel; rerun and cancel live only here and in its row.
-func (m *model) checksKey(k tea.KeyPressMsg) tea.Cmd {
-	switch {
-	case key.Matches(k, keys.Back), m.log == nil && key.Matches(k, keys.Esc):
-		m.focus = paneSections
-	case key.Matches(k, keys.Rerun):
-		return m.rerun()
-	case key.Matches(k, keys.Cancel):
-		m.cancel()
 	case key.Matches(k, keys.Open):
-		return m.open()
+		return m.openPRURL()
 	case key.Matches(k, keys.Copy):
 		return m.copySHA()
-	default:
-		return m.mainKey(k)
 	}
 	return nil
 }
@@ -318,41 +254,30 @@ func (m *model) openPRURL() tea.Cmd {
 	return openCmd(u)
 }
 
-// prClick and prWheel are click and wheel inside a PR.
-func (m *model) prClick(mo tea.Mouse, lay layout) {
-	switch {
-	case lay.inTable(mo.X, mo.Y):
-		m.focus = paneSections
-		if y := mo.Y - lay.top; y < lay.th-1 {
-			m.pr.secs.click(y)
-		}
-		m.pickSection()
-	case lay.inPreview(mo.X, mo.Y):
-		m.focus = onPreview
-		if y := mo.Y - lay.py; m.pr.section == 1 && m.log == nil && y < lay.ph-1 {
-			m.tree.click(y)
+// chips are the preview tabs, the active one reversed.
+func (m *model) chips() string {
+	cs, _ := m.prChecks()
+	labels := []string{"Overview", fmt.Sprintf("Checks %d/%d", passing(cs), len(cs))}
+	for i, l := range labels {
+		if i == m.pr.section {
+			labels[i] = chipOn.Render(l)
 		}
 	}
+	return strings.Join(labels, "  ")
 }
 
-func (m *model) prWheel(d int, lay layout, x, y int) {
-	switch {
-	case lay.inTable(x, y):
-		m.pr.secs.move(d)
-		m.pickSection()
-	case !lay.inPreview(x, y):
-	case m.pr.section == 0:
-		m.syncPage(lay.pw-2, lay.ph-2)
-		if d > 0 {
-			m.pr.vp.ScrollDown(3)
-		} else {
-			m.pr.vp.ScrollUp(3)
-		}
-	case m.log != nil:
-		m.log.scroll(3 * d)
-	default:
-		m.tree.move(d)
+// prPreviewView is the preview inside a PR: the chips, then the active tab.
+func (m *model) prPreviewView(w, h int) string {
+	focused := m.focus == onPreview
+	inner := max(0, h-3)
+	lines := []string{m.chips()}
+	if m.pr.section == 0 {
+		m.syncPage(w-2, inner)
+		lines = append(lines, strings.Split(m.pr.vp.View(), "\n")...)
+	} else {
+		lines = append(lines, m.tree.rows(w, inner, m.now(), focused)...)
 	}
+	return frame(fmt.Sprintf("#%d", m.pr.number), lines, w, h, focused)
 }
 
 // syncPage sizes the viewport and rebuilds the page when the width or detail changed.
@@ -367,12 +292,7 @@ func (m *model) syncPage(w, h int) {
 	}
 }
 
-func (m *model) descView(w, h int) string {
-	m.syncPage(w-2, h-2)
-	return frame("Description", strings.Split(m.pr.vp.View(), "\n"), w, h, m.focus == onPreview)
-}
-
-// prPage is the Description page, w wide: header, body, timeline, checks, merge.
+// prPage is the Overview page, w wide: header, body, timeline, checks, merge.
 func (m *model) prPage(w int) []string {
 	p := m.pr
 	var out []string

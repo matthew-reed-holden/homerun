@@ -22,6 +22,7 @@ var (
 	magenta = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
 	bold    = lipgloss.NewStyle().Bold(true)
 	sel     = lipgloss.NewStyle().Reverse(true)
+	chipOn  = lipgloss.NewStyle().Reverse(true).Bold(true) // the active preview tab
 )
 
 func Icon(status, conclusion string) string {

@@ -222,7 +222,8 @@ func (m *model) switchTab(i int) tea.Cmd {
 	if i < 0 || i >= len(m.tabs) || i == m.tab || m.off(i) {
 		return nil
 	}
-	m.tab, m.focus = i, onTable
+	m.leavePreview()
+	m.tab = i
 	m.syncMain()
 	if t := m.at(); t.kind == tabSearch {
 		if _, ok := t.res[m.repo().Name]; !ok {
@@ -469,14 +470,8 @@ func ciCell(cs []api.Check) string {
 	if len(cs) == 0 {
 		return dim.Render("·")
 	}
-	pass := 0
-	for _, c := range cs {
-		if c.Status == "completed" && passed(c.Conclusion) {
-			pass++
-		}
-	}
 	icon := Rollup(cs)
-	return tint(icon, fmt.Sprintf("%s %d/%d", icon, pass, len(cs)))
+	return tint(icon, fmt.Sprintf("%s %d/%d", icon, passing(cs), len(cs)))
 }
 
 func mark(paths []string) string {

@@ -6,7 +6,7 @@ import "charm.land/bubbles/v2/key"
 // generated from it, so they cannot disagree with what the keys do.
 type keyMap struct {
 	PrevTab, NextTab, Tab, Tabs, Next, Prev, Into, Back  key.Binding
-	Up, Down, Top, Bottom, Fold, Enter, Esc, Move        key.Binding
+	Up, Down, Top, Bottom, Fold, Enter, Esc              key.Binding
 	Search, NextMatch, PrevMatch, NextFail, Follow, Zoom key.Binding
 	Rerun, Cancel, Open, Copy, Reload, Help, Quit        key.Binding
 	Merge, Update, Comment, Send, Repo                   key.Binding
@@ -32,7 +32,6 @@ var keys = keyMap{
 	Fold:      bind("space", "fold", "space"),
 	Enter:     bind("enter", "log", "enter"),
 	Esc:       bind("esc", "back", "esc"),
-	Move:      bind("j/k", "up/down", "j", "k"), // for the bar only; Up and Down do the moving
 	Search:    bind("/", "search", "/"),
 	NextMatch: bind("n", "next match", "n"),
 	PrevMatch: bind("N", "prev match", "N"),
@@ -56,29 +55,23 @@ var keys = keyMap{
 type barCtx int
 
 const (
-	inTable barCtx = iota
-	inTree
+	inTable           barCtx = iota
+	inTablePR                // a PR row, with PR tabs on
+	inPreviewOverview        // inside a PR, on Overview
+	inPreviewChecks          // inside a PR on Checks, or a branch or run's tree
 	inLog
-	inPRSections
-	inPRDesc
-	inPRChecks
-	inTablePR // a PR row, with PR tabs on
 )
 
 func (k keyMap) bar(c barCtx) []key.Binding {
 	switch c {
-	case inTree:
-		return []key.Binding{k.Enter, k.Fold, k.Back, k.Rerun, k.Cancel, k.Open, k.Help, k.Quit}
+	case inTablePR:
+		return []key.Binding{k.Tabs, k.Into, k.Rerun, k.Cancel, k.Merge, k.Update, k.Open, k.Repo, k.Help, k.Quit}
+	case inPreviewOverview:
+		return []key.Binding{k.Tabs, k.Merge, k.Update, k.Comment, k.Open, k.Back, k.Help, k.Quit}
+	case inPreviewChecks:
+		return []key.Binding{k.Tabs, k.Enter, k.Fold, k.Rerun, k.Cancel, k.Open, k.Back, k.Help, k.Quit}
 	case inLog:
 		return []key.Binding{k.Search, k.NextMatch, k.NextFail, k.Follow, k.Zoom, k.Esc, k.Help}
-	case inPRSections:
-		return []key.Binding{k.Move, k.Into, k.Esc, k.Open, k.Help, k.Quit}
-	case inPRDesc:
-		return []key.Binding{k.Move, k.Merge, k.Update, k.Comment, k.Open, k.Esc, k.Help, k.Quit}
-	case inPRChecks:
-		return []key.Binding{k.Move, k.Enter, k.Fold, k.Rerun, k.Cancel, k.Open, k.Esc, k.Help, k.Quit}
-	case inTablePR:
-		return []key.Binding{k.Tabs, k.Into, k.Rerun, k.Merge, k.Update, k.Open, k.Repo, k.Help, k.Quit}
 	}
 	return []key.Binding{k.Tabs, k.Into, k.Rerun, k.Cancel, k.Copy, k.Open, k.Repo, k.Help, k.Quit}
 }
@@ -86,7 +79,7 @@ func (k keyMap) bar(c barCtx) []key.Binding {
 func (k keyMap) groups() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Tabs, k.Tab, k.Next, k.Into, k.Back, k.Repo, k.Reload, k.Help, k.Quit},
-		{k.Up, k.Down, k.Move, k.Top, k.Bottom, k.Fold, k.Enter},
+		{k.Up, k.Down, k.Top, k.Bottom, k.Fold, k.Enter},
 		{k.Search, k.NextMatch, k.PrevMatch, k.NextFail, k.Follow, k.Zoom, k.Esc},
 		{k.Rerun, k.Cancel, k.Open, k.Copy, k.Merge, k.Update, k.Comment, k.Send},
 	}

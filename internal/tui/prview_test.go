@@ -79,28 +79,18 @@ func TestEnterOpensPR(t *testing.T) {
 		t.Fatalf("detail calls %v", f.DetailCalls)
 	}
 	out := screen(m)
-	lines := strings.Split(out, "\n")
-	if !strings.HasPrefix(lines[2], "╭─#1 e2e PR─") {
-		t.Fatalf("sections title:\n%s", out)
-	}
-	if !strings.Contains(lines[3], "Description") || !strings.Contains(lines[4], "✘ Checks 2/4") {
-		t.Fatalf("section rows:\n%s", out)
-	}
-	if strings.Contains(out, "#  Title") {
-		t.Fatalf("table still shown:\n%s", out)
+	if got := chipsLine(m); got != "Overview  Checks 2/4" {
+		t.Fatalf("chips %q:\n%s", got, out)
 	}
 	if !strings.Contains(out, "Timeline") || !strings.Contains(out, "Merged") {
-		t.Fatalf("no Description page:\n%s", out)
+		t.Fatalf("no Overview page:\n%s", out)
 	}
 	if b, ok := m.behindOf(1); !ok || b != 2 {
 		t.Fatalf("behind %d %v", b, ok)
 	}
 	keysIn(m, "esc")
 	if m.pr != nil || m.focus != onTable || m.rowKey() != "pr:1" {
-		t.Fatalf("esc: pr %v focus %d row %q", m.pr, m.focus, m.rowKey())
-	}
-	if !strings.Contains(screen(m), "#  Title") {
-		t.Fatal("table not back")
+		t.Fatalf("esc: pr %v focus %d row %q", m.pr != nil, m.focus, m.rowKey())
 	}
 }
 
@@ -171,7 +161,6 @@ func TestDescriptionScrolls(t *testing.T) {
 	d.Body = strings.Repeat("line\n\n", 100)
 	m, _ := prOpenModel(t, d)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	keysIn(m, "l")
 	top := screen(m)
 	keysIn(m, "j")
 	if screen(m) == top || m.pr.vp.YOffset() != 1 {
@@ -190,8 +179,8 @@ func TestDescriptionScrolls(t *testing.T) {
 		t.Fatal("g")
 	}
 	keysIn(m, "esc")
-	if m.focus != paneSections || m.pr == nil {
-		t.Fatal("esc from the page must focus the sections panel")
+	if m.focus != onTable || m.pr != nil {
+		t.Fatal("esc from Overview must leave the preview")
 	}
 }
 
@@ -237,27 +226,19 @@ func TestDetailErrorShowsInPage(t *testing.T) {
 func TestPRKeysByContext(t *testing.T) {
 	m, _ := prOpenModel(t, detailFixture())
 	bar := ansi.Strip(m.bar())
-	for _, want := range []string{"j/k", "l/enter", "esc back", "o open", "?", "q"} {
+	for _, want := range []string{"[ ] tabs", "m merge", "u update", "c comment", "o open", "h table", "?", "q"} {
 		if !strings.Contains(bar, want) {
-			t.Fatalf("sections bar %q lacks %q", bar, want)
+			t.Fatalf("Overview bar %q lacks %q", bar, want)
 		}
 	}
 	if strings.Contains(bar, "rerun") || strings.Contains(bar, "cancel") {
-		t.Fatalf("sections bar %q", bar)
-	}
-	if keysIn(m, "r"); m.dlg != nil || m.status != "" {
-		t.Fatalf("r fired on Description row: %q", m.status)
-	}
-	keysIn(m, "l")
-	bar = ansi.Strip(m.bar())
-	if !strings.Contains(bar, "j/k") || !strings.Contains(bar, "o open") || !strings.Contains(bar, "esc") || strings.Contains(bar, "rerun") {
-		t.Fatalf("description bar %q", bar)
+		t.Fatalf("Overview bar %q", bar)
 	}
 	if cmd := keysIn(m, "r"); cmd != nil || m.dlg != nil {
-		t.Fatal("r fired in Description")
+		t.Fatal("r fired on Overview")
 	}
 	if keysIn(m, "c"); m.dlg != nil || !m.commenting() {
-		t.Fatal("c in Description opens the comment box, not cancel")
+		t.Fatal("c on Overview opens the comment box, not cancel")
 	}
 	keysIn(m, "esc")
 	var opened []string
@@ -269,11 +250,16 @@ func TestPRKeysByContext(t *testing.T) {
 		t.Fatalf("opened %v", opened)
 	}
 	// Checks: today's tree for the item, with rerun.
-	keysIn(m, "esc", "j")
+	keysIn(m, "]")
 	if m.pr.section != 1 {
-		t.Fatal("j to Checks")
+		t.Fatal("] to Checks")
 	}
-	keysIn(m, "l")
+	bar = ansi.Strip(m.bar())
+	for _, want := range []string{"enter log", "space fold", "r rerun", "x cancel", "o open", "h table"} {
+		if !strings.Contains(bar, want) {
+			t.Fatalf("Checks bar %q lacks %q", bar, want)
+		}
+	}
 	if out := screen(m); !strings.Contains(out, "CI / fail") {
 		t.Fatalf("checks tree:\n%s", out)
 	}
@@ -285,12 +271,12 @@ func TestPRKeysByContext(t *testing.T) {
 		t.Fatal("enter in Checks opens the log")
 	}
 	keysIn(m, "esc")
-	if m.log != nil || m.focus != onPreview {
+	if m.log != nil || m.focus != onPreview || m.pr == nil {
 		t.Fatal("esc closes the log first")
 	}
 	keysIn(m, "esc")
-	if m.focus != paneSections {
-		t.Fatal("then esc focuses sections")
+	if m.focus != onTable || m.pr != nil {
+		t.Fatal("then esc leaves the preview")
 	}
 }
 
@@ -305,7 +291,7 @@ func TestPRTextRendersInert(t *testing.T) {
 	d.Timeline[1].Author += bad
 	d.Checks[0].Name += bad
 	m, _ := prOpenModel(t, d)
-	for _, ks := range [][]string{nil, {"l"}, {"G"}} {
+	for _, ks := range [][]string{nil, {"G"}, {"]"}} {
 		keysIn(m, ks...)
 		out := m.render()
 		for _, s := range []string{"]52;", "[2J", "]8;;http://x"} {
@@ -322,7 +308,7 @@ func TestDescriptionLayoutHoldsWithHugeBody(t *testing.T) {
 	d.Timeline[1].Text = strings.Repeat("y", 300)
 	m, _ := prOpenModel(t, d)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	for _, ks := range [][]string{nil, {"l"}, {"G"}, {"k"}} {
+	for _, ks := range [][]string{nil, {"G"}, {"k"}, {"]"}} {
 		keysIn(m, ks...)
 		// The key bar is never padded (existing goldens keep it short); it only must fit.
 		lines := strings.Split(m.render(), "\n")
@@ -349,7 +335,7 @@ func prDaemonModel(t *testing.T) (*model, *fakeDaemon) {
 func TestPRActionsTargetTheOpenPR(t *testing.T) {
 	m, fd := prDaemonModel(t)
 	m.tabs[0].rows.cur = 1 // the table selection is now #2
-	keysIn(m, "j")         // Checks row
+	keysIn(m, "]")         // Checks
 	cmd := keysIn(m, "r")
 	if cmd == nil {
 		t.Fatalf("no rerun: %q", m.status)
@@ -362,7 +348,7 @@ func TestPRActionsTargetTheOpenPR(t *testing.T) {
 	old := openURL
 	openURL = func(u string) error { opened = append(opened, u); return nil }
 	t.Cleanup(func() { openURL = old })
-	m.Update(keysIn(m, "o")())
+	m.Update(keysIn(m, "[", "o")()) // Overview opens the PR
 	if !slices.Equal(opened, []string{"https://github.com/o/e2e/pull/1"}) {
 		t.Fatalf("opened %v", opened)
 	}
@@ -375,7 +361,7 @@ func TestPRActionsWithoutItemRefuse(t *testing.T) {
 	st := fixture()
 	st.Repos[0].Items = st.Repos[0].Items[:1] // main only
 	m.Update(stateMsg{&st})
-	keysIn(m, "j", "l")
+	keysIn(m, "]")
 	if cmd := keysIn(m, "r"); cmd != nil || !strings.Contains(m.status, "nothing to run here") {
 		t.Fatalf("cmd %v status %q", cmd, m.status)
 	}
@@ -398,7 +384,7 @@ func TestPRMarkdownEntitiesRenderInert(t *testing.T) {
 	d.Body = bad
 	d.Timeline[1].Text = bad
 	m, _ := prOpenModel(t, d)
-	for _, ks := range [][]string{nil, {"l", "G"}} {
+	for _, ks := range [][]string{nil, {"G"}} {
 		keysIn(m, ks...)
 		out := m.render()
 		for _, s := range []string{"]52;", "[2J", "\u009b", "\x07"} {
@@ -429,7 +415,7 @@ func sgrAt(s string) bool {
 	return false
 }
 
-// checksModel opens PR #1 on its Checks section with a rollup of one required
+// checksModel opens PR #1 on its Checks tab with a rollup of one required
 // daemon-named check, one GitHub-only required check and one GitHub-only plain check.
 func checksModel(t *testing.T) (*model, *fakeDaemon) {
 	t.Helper()
@@ -445,7 +431,7 @@ func checksModel(t *testing.T) (*model, *fakeDaemon) {
 	}
 	m, fd := searchModelDaemon(t, &pr.Fake{Results: e2eResults(e2eResult()), Details: map[string]*pr.Detail{"o/e2e#1": d}}, st)
 	run(m, keysIn(m, "enter"))
-	keysIn(m, "j", "l")
+	keysIn(m, "]")
 	return m, fd
 }
 
@@ -460,8 +446,8 @@ func TestChecksSection(t *testing.T) {
 	if strings.Contains(out, "docs required") || strings.Contains(out, "fail required") {
 		t.Fatalf("stray required:\n%s", out)
 	}
-	if strings.Count(out, "pass") > 3 {
-		t.Fatalf("daemon check duplicated:\n%s", out)
+	if n := strings.Count(out, "CI / pass"); n != 1 {
+		t.Fatalf("daemon check shown %d times:\n%s", n, out)
 	}
 	// A detail refresh keeps the cursor and fold state.
 	keysIn(m, "j", "j")
@@ -515,9 +501,9 @@ func TestChecksSectionKeys(t *testing.T) {
 
 func TestDescriptionCIsNotCancel(t *testing.T) {
 	m, _ := checksModel(t)
-	keysIn(m, "esc", "k", "l")
+	keysIn(m, "[")
 	if m.pr.section != 0 || m.focus != onPreview {
-		t.Fatal("not in Description")
+		t.Fatal("not on Overview")
 	}
 	if keysIn(m, "c"); m.dlg != nil || m.status != "" {
 		t.Fatalf("c in Description: dlg %v status %q", m.dlg, m.status)
@@ -532,9 +518,8 @@ func typeIn(m *model, s string) {
 
 func TestCommentSends(t *testing.T) {
 	m, f := prOpenModel(t, openDetail())
-	keysIn(m, "l")
 	if m.pr.section != 0 || m.focus != onPreview {
-		t.Fatal("not in Description")
+		t.Fatal("not on Overview")
 	}
 	keysIn(m, "c")
 	out := screen(m)
@@ -557,7 +542,7 @@ func TestCommentSends(t *testing.T) {
 
 func TestCommentEmptyNotSent(t *testing.T) {
 	m, f := prOpenModel(t, openDetail())
-	keysIn(m, "l", "c", "space", "enter")
+	keysIn(m, "c", "space", "enter")
 	step(m, keysIn(m, "ctrl+s"))
 	if m.status != "comment is empty" || len(f.Comments) != 0 || !strings.Contains(screen(m), "Comment on #1") {
 		t.Fatalf("status %q comments %v", m.status, f.Comments)
@@ -566,7 +551,7 @@ func TestCommentEmptyNotSent(t *testing.T) {
 
 func TestCommentDraftKept(t *testing.T) {
 	m, f := prOpenModel(t, openDetail())
-	keysIn(m, "l", "c")
+	keysIn(m, "c")
 	typeIn(m, "wip")
 	keysIn(m, "esc")
 	if strings.Contains(screen(m), "Comment on #1") {
@@ -585,8 +570,8 @@ func TestCommentDraftKept(t *testing.T) {
 
 func TestCommentErrorKeepsDraft(t *testing.T) {
 	m, f := prOpenModel(t, openDetail())
-	f.Err = errors.New("boom")
-	keysIn(m, "l", "c")
+	f.CommentErr = errors.New("boom")
+	keysIn(m, "c")
 	typeIn(m, "keep")
 	step(m, keysIn(m, "ctrl+s"))
 	if m.status != "comment failed: boom" {
@@ -613,7 +598,7 @@ func TestMutationResultClosesDialog(t *testing.T) {
 // A send clears the draft at once, so reopening the box cannot post it twice.
 func TestCommentSendClearsDraftUntilResult(t *testing.T) {
 	m, f := prOpenModel(t, openDetail())
-	keysIn(m, "l", "c")
+	keysIn(m, "c")
 	typeIn(m, "one")
 	send := keysIn(m, "ctrl+s")
 	keysIn(m, "c")
@@ -626,21 +611,21 @@ func TestCommentSendClearsDraftUntilResult(t *testing.T) {
 	}
 	typeIn(m, "two")
 	step(m, send)
-	if len(f.Comments) != 1 || m.pr.draft.Value() != "two" {
-		t.Fatalf("comments %v draft %q", f.Comments, m.pr.draft.Value())
+	if len(f.Comments) != 1 || m.draft.Value() != "two" {
+		t.Fatalf("comments %v draft %q", f.Comments, m.draft.Value())
 	}
 }
 
 func TestCommentFailureRestoresDraft(t *testing.T) {
 	m, f := prOpenModel(t, openDetail())
 	f.Err = errors.New("boom")
-	keysIn(m, "l", "c")
+	keysIn(m, "c")
 	typeIn(m, "one")
 	send := keysIn(m, "ctrl+s")
 	keysIn(m, "c")
 	typeIn(m, "two")
 	step(m, send)
-	if v := m.pr.draft.Value(); v != "one\ntwo" {
+	if v := m.draft.Value(); v != "one\ntwo" {
 		t.Fatalf("draft %q", v)
 	}
 }

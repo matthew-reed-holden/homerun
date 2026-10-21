@@ -64,14 +64,14 @@ func TestGolden(t *testing.T) {
 		{"wide-branches", 120, 40, []string{"4"}},
 		{"wide-runs", 120, 40, []string{"5"}},
 		{"standard-runs", 80, 24, []string{"5"}},
-		{"wide-pr-description", 120, 40, []string{"enter", "l"}},
-		{"wide-pr-checks", 120, 40, []string{"enter", "j", "l"}},
-		{"standard-pr-checks", 80, 24, []string{"enter", "j", "l"}},
-		{"standard-pr-description", 80, 24, []string{"enter", "l"}},
-		{"wide-merge-dialog", 120, 40, []string{"enter", "l", "m"}},
-		{"standard-merge-dialog", 80, 24, []string{"enter", "l", "m"}},
-		{"wide-comment", 120, 40, []string{"enter", "l", "c", "h", "i"}},
-		{"standard-comment", 80, 24, []string{"enter", "l", "c", "h", "i"}},
+		{"wide-preview-overview", 120, 40, []string{"enter"}},
+		{"standard-preview-overview", 80, 24, []string{"enter"}},
+		{"wide-preview-checks", 120, 40, []string{"enter", "]"}},
+		{"standard-preview-checks", 80, 24, []string{"enter", "]"}},
+		{"wide-merge-dialog", 120, 40, []string{"enter", "m"}},
+		{"standard-merge-dialog", 80, 24, []string{"enter", "m"}},
+		{"wide-comment", 120, 40, []string{"enter", "c", "h", "i"}},
+		{"standard-comment", 80, 24, []string{"enter", "c", "h", "i"}},
 		{"wide-fork-dialog", 120, 40, []string{"j", "r"}},
 		{"wide-repo-picker", 120, 40, []string{"R"}},
 		{"standard-repo-picker", 80, 24, []string{"R"}},
@@ -85,7 +85,7 @@ func TestGolden(t *testing.T) {
 				m.behind = map[string]int{"o/e2e#1": 3}
 			}
 			m.Update(tea.WindowSizeMsg{Width: c.w, Height: c.h})
-			if d := detailFixture(); strings.HasSuffix(c.name, "-pr-description") || strings.HasSuffix(c.name, "-pr-checks") || strings.HasSuffix(c.name, "-merge-dialog") || strings.HasSuffix(c.name, "-comment") {
+			if d := detailFixture(); strings.Contains(c.name, "-preview-") || strings.HasSuffix(c.name, "-merge-dialog") || strings.HasSuffix(c.name, "-comment") {
 				if strings.HasSuffix(c.name, "-merge-dialog") {
 					d = openDetail()
 					d.MergeMethods = []string{"MERGE", "SQUASH", "REBASE"}
