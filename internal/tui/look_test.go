@@ -488,7 +488,7 @@ func TestDialogClayBorder(t *testing.T) {
 
 func TestHelpNamesIcons(t *testing.T) {
 	s := ansi.Strip(helpDialog().view(100))
-	if !strings.Contains(s, "icons: nerd | unicode | ascii") {
+	if !strings.Contains(s, "icons: nerd · set icons: unicode if these look like boxes") {
 		t.Fatalf("help %q", s)
 	}
 }

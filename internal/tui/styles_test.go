@@ -77,7 +77,7 @@ func TestOpenOnlyHTTPURLs(t *testing.T) {
 func TestKeyBarsAreInHelp(t *testing.T) {
 	inHelp := map[string]bool{}
 	for _, g := range keys.groups() {
-		for _, b := range g {
+		for _, b := range g.keys {
 			inHelp[b.Help().Key] = true
 		}
 	}

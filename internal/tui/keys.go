@@ -1,6 +1,11 @@
 package tui
 
-import "charm.land/bubbles/v2/key"
+import (
+	"strings"
+
+	"charm.land/bubbles/v2/key"
+	"github.com/charmbracelet/x/ansi"
+)
 
 // keyMap holds every binding once; the dugout line and the help popup are both
 // generated from it, so they cannot disagree with what the keys do.
@@ -82,19 +87,52 @@ func (k keyMap) bar(c barCtx) []key.Binding {
 	return []key.Binding{k.Into, k.Rerun, k.Cancel, k.Copy, k.Open, k.Repo}
 }
 
-// groups are help's columns: moving around, the tree and the log, the rest
-// of the log then actions. Three columns of at most 11 keep the popup inside
-// 80×24 with every note showing.
-func (k keyMap) groups() [][]key.Binding {
-	return [][]key.Binding{
-		{k.Tabs, k.Tab, k.Next, k.Into, k.Back, k.Repo, k.Filter, k.Reload, k.Theme, k.Help, k.Quit},
-		{k.Up, k.Down, k.Top, k.Bottom, k.Fold, k.Enter, k.Search, k.NextMatch, k.PrevMatch, k.NextFail},
-		{k.Follow, k.Zoom, k.Esc, k.Rerun, k.Cancel, k.Open, k.Copy, k.Merge, k.Update, k.Comment, k.Send},
+// helpGroup is one of help's rows: a context and its keys.
+type helpGroup struct {
+	label string
+	keys  []key.Binding
+}
+
+// groups are help's rows by context: the dashboard, the preview, the log,
+// then the keys that work anywhere.
+func (k keyMap) groups() []helpGroup {
+	return []helpGroup{
+		{"dashboard", []key.Binding{k.Tabs, k.Tab, k.Into, k.Filter, k.Repo, k.Rerun, k.Cancel, k.Copy, k.Open, k.Merge, k.Update}},
+		{"preview", []key.Binding{k.Next, k.Up, k.Down, k.Top, k.Bottom, k.Fold, k.Enter, k.Comment, k.Send, k.Back, k.Esc}},
+		{"log", []key.Binding{k.Search, k.NextMatch, k.PrevMatch, k.NextFail, k.Follow, k.Zoom}},
+		{"anywhere", []key.Binding{k.Reload, k.Theme, k.Help, k.Quit}},
 	}
+}
+
+// helpRowW is as wide as a help row's keys go before they continue on the
+// next row, so the popup stays inside 80 columns.
+const helpRowW = 56
+
+// helpRows is help's body: each context's label in clay, its keys inline as
+// key desc three spaces apart, continuing on labelless rows when they overflow.
+func helpRows() string {
+	var rows []string
+	for _, g := range keys.groups() {
+		label := th.clay.Render(fit(g.label, 11))
+		line := ""
+		for _, b := range g.keys {
+			h := th.fg.Render(b.Help().Key) + " " + th.dim.Render(b.Help().Desc)
+			if line != "" && ansi.StringWidth(line)+3+ansi.StringWidth(h) > helpRowW {
+				rows = append(rows, label+line)
+				label, line = strings.Repeat(" ", 11), ""
+			}
+			if line != "" {
+				line += "   "
+			}
+			line += h
+		}
+		rows = append(rows, label+line)
+	}
+	return strings.Join(rows, "\n")
 }
 
 // iconsNote is help's line on the icons: setting, naming the one in use.
 func iconsNote() string {
 	now := [...]string{"nerd", "unicode", "ascii"}[icons]
-	return "icons: nerd | unicode | ascii, now " + now + " · boxes here? set unicode"
+	return "icons: " + now + " · set icons: unicode if these look like boxes"
 }

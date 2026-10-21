@@ -13,15 +13,15 @@
     typo fix                        ╎  Makes the thing b optional.                                                      
                                     ╎                                                                                   
                                     ╎  ACTIVITY                                                                         
-                                    ╎   2h  abc1234  headline                                                          
-                          ┌─────────────────────────────────────────────────────────────────┐                           
-                          │ Merge #1 into main?                                             │                           
-                          │                                                                 │                           
-                          │ ○ Create a merge commit  ● Squash and merge  ○ Rebase and merge │                           
-                          │                                                                 │                           
-                          │ [tab] switch · [y] merge · any other key cancels                │                           
-                          └─────────────────────────────────────────────────────────────────┘                           
-                                    ╎                                                                                   
+                                   ┌────────────────────────────────────────────────┐                                   
+                                   │  Merge #1 into main?                           │                                   
+                                   │                                                │                                   
+                                   │    ○ merge commit                              │                                   
+                                   │   ● squash                                     │                                   
+                                   │    ○ rebase                                    │                                   
+                                   │                                                │                                   
+                                   │  tab method · y merge · any other key cancels  │                                   
+                                   └────────────────────────────────────────────────┘                                   
                                     ╎                                                                                   
                                     ╎                                                                                   
                                     ╎                                                                                   

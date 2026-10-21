@@ -103,6 +103,19 @@ func step(m *model, cmd tea.Cmd) {
 
 func dlgText(m *model) string { return ansi.Strip(m.dlg.view(m.w)) }
 
+// radio reports the options present in s, one per row, in order.
+func radio(s string, opts ...string) bool {
+	at := -1
+	for _, o := range opts {
+		i := strings.Index(s, o)
+		if i < 0 || i < at || (at >= 0 && !strings.Contains(s[at:i], "\n")) {
+			return false
+		}
+		at = i
+	}
+	return true
+}
+
 func TestMergeDialog(t *testing.T) {
 	m, f := prOpenModel(t, openDetail())
 	keysIn(m, "m")
@@ -112,14 +125,14 @@ func TestMergeDialog(t *testing.T) {
 	if m.dlg.title != "Merge #1 into main?" {
 		t.Fatalf("title %q", m.dlg.title)
 	}
-	if s := dlgText(m); !strings.Contains(s, "● Squash and merge  ○ Rebase and merge") || strings.Contains(s, "merge commit") {
+	if s := dlgText(m); !radio(s, "● squash", "○ rebase") || strings.Contains(s, "merge commit") {
 		t.Fatalf("methods:\n%s", s)
 	}
 	keysIn(m, "tab")
 	if m.dlg == nil {
 		t.Fatal("tab closed the dialog")
 	}
-	if s := dlgText(m); !strings.Contains(s, "○ Squash and merge  ● Rebase and merge") {
+	if s := dlgText(m); !radio(s, "○ squash", "● rebase") {
 		t.Fatalf("after tab:\n%s", s)
 	}
 	calls := len(f.DetailCalls)
@@ -136,7 +149,7 @@ func TestMergeDialog(t *testing.T) {
 	d.MergeMethods, d.DefaultMethod = []string{"MERGE", "SQUASH", "REBASE"}, "MERGE"
 	m.pr.d = d
 	keysIn(m, "m", "tab", "tab", "tab")
-	if s := dlgText(m); !strings.Contains(s, "● Create a merge commit  ○ Squash and merge  ○ Rebase and merge") {
+	if s := dlgText(m); !radio(s, "● merge commit", "○ squash", "○ rebase") {
 		t.Fatalf("wrap:\n%s", s)
 	}
 	if keysIn(m, "n"); m.dlg != nil || len(f.Merges) != 1 {
@@ -146,7 +159,7 @@ func TestMergeDialog(t *testing.T) {
 	// A default that isn't allowed preselects the first allowed method.
 	d.MergeMethods, d.DefaultMethod = []string{"SQUASH", "REBASE"}, "MERGE"
 	keysIn(m, "m")
-	if s := dlgText(m); !strings.Contains(s, "● Squash and merge") {
+	if s := dlgText(m); !strings.Contains(s, "● squash") {
 		t.Fatalf("fallback default:\n%s", s)
 	}
 }
@@ -203,13 +216,13 @@ func TestUpdateDialog(t *testing.T) {
 	if m.dlg == nil || m.dlg.title != "Update #1 from main?" {
 		t.Fatalf("dlg %v status %q", m.dlg, m.status)
 	}
-	if s := dlgText(m); !strings.Contains(s, "● Merge main into branch  ○ Rebase") {
+	if s := dlgText(m); !radio(s, "● merge main into the branch", "○ rebase onto main") {
 		t.Fatalf("body:\n%s", s)
 	}
 	calls := len(f.DetailCalls)
 	step(m, keysIn(m, "y"))
 	keysIn(m, "u", "tab")
-	if s := dlgText(m); !strings.Contains(s, "○ Merge main into branch  ● Rebase") {
+	if s := dlgText(m); !radio(s, "○ merge main into the branch", "● rebase onto main") {
 		t.Fatalf("after tab:\n%s", s)
 	}
 	step(m, keysIn(m, "y"))

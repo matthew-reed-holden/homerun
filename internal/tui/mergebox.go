@@ -128,22 +128,23 @@ func mergeLines(d *pr.Detail) []mergeLine {
 	return out
 }
 
-var methodLabels = map[string]string{"MERGE": "Create a merge commit", "SQUASH": "Squash and merge", "REBASE": "Rebase and merge"}
+var methodLabels = map[string]string{"MERGE": "merge commit", "SQUASH": "squash", "REBASE": "rebase"}
 
-// choiceDialog confirms one of labels, sel first; tab cycles and y runs do on
-// the selection.
+// choiceDialog confirms one of labels, sel first, listed one per row: the
+// selection a clay ● on the lit field, the others a dim ○; tab cycles and
+// y runs do on the selection.
 func choiceDialog(title, verb string, labels []string, sel int, do func(int) tea.Cmd) *dialog {
 	d := &dialog{title: title}
 	render := func() {
-		parts := make([]string, len(labels))
+		rows := make([]string, len(labels))
 		for i, l := range labels {
-			mark := "○"
 			if i == sel {
-				mark = "●"
+				rows[i] = litRow(" "+th.clay.Render("●")+" "+l+" ", th.p.lit)
+			} else {
+				rows[i] = "  " + th.dim.Render("○") + " " + l
 			}
-			parts[i] = mark + " " + l
 		}
-		d.body = strings.Join(parts, "  ") + "\n\n[tab] switch · [y] " + verb + " · any other key cancels"
+		d.body = strings.Join(rows, "\n") + "\n\ntab method · y " + verb + " · any other key cancels"
 		d.confirm = do(sel)
 	}
 	d.onKey = func(k tea.KeyPressMsg) bool {
@@ -239,7 +240,7 @@ func (m *model) updateDetail(repo string, n int, d *pr.Detail) {
 		return
 	}
 	id, sha := d.ID, d.HeadSHA
-	labels := []string{"Merge " + base + " into branch", "Rebase"}
+	labels := []string{"merge " + base + " into the branch", "rebase onto " + base}
 	m.dlg = choiceDialog(fmt.Sprintf("Update #%d from %s?", n, base), "update", labels, 0, func(i int) tea.Cmd {
 		return m.mutate("update", fmt.Sprintf("updated #%d", n), repo, n, func(ctx context.Context, api pr.API) error { return api.UpdateBranch(ctx, id, sha, i == 1) })
 	})

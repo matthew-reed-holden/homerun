@@ -14,14 +14,14 @@
                                                                  ╎  loading…                                            
                                                                  ╎                                                      
                                                                  ╎                                                      
-                            ┌──────────────────────────────────────────────────────────────┐                            
-                            │  Run fork PR e2e#2 from @bob?                               │                            
-                            │                                                              │                            
-                            │ Untrusted code runs on this machine (sandboxed, no secrets). │                            
-                            │                                                              │                            
-                            │ [y] run · any other key cancels                              │                            
-                            └──────────────────────────────────────────────────────────────┘                            
-                                                                 ╎                                                      
+                                      ┌──────────────────────────────────────────┐                                      
+                                      │   Run fork PR e2e#2 from @bob?          │                                      
+                                      │                                          │                                      
+                                      │  Untrusted code runs on this machine     │                                      
+                                      │  (sandboxed, no secrets).                │                                      
+                                      │                                          │                                      
+                                      │  y run · any other key cancels           │                                      
+                                      └──────────────────────────────────────────┘                                      
                                                                  ╎                                                      
                                                                  ╎                                                      
                                                                  ╎                                                      

@@ -731,7 +731,7 @@ func TestHostQuitWithActiveRunsAsks(t *testing.T) {
 		t.Fatal("q quit at once with a run in progress")
 	}
 	if m.dlg == nil || !strings.Contains(m.dlg.body, "1 runs in progress will be cancelled.") ||
-		!strings.Contains(m.dlg.body, "[y] quit · any other key stays") {
+		!strings.Contains(m.dlg.body, "y quit · any other key stays") {
 		t.Fatalf("dialog %+v", m.dlg)
 	}
 	if cmd := keysIn(m, "n"); cmd != nil || m.dlg != nil {
@@ -958,7 +958,7 @@ func TestAddFailureWithoutInstallLinkOpensNothing(t *testing.T) {
 		return errors.New("GET https://api.github.com/repos/o/new: dial tcp: connection refused")
 	}, "o/a")
 	m.Update(keysIn(m, "down", "enter")())
-	if m.dlg == nil || m.dlg.open != "" || strings.Contains(m.dlg.body, "[o] open") || !strings.Contains(m.dlg.body, "connection refused") {
+	if m.dlg == nil || m.dlg.open != "" || strings.Contains(m.dlg.body, "o open ·") || !strings.Contains(m.dlg.body, "connection refused") {
 		t.Fatalf("%+v", m.dlg)
 	}
 }

@@ -302,7 +302,7 @@ func TestBarOverviewHasHelp(t *testing.T) {
 	if b := barText(m); !strings.Contains(b, "? help") || !strings.Contains(b, "h table") {
 		t.Fatalf("bar %q", b)
 	}
-	if s := ansi.Strip(m.helpView().view(160)); !strings.Contains(s, "q       quit") {
+	if s := ansi.Strip(m.helpView().view(160)); !strings.Contains(s, "q quit") {
 		t.Fatalf("help %q", s)
 	}
 }

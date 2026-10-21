@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/bubbles/v2/help"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -48,13 +47,13 @@ func (d *dialog) view(w int) string {
 	}
 	i := strings.LastIndex(d.body, "\n") + 1
 	body := d.body[:i] + th.dim.Render(d.body[i:])
-	bw := min(max(20, w-4), max(44, lipgloss.Width(body)+4))
+	bw := min(max(20, w-4), max(44, lipgloss.Width(body)+6)) // the padding and a cell of slack each side
 	return clayBox(bw).Render(title + "\n\n" + body)
 }
 
 // clayBox is the one frame every overlay floats in: square, clay, w wide.
 func clayBox(w int) lipgloss.Style {
-	return lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(th.p.clay).Padding(0, 1).Width(w)
+	return lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(th.p.clay).Padding(0, 2).Width(w)
 }
 
 // overlay draws fg centred on bg, a full w×h screen, and dims what it
@@ -85,7 +84,7 @@ func forkDialog(req api.StartRequest, author string, start func(api.StartRequest
 	return &dialog{
 		icon:    "warn",
 		title:   fmt.Sprintf("Run fork PR %s#%d%s?", termsafe.Line(repoShort(req.Repo)), req.PR, who),
-		body:    "Untrusted code runs on this machine (sandboxed, no secrets).\n\n[y] run · any other key cancels",
+		body:    "Untrusted code runs on this machine\n(sandboxed, no secrets).\n\ny run · any other key cancels",
 		confirm: start(req),
 	}
 }
@@ -93,7 +92,7 @@ func forkDialog(req api.StartRequest, author string, start func(api.StartRequest
 func cancelDialog(runID, label string, cancel func(string) tea.Cmd) *dialog {
 	return &dialog{
 		title:   "Cancel run " + termsafe.Line(runID) + " (" + termsafe.Line(label) + ")?",
-		body:    "[y] cancel run · any other key keeps it",
+		body:    "y cancel run · any other key keeps it",
 		confirm: cancel(runID),
 	}
 }
@@ -104,12 +103,10 @@ type note struct {
 	text string
 }
 
-// helpDialog is every key, then the notes, the icons: setting and the
-// closing hint.
+// helpDialog is every key by context, then the notes, the icons: setting
+// and the closing hint.
 func helpDialog(notes ...note) *dialog {
-	h := help.New()
-	h.Styles.FullKey, h.Styles.FullDesc, h.Styles.FullSeparator = th.fg, th.dim, th.line
-	body := h.FullHelpView(keys.groups()) + "\n"
+	body := helpRows() + "\n"
 	for _, n := range notes {
 		if n.warn {
 			body += "\n" + th.lights.Render(ic("warn")) + " " + n.text
@@ -125,7 +122,7 @@ func helpDialog(notes ...note) *dialog {
 func quitDialog(n int) *dialog {
 	return &dialog{
 		title:   "Quit homerun?",
-		body:    fmt.Sprintf("%d runs in progress will be cancelled.\n\n[y] quit · any other key stays", n),
+		body:    fmt.Sprintf("%d runs in progress will be cancelled.\n\ny quit · any other key stays", n),
 		confirm: tea.Quit,
 	}
 }
@@ -149,7 +146,7 @@ func addFailedDialog(name string, err error) *dialog {
 	var il InstallLinker
 	if errors.As(err, &il) && httpURL(il.InstallLink()) {
 		d.open = il.InstallLink()
-		d.body = strings.TrimSuffix(d.body, "any key closes") + "[o] open · any other key closes"
+		d.body = strings.TrimSuffix(d.body, "any key closes") + "o open · any other key closes"
 	}
 	return d
 }
