@@ -96,6 +96,8 @@ func paintMerge(l string) string {
 		return th.lights.Render(l)
 	case strings.HasPrefix(l, "✘"), l == "Closed":
 		return th.out.Render(l)
+	case l == "Merged":
+		return th.clay.Bold(true).Render(l)
 	case strings.HasPrefix(l, "◌"):
 		return th.dim.Render(l)
 	}

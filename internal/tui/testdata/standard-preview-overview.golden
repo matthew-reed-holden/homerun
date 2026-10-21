@@ -3,21 +3,21 @@ HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 ·  client
 ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
 is:open author:@me                                                              
    Title                                                                     
-▌✘ #1 · feat · @matt                                    1/2         +0 −0      
+▌ #1 · feat · @matt                                    1/2         +0 −0      
 ▌  e2e PR                                                                       
  ◇ #2 · typo · @bob                                    ·             +0 −0      
    typo fix                                                                     
 ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
-#1                                                                              
-Overview  Checks 2/4                                                            
-#1 e2e PR  @matt · feat → main                                                  
+o/e2e · #1                                                                      
+e2e PR                                                                          
+ OPEN   main ← feat  @matt                                                      
+◆ Overview  ◇ Checks 2/4                                                        
 ✔ no conflicts                                                                  
 Checks ✔ 1 passed · ◌ 1 pending                                                 
-Reviews: approved · Files 3 (+40 −7) · 💬 1                                     
-Open                                                                            
+Reviews: approved · Files 3 (+40 −7) ·  1                                      
 ──────────────────────────────────────────────────────────────────────────────  
                                                                                 
- Heading                                                                        
+Heading                                                                         
                                                                                 
 Makes the thing b optional.                                                     
 ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌

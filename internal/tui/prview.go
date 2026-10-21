@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image/color"
 	"strings"
 	"time"
 
@@ -213,7 +214,7 @@ func (m *model) prKey(k tea.KeyPressMsg) tea.Cmd {
 
 func (m *model) overviewKey(k tea.KeyPressMsg) tea.Cmd {
 	lay := m.layout()
-	m.syncPage(lay.pw-2, lay.ph-2)
+	m.syncPage(lay.pw-2, lay.ph-prHeadH)
 	vp := &m.pr.vp
 	switch {
 	case key.Matches(k, keys.Down):
@@ -254,23 +255,32 @@ func (m *model) openPRURL() tea.Cmd {
 	return openCmd(u)
 }
 
-// chips are the preview tabs, the active one reversed.
+// chips are the preview tabs as bases: ◆ in clay on the active one, ◇ on the
+// other; the checks count takes the rollup's colour.
 func (m *model) chips() string {
 	cs, _ := m.prChecks()
-	labels := []string{"Overview", fmt.Sprintf("Checks %d/%d", passing(cs), len(cs))}
+	labels := []string{"Overview", "Checks"}
 	for i, l := range labels {
+		mark, st := th.line.Render("◇"), th.dim
 		if i == m.pr.section {
-			labels[i] = chipOn.Render(l)
+			mark, st = th.clay.Render("◆"), th.fg.Bold(true)
 		}
+		labels[i] = mark + " " + st.Render(l)
 	}
+	labels[1] += " " + tint(Rollup(cs), fmt.Sprintf("%d/%d", passing(cs), len(cs)))
 	return strings.Join(labels, "  ")
 }
 
-// prPreviewView is the preview inside a PR: the chips, then the active tab.
+// prHeadH is the lines above a PR's tab body: where, the title, the state
+// line and the tabs.
+const prHeadH = 4
+
+// prPreviewView is the preview inside a PR: repo · #n dim, the title in bold,
+// the state tile with base ← head and author · age, the tabs, then the active tab.
 func (m *model) prPreviewView(w, h int) string {
 	focused := m.focus == onPreview
-	inner := max(0, h-2) // the title and the chips
-	lines := []string{m.chips()}
+	inner := max(0, h-prHeadH)
+	lines := append(m.prHeader(w-2), m.chips())
 	if m.pr.section == 0 {
 		m.syncPage(w-2, inner)
 		lines = append(lines, strings.Split(m.pr.vp.View(), "\n")...)
@@ -279,7 +289,35 @@ func (m *model) prPreviewView(w, h int) string {
 		lines = append(lines, head...)
 		lines = append(lines, m.tree.rows(w, max(0, inner-len(head)), m.now(), focused)...)
 	}
-	return section(fmt.Sprintf("#%d", m.pr.number), lines, w, h, focused)
+	// The where line stays dim: the foul line beside it shows the focus.
+	return section(termsafe.Line(m.pr.repo)+fmt.Sprintf(" · #%d", m.pr.number), lines, w, h, false)
+}
+
+// prHeader is the title and the state line, w wide, from the detail or,
+// before it lands, the search's summary; blank lines while there is neither.
+func (m *model) prHeader(w int) []string {
+	p := m.pr
+	s, ok := m.summary(p.repo, p.number)
+	state := "OPEN"
+	if p.d != nil {
+		s, ok, state = p.d.Summary, true, p.d.State
+	}
+	if !ok {
+		return []string{"", ""}
+	}
+	title := th.fg.Bold(true).Render(truncate(termsafe.Line(s.Title), w))
+	l := stateTile(state, s.IsDraft)
+	if s.BaseRef != "" || s.HeadRef != "" {
+		l += "  " + th.dim.Render(termsafe.Line(s.BaseRef)+" ←") + " " + th.fg.Render(termsafe.Line(s.HeadRef))
+	}
+	if s.Author != "" {
+		who := th.fg.Render("@" + termsafe.Line(s.Author))
+		if a := age(s.Updated, m.now()); a != "" {
+			who += th.dim.Render(" · " + a + " ago")
+		}
+		l += "  " + who
+	}
+	return []string{title, truncate(l, w)}
 }
 
 // checksHead is what the Checks tab shows above the tree: the doubled and
@@ -330,7 +368,7 @@ func (m *model) prPage(w int) []string {
 	behind, known := m.behind[m.prRef()]
 	if p.d == nil {
 		if s, ok := m.summary(p.repo, p.number); ok {
-			out = append(out, summaryLines(s, behind, known, w)...)
+			out = append(out, summaryLines(s, behind, known, w)[1:]...) // the header has the headline
 		} else if p.err == nil {
 			out = append(out, th.dim.Render("loading…"))
 		}
@@ -339,8 +377,8 @@ func (m *model) prPage(w int) []string {
 	d := p.d
 	head := d.Summary
 	head.Body = ""
-	out = append(out, summaryLines(head, behind, known, w)...)
-	out = append(out, stateWord(d), th.dim.Render(strings.Repeat("─", w)), "")
+	out = append(out, summaryLines(head, behind, known, w)[1:]...) // the header has the headline
+	out = append(out, th.dim.Render(strings.Repeat("─", w)), "")
 	if strings.TrimSpace(d.Body) == "" {
 		out = append(out, th.dim.Render("No description provided."))
 	} else {
@@ -380,17 +418,15 @@ func mergedLine(d *pr.Detail) string {
 	return l
 }
 
-func stateWord(d *pr.Detail) string {
-	switch d.State {
-	case "MERGED":
-		return th.bold.Render("Merged")
-	case "CLOSED":
-		return th.out.Render("Closed")
+// stateTile is the PR's state as a tile: OPEN, DRAFT, MERGED or CLOSED.
+func stateTile(state string, draft bool) string {
+	switch {
+	case state == "MERGED", state == "CLOSED":
+		return tile(state)
+	case draft:
+		return tile("DRAFT")
 	}
-	if d.IsDraft {
-		return th.safe.Render("Open") + th.dim.Render(" · draft")
-	}
-	return th.safe.Render("Open")
+	return tile("OPEN")
 }
 
 // eventLines is one timeline entry: a headline, then any text indented 2.
@@ -404,18 +440,18 @@ func (m *model) eventLines(e pr.Event, w int) []string {
 	body := ""
 	switch e.Kind {
 	case "commit":
-		head = th.dim.Render("●") + " " + short(termsafe.Line(e.SHA)) + " " + termsafe.Line(e.Text) + " · " + who + when
+		head = th.sha.Render(ic("commit")) + " " + short(termsafe.Line(e.SHA)) + " " + termsafe.Line(e.Text) + " · " + who + when
 	case "comment":
-		head, body = "💬 "+who+when, e.Text
+		head, body = th.dim.Render(ic("comments"))+" "+who+when, e.Text
 	case "review":
 		icon, verb := reviewEvent(e.State)
 		head, body = icon+" "+who+" "+verb+when, e.Text
 	case "merged":
-		head = "◆ " + who + " merged" + when
+		head = th.clay.Render(ic("pr-merged")) + " " + who + " merged" + when
 	case "closed":
-		head = th.out.Render("✘") + " " + who + " closed" + when
+		head = th.out.Render(ic("pr-closed")) + " " + who + " closed" + when
 	case "reopened":
-		head = "○ " + who + " reopened" + when
+		head = th.safe.Render(ic("pr-open")) + " " + who + " reopened" + when
 	case "force_pushed":
 		head = "↻ " + who + " force-pushed" + when
 	default:
@@ -433,13 +469,13 @@ func (m *model) eventLines(e pr.Event, w int) []string {
 func reviewEvent(state string) (icon, verb string) {
 	switch state {
 	case "APPROVED":
-		return th.safe.Render("✔"), "approved"
+		return th.safe.Render(ic("rv-approved")), "approved"
 	case "CHANGES_REQUESTED":
-		return th.out.Render("✘"), "requested changes"
+		return th.out.Render(ic("rv-changes")), "requested changes"
 	case "DISMISSED":
-		return th.dim.Render("○"), "review dismissed"
+		return th.dim.Render(ic("rv-none")), "review dismissed"
 	}
-	return "💬", "reviewed"
+	return th.dim.Render(ic("rv-commented")), "reviewed"
 }
 
 // wrapLines splits s into lines at most w wide.
@@ -451,22 +487,46 @@ func wrapLines(s string, w int) []string {
 	return out
 }
 
-// mdStyle is glamour's dark style without the page margin. Never glamour's
-// auto style: it queries the terminal.
-var mdStyle = func() gansi.StyleConfig {
+// hex is c as "#rrggbb", the form glamour's styles take.
+func hex(c color.Color) *string {
+	r, g, b, _ := c.RGBA()
+	s := fmt.Sprintf("#%02x%02x%02x", r>>8, g>>8, b>>8)
+	return &s
+}
+
+// mdStyle is glamour's dark style in the palette, without the page margin:
+// chalk bold headings, clay bullets and links, code on the lit field, dim
+// quotes. Never glamour's auto style: it queries the terminal.
+func mdStyle() gansi.StyleConfig {
 	s := styles.DarkStyleConfig
-	zero := uint(0)
+	zero, yes := uint(0), true
 	s.Document.Margin = &zero
 	s.Document.BlockPrefix, s.Document.BlockSuffix = "", ""
+	s.Document.Color = hex(th.p.fg)
+	s.Heading.Color, s.Heading.Bold = hex(th.p.fg), &yes
+	s.H1.Color, s.H1.BackgroundColor, s.H1.Prefix, s.H1.Suffix = hex(th.p.fg), nil, "", ""
+	s.H6.Color, s.H6.Bold = hex(th.p.fg), &yes
+	// A block prefix takes the parent's style; a prefix takes the item's.
+	s.Item.BlockPrefix, s.Item.Prefix, s.Item.Color = "", "• ", hex(th.p.clay)
+	s.Link.Color, s.LinkText.Color = hex(th.p.clay), hex(th.p.clay)
+	s.Code.Color, s.Code.BackgroundColor = hex(th.p.fg), hex(th.p.lit)
+	s.CodeBlock.Color, s.CodeBlock.BackgroundColor = hex(th.p.fg), hex(th.p.lit)
+	if s.CodeBlock.Chroma != nil {
+		ch := *s.CodeBlock.Chroma
+		ch.Background.BackgroundColor = hex(th.p.lit)
+		s.CodeBlock.Chroma = &ch
+	}
+	s.BlockQuote.Color = hex(th.p.dim)
+	s.HorizontalRule.Color = hex(th.p.line)
 	return s
-}()
+}
 
 // renderMarkdown renders untrusted markdown w wide. Escapes are stripped
 // before glamour sees the text and from what it returns, keeping only SGR;
 // on a glamour error the plain text is shown.
 func renderMarkdown(s string, w int) string {
 	s = termsafe.Text(s)
-	r, err := glamour.NewTermRenderer(glamour.WithStyles(mdStyle), glamour.WithWordWrap(max(1, w)))
+	r, err := glamour.NewTermRenderer(glamour.WithStyles(mdStyle()), glamour.WithWordWrap(max(1, w)))
 	if err != nil {
 		return s
 	}

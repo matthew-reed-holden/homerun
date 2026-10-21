@@ -99,6 +99,7 @@ type model struct {
 	tree     tree
 	treeKey  string
 	log      *logView
+	crumbs   []string // the breadcrumb shown in place of the bases while log is open
 	zoom     bool
 	dlg      *dialog
 	pk       *picker
@@ -675,6 +676,13 @@ func (m *model) openLog() tea.Cmd {
 		}
 	}
 	m.log = newLogView(c.RunID, c.LogPrefix, stage, name, nth, c.Status != "completed" && step < 0)
+	_, owner, _, _ := m.previewSource()
+	leaf := "log"
+	if step >= 0 {
+		first, _, _ := strings.Cut(name, "\n")
+		leaf = termsafe.Line(first) + " · log"
+	}
+	m.crumbs = []string{owner, displayName(c.Name), leaf}
 	return m.stream(c.RunID)
 }
 
@@ -682,7 +690,7 @@ func (m *model) closeLog() {
 	if m.stopLog != nil {
 		m.stopLog()
 	}
-	m.stopLog, m.log, m.zoom = nil, nil, false
+	m.stopLog, m.log, m.zoom, m.crumbs = nil, nil, false, nil
 	m.gen++
 }
 
@@ -814,7 +822,11 @@ func (m *model) render() string {
 			body = table + "\n" + foul(m.w, onPv) + "\n" + body
 		}
 	}
-	screen := m.strip() + "\n" + m.bases() + "\n" + foul(m.w, false) + "\n" + body + "\n" + foul(m.w, false)
+	top := m.bases() + "\n" + foul(m.w, false)
+	if m.log != nil {
+		top = fit(breadcrumb(m.crumbs...), m.w) + "\n" + foul(m.w, true)
+	}
+	screen := m.strip() + "\n" + top + "\n" + body + "\n" + foul(m.w, false)
 	if m.fltErr != "" {
 		screen += "\n" + m.filterErrLine()
 	}
@@ -955,7 +967,7 @@ func (m *model) wheel(mo tea.Mouse) tea.Cmd {
 	case m.log != nil:
 		m.log.scroll(3 * d)
 	case m.pr != nil && m.pr.section == 0:
-		m.syncPage(lay.pw-2, lay.ph-2)
+		m.syncPage(lay.pw-2, lay.ph-prHeadH)
 		if d > 0 {
 			m.pr.vp.ScrollDown(3)
 		} else {

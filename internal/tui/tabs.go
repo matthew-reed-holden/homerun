@@ -387,15 +387,8 @@ func source(c api.Check, fromDaemon bool) string {
 	return termsafe.Line(c.App)
 }
 
-func paintSource(s string) string {
-	switch s {
-	case "homerun":
-		return th.clay.Render(s)
-	case "actions":
-		return th.sha.Render(s)
-	}
-	return th.dim.Render(s)
-}
+// paintSource is a check's source as a tile: homerun in clay, the rest dim.
+func paintSource(s string) string { return tile(s) }
 
 // sourceCounts is "3 homerun · 2 actions · 1 codecov": homerun and actions
 // first, then the others as they come.
@@ -467,25 +460,12 @@ func baseNames(paths []string) string {
 func actionsLines(paths []string, r api.Repo, w int) []string {
 	var out []string
 	if len(paths) > 0 {
-		out = append(out, th.lights.Render(truncate("⚠ "+baseNames(paths)+" also runs on GitHub Actions", w)))
+		out = append(out, truncate(th.lights.Render("⚠")+" "+th.dim.Render(baseNames(paths)+" also runs on GitHub Actions"), w))
 	}
 	if len(r.Unhandled) > 0 {
 		out = append(out, th.dim.Render(truncate("left to GitHub Actions: "+baseNames(r.Unhandled), w)))
 	}
 	return out
-}
-
-// ciRole is the icon role for a rollup glyph.
-func ciRole(rollup string) string {
-	switch rollup {
-	case "✔":
-		return "ci-pass"
-	case "✘":
-		return "ci-fail"
-	case "⟳":
-		return "ci-run"
-	}
-	return "ci-pending"
 }
 
 // ciCell is the rollup's CI icon and the passing/total count, "·" with no checks.
@@ -494,7 +474,7 @@ func ciCell(cs []api.Check) string {
 		return th.dim.Render("·")
 	}
 	icon := Rollup(cs)
-	return tint(icon, fmt.Sprintf("%s %d/%d", ic(ciRole(icon)), passing(cs), len(cs)))
+	return tint(icon, fmt.Sprintf("%s %d/%d", ic(icon), passing(cs), len(cs)))
 }
 
 func mark(paths []string) string {
@@ -588,7 +568,7 @@ func (m *model) prRows(t *tab, w int) []entry {
 	var out []entry
 	for _, s := range res.PRs {
 		it := m.itemFor(repo, s.Number)
-		icon, ci := "·", th.dim.Render(ic("ci-skip")+" not run")
+		icon, ci := "ci-skip", th.dim.Render(ic("ci-skip")+" not run")
 		switch {
 		case m.err != nil: // the engine's checks are unknown, not absent
 			icon, ci = "?", ciCell(mergedChecks(nil, s.Checks))+" "+th.dim.Render("github only")
@@ -607,7 +587,7 @@ func (m *model) prRows(t *tab, w int) []entry {
 		}
 		title := th.fg.Render(termsafe.Line(s.Title))
 		if s.IsDraft {
-			title = th.tile.Render(" DRAFT ") + " " + title
+			title = tile("DRAFT") + " " + title
 		}
 		behind := ""
 		if b, ok := m.behindOf(s.Number); ok && b > 0 {
@@ -669,16 +649,16 @@ func (m *model) runRows(w int) []entry {
 		icon, status, took, ago := Rollup(r.Checks), termsafe.Line(r.Status), timing("completed", r.Started, r.Finished, now), age(r.Finished, now)
 		switch r.Status {
 		case "running":
-			icon, status, took, ago = "⟳", "running", timing("in_progress", r.Started, time.Time{}, now), ""
+			icon, status, took, ago = "ci-run", "running", timing("in_progress", r.Started, time.Time{}, now), ""
 		case "queued", "requeue":
-			icon, status, took, ago = "·", "queued", "", age(r.Created, now)
+			icon, status, took, ago = "ci-pending", "queued", "", age(r.Created, now)
 		case "cancelled":
-			icon, status = "○", "cancelled"
+			icon, status = "ci-skip", "cancelled"
 		case "done":
 			switch icon {
-			case "✘":
+			case "ci-fail":
 				status = "failed"
-			case "✔":
+			case "ci-pass":
 				status = "passed"
 			}
 		}
@@ -787,9 +767,9 @@ func (m *model) lineScore() (prs, runs, pass, fail string) {
 			r++
 		case run.Status == "done":
 			switch Rollup(run.Checks) {
-			case "✔":
+			case "ci-pass":
 				p++
-			case "✘":
+			case "ci-fail":
 				f++
 			}
 		}

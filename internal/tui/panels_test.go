@@ -111,8 +111,8 @@ func TestBranchAndPRRows(t *testing.T) {
 	if got := rowKeys(m); len(got) != 2 {
 		t.Fatalf("branch rows %v", got)
 	}
-	indexAll(t, rowText(m, 0), "✔ main", "fd387ab", ic("ci-pass")+" 1/1")
-	if r := m.at().rows.rows[1]; strings.Contains(r.text, "]52") || !strings.Contains(rowText(m, 1), "· spike/") || !strings.HasSuffix(strings.TrimSpace(rowText(m, 1)), "2d") {
+	indexAll(t, rowText(m, 0), ic("ci-pass")+" main", "fd387ab", ic("ci-pass")+" 1/1")
+	if r := m.at().rows.rows[1]; strings.Contains(r.text, "]52") || !strings.Contains(rowText(m, 1), ic("ci-pending")+" spike/") || !strings.HasSuffix(strings.TrimSpace(rowText(m, 1)), "2d") {
 		t.Fatalf("branch row %q", rowText(m, 1))
 	}
 }
@@ -127,17 +127,17 @@ func TestRepoAndRunRows(t *testing.T) {
 			Checks: []api.Check{{Status: "completed", Conclusion: "failure"}}},
 	}
 	m := searchModelState(t, &pr.Fake{Results: e2eResults(e2eResult())}, st)
-	if e := m.repoEntry(st.Repos[2]); e.icon != "✘" || e.text != "o/a" {
+	if e := m.repoEntry(st.Repos[2]); e.icon != "ci-fail" || e.text != "o/a" {
 		t.Fatalf("repo %+v", e)
 	}
-	if e := m.repoEntry(st.Repos[3]); e.icon != "✘" || e.text != "o/b (error)" {
+	if e := m.repoEntry(st.Repos[3]); e.icon != "ci-fail" || e.text != "o/b (error)" {
 		t.Fatalf("repo %+v", e)
 	}
 	if e := ansi.Strip(m.repoEntry(st.Repos[0]).text); e != "o/e2e ● 2 PRs" {
 		t.Fatalf("picked repo %q", e)
 	}
 	keysIn(m, "5")
-	indexAll(t, rowText(m, 0), "· main", "queued", "1m")
-	indexAll(t, rowText(m, 1), "○ #2", "cancelled", "10m", "\n", "1m00s")
-	indexAll(t, rowText(m, 2), "✘ #1", "failed", "10m", "\n", "pull_request", "1m00s")
+	indexAll(t, rowText(m, 0), ic("ci-pending")+" main", "queued", "1m")
+	indexAll(t, rowText(m, 1), ic("ci-skip")+" #2", "cancelled", "10m", "\n", "1m00s")
+	indexAll(t, rowText(m, 2), ic("ci-fail")+" #1", "failed", "10m", "\n", "pull_request", "1m00s")
 }

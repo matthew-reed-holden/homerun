@@ -46,5 +46,5 @@ func (m *model) filterBar() string {
 }
 
 func (m *model) filterErrLine() string {
-	return truncate(th.out.Render("✘")+" "+th.dim.Render("GitHub rejected the query: "+termsafe.Line(m.fltErr)+". The tab kept its old query."), m.w)
+	return truncate(th.out.Render(ic("ci-fail"))+" "+th.dim.Render("GitHub rejected the query: "+termsafe.Line(m.fltErr)+". The tab kept its old query."), m.w)
 }

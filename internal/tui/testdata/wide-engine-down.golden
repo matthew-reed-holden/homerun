@@ -5,18 +5,18 @@ is:open author:@me                                                ╎ #1 e2e PR 
    Title                                                     ╎ #1 e2e PR  @matt · feat → main                      
 ▌? #1 · feat · @matt    0/1 github only        +40 −7        5m ╎ ✔ no conflicts                                      
 ▌  e2e PR                                                         ╎ Checks ✘ 1 failing (1 required)                     
- ? #2 · @bob           · github only             +0 −0        3h ╎ Reviews: approved · Files 3 (+40 −7) · 💬 2         
+ ? #2 · @bob           · github only             +0 −0        3h ╎ Reviews: approved · Files 3 (+40 −7) ·  2          
    typo fix                                                       ╎                                                     
  ? #5 · @sam           · github only              +0 −0        5d ╎ Makes the thing                                     
     DRAFT  pr: GraphQL page cache                                 ╎ optional.                                           
-                                                                  ╎ 2 homerun · 1 actions                               
+                                                                  ╎ 2  homerun  · 1  actions                            
                                                                   ╎ ──────────────────────────────────────────────────  
-                                                                  ╎  ✔ CI / pass homerun                             4s 
-                                                                  ╎  ✘ CI / fail homerun — echo bad; exit 1          3s 
+                                                                  ╎   CI / pass  homerun                            4s 
+                                                                  ╎   CI / fail  homerun  — echo bad; exit 1        3s 
                                                                   ╎    exit status 1                                    
-                                                                  ╎    ✔ Set up job                                  1s 
-                                                                  ╎    ✘ echo bad; exit 1                            0s 
-                                                                  ╎  ✘ ci/gh actions required                           
+                                                                  ╎     Set up job                                  1s 
+                                                                  ╎     echo bad; exit 1                            0s 
+                                                                  ╎   ci/gh  actions  required                         
                                                                   ╎                                                     
                                                                   ╎                                                     
                                                                   ╎                                                     

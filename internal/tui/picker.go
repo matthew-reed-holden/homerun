@@ -134,7 +134,7 @@ func (m *model) repoEntry(r api.Repo) entry {
 		t += " ●"
 	}
 	if r.Error != "" {
-		return entry{icon: "✘", text: t + " (error)", key: r.Name}
+		return entry{icon: "ci-fail", text: t + " (error)", key: r.Name}
 	}
 	for _, tb := range m.tabs {
 		if res, ok := tb.res[r.Name]; ok && tb.q() == "is:open" {

@@ -164,7 +164,7 @@ func TestStackedPreviewKeepsPart1Lines(t *testing.T) {
 	m, _ := newTestModel(t)
 	m.Update(searchMsg{repo: "o/e2e", tab: 0, query: "is:open author:@me", res: goldenResult()})
 	m.Update(tea.WindowSizeMsg{Width: 90, Height: 30})
-	if out := screen(m); !strings.Contains(out, "✘ ci/gh actions required") {
+	if out := screen(m); !strings.Contains(out, ic("ci-fail")+" ci/gh  actions  required") {
 		t.Fatalf("failing required check below the fold:\n%s", out)
 	}
 	if lay := m.layout(); lay.ph-1 < 15 {
@@ -312,5 +312,104 @@ func TestFailingCIRed(t *testing.T) {
 	m, _ := newTestModel(t)
 	if r := m.at().rows.rows[0]; !strings.Contains(r.text, outSGR+"m"+ic("ci-fail")) {
 		t.Fatalf("failing CI not red: %q", r.text)
+	}
+}
+
+// previewLines is the preview section's lines, ANSI stripped.
+func previewLines(m *model) []string {
+	lay := m.layout()
+	return strings.Split(ansi.Strip(m.prPreviewView(lay.pw, lay.ph)), "\n")
+}
+
+func TestPreviewHeaderTitleOnce(t *testing.T) {
+	m, _ := prOpenModel(t, openDetail())
+	ls := previewLines(m)
+	if n := strings.Count(strings.Join(ls, "\n"), "e2e PR"); n != 1 {
+		t.Fatalf("title shown %d times:\n%s", n, strings.Join(ls, "\n"))
+	}
+	if !strings.HasPrefix(ls[0], "o/e2e · #1") || strings.TrimSpace(ls[1]) != "e2e PR" {
+		t.Fatalf("header %q / %q", ls[0], ls[1])
+	}
+	for _, want := range []string{" OPEN ", "main ← feat", "@matt"} {
+		if !strings.Contains(ls[2], want) {
+			t.Fatalf("state line %q lacks %q", ls[2], want)
+		}
+	}
+	if !strings.Contains(ls[3], "◆ Overview") || !strings.Contains(ls[3], "◇ Checks 2/4") {
+		t.Fatalf("tabs %q", ls[3])
+	}
+	lay := m.layout()
+	if v := m.prPreviewView(lay.pw, lay.ph); strings.Contains(v, "\x1b[7") || !strings.Contains(v, claySGR+"m◆") {
+		t.Fatalf("active tab not a clay base: %q", strings.Split(v, "\n")[3])
+	}
+}
+
+func TestStateTiles(t *testing.T) {
+	draft := openDetail()
+	draft.IsDraft = true
+	for _, c := range []struct {
+		word string
+		d    *pr.Detail
+	}{{"OPEN", openDetail()}, {"DRAFT", draft}, {"MERGED", detailFixture()}} {
+		if s := ansi.Strip(tile(c.word)); s != " "+c.word+" " {
+			t.Fatalf("tile %q", s)
+		}
+		m, _ := prOpenModel(t, c.d)
+		lay := m.layout()
+		if v := m.prPreviewView(lay.pw, lay.ph); !strings.Contains(strings.Split(v, "\n")[2], tile(c.word)) {
+			t.Fatalf("%s: state line %q", c.word, strings.Split(ansi.Strip(v), "\n")[2])
+		}
+	}
+}
+
+func TestSourceTileTruncates(t *testing.T) {
+	if s := ansi.Strip(tile("very-long-app-name")); s != " very-long… " {
+		t.Fatalf("tile %q", s)
+	}
+	if !strings.Contains(tile("x"), "48;2;9;16;32") {
+		t.Fatalf("tile not on the strip colour: %q", tile("x"))
+	}
+}
+
+func TestBreadcrumb(t *testing.T) {
+	m, _ := checksModel(t)
+	keysIn(m, "enter")
+	if m.log == nil {
+		t.Fatal("no log")
+	}
+	if l := strings.Split(screen(m), "\n")[1]; !strings.HasPrefix(l, "#1 › CI / pass ›") {
+		t.Fatalf("breadcrumb line %q", l)
+	}
+	if !strings.Contains(strings.Split(m.render(), "\n")[2], claySGR+"m╌") {
+		t.Fatal("line under the breadcrumb not clay")
+	}
+	keysIn(m, "esc")
+	if l := strings.Split(screen(m), "\n")[1]; !strings.HasPrefix(l, "◆ 1 My PRs") {
+		t.Fatalf("bases not back: %q", l)
+	}
+}
+
+func TestMarkdownPalette(t *testing.T) {
+	out := renderMarkdown("- item\n\n`code`", 40)
+	bullet := out[:strings.Index(out, "•")]
+	if !strings.Contains(bullet[strings.LastIndex(bullet, "\x1b["):], claySGR) {
+		t.Fatalf("bullet not clay: %q", out)
+	}
+	if !strings.Contains(out, "48;2;27;42;68") {
+		t.Fatalf("code not on the lit field: %q", out)
+	}
+}
+
+func TestLeadGlyphFollowsIcons(t *testing.T) {
+	for _, mode := range []IconMode{IconsNerd, IconsUnicode, IconsASCII} {
+		m, _ := newTestModel(t)
+		useIcons(t, mode)
+		m.tableRows()
+		lay := m.layout()
+		l := &m.at().rows
+		row := ansi.Strip(strings.Split(m.tableView(lay.tw, lay.th), "\n")[l.first()])
+		if !strings.HasPrefix(row, "▌"+ic("ci-fail")+" ") {
+			t.Fatalf("mode %d: failing PR row %q, want lead %q", mode, row, ic("ci-fail"))
+		}
 	}
 }

@@ -166,6 +166,26 @@ func section(title string, lines []string, w, h int, focused bool) string {
 	return strings.Join(out[:max(0, min(len(out), h))], "\n")
 }
 
+// breadcrumb is where a drill-down is, parts joined with " › ": the way
+// there dim, the last part in chalk and bold. It stands in for the bases,
+// over a clay foul line.
+func breadcrumb(parts ...string) string {
+	var ps []string
+	for _, p := range parts {
+		if p != "" {
+			ps = append(ps, p)
+		}
+	}
+	if len(ps) == 0 {
+		return ""
+	}
+	last := th.fg.Bold(true).Render(ps[len(ps)-1])
+	if len(ps) == 1 {
+		return last
+	}
+	return th.dim.Render(strings.Join(ps[:len(ps)-1], " › ")+" › ") + last
+}
+
 // foul is a dashed chalk line w wide; clay beside the focused section.
 func foul(w int, focused bool) string {
 	st := th.line

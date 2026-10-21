@@ -1,17 +1,17 @@
 HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 ·  client                                                                     
 ◆ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◇ 5 Runs 3                                        
 ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
-is:open author:@me                                                ╎ #1                                                  
-   Title                                                     ╎ Overview  Checks 2/4                                
-▌✘ #1 · feat · @matt               1/2           +0 −0   ↓2   5m ╎ ▌✔ CI / pass homerun                             4s 
-▌  e2e PR                                                         ╎  ✘ CI / fail homerun — echo bad; exit 1          3s 
- ◇ #2 · typo · @bob               ·               +0 −0        3h ╎    exit status 1                                    
-   typo fix                                                       ╎    ✔ Set up job                                  1s 
-                                                                  ╎    ✘ echo bad; exit 1                            0s 
-                                                                  ╎  ✔ lint status required                             
-                                                                  ╎  ⟳ build status                              queued 
-                                                                  ╎                                                     
-                                                                  ╎                                                     
+is:open author:@me                                                ╎ o/e2e · #1                                          
+   Title                                                     ╎ e2e PR                                              
+▌ #1 · feat · @matt               1/2           +0 −0   ↓2   5m ╎  MERGED   main ← feat  @matt                        
+▌  e2e PR                                                         ╎ ◇ Overview  ◆ Checks 2/4                            
+ ◇ #2 · typo · @bob               ·               +0 −0        3h ╎ ▌ CI / pass  homerun                            4s 
+   typo fix                                                       ╎   CI / fail  homerun  — echo bad; exit 1        3s 
+                                                                  ╎    exit status 1                                    
+                                                                  ╎     Set up job                                  1s 
+                                                                  ╎     echo bad; exit 1                            0s 
+                                                                  ╎   lint  status  required                           
+                                                                  ╎   build  status                             queued 
                                                                   ╎                                                     
                                                                   ╎                                                     
                                                                   ╎                                                     

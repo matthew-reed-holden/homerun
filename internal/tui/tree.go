@@ -58,7 +58,7 @@ func (t *tree) update(cs []api.Check) {
 // failed job, else the first running one, because that is what they came to see.
 func autoOpen(cs []api.Check) string {
 	for _, c := range cs {
-		if c.Status == "completed" && Icon(c.Status, c.Conclusion) == "✘" {
+		if c.Status == "completed" && Icon(c.Status, c.Conclusion) == "ci-fail" {
 			return c.Name
 		}
 	}
@@ -215,7 +215,7 @@ func (t *tree) rows(w, inner int, now time.Time, focused bool) []string {
 		line := fit(indent+paint(icon)+" "+name, w-2-timeW) + rfit(tm, timeW)
 		if why != "" {
 			// The reason takes the room the name leaves free in the row.
-			room := w - 2 - timeW - ansi.StringWidth(indent+icon+" "+name) - 1
+			room := w - 2 - timeW - ansi.StringWidth(indent+ic(icon)+" "+name) - 1
 			if room > 3 {
 				line = fit(indent+paint(icon)+" "+name+" "+th.dim.Render(truncate("— "+why, room)), w-2-timeW) + rfit(tm, timeW)
 			}

@@ -7,58 +7,86 @@ import (
 	"strings"
 	"time"
 
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/matthew-reed-holden/homerun/internal/api"
 	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 )
 
-var chipOn = lipgloss.NewStyle().Reverse(true).Bold(true) // the active preview tab; Task 4 replaces it
-
+// Icon is a check's or step's state as an icon role: ci-pass, ci-fail,
+// ci-run, ci-pending (queued) or ci-skip. Callers compare roles, never glyphs,
+// so behaviour is the same in every icon mode.
 func Icon(status, conclusion string) string {
 	switch {
 	case status == "queued":
-		return "·"
+		return "ci-pending"
 	case status != "completed":
-		return "⟳"
+		return "ci-run"
 	case conclusion == "success":
-		return "✔"
+		return "ci-pass"
 	case conclusion == "failure", conclusion == "timed_out", conclusion == "action_required":
-		return "✘"
+		return "ci-fail"
 	default:
-		return "○"
+		return "ci-skip"
 	}
 }
 
+// Rollup is the role for a set of checks: failing if any fails, running if
+// any is unfinished, else passing; pending with no checks.
 func Rollup(cs []api.Check) string {
 	if len(cs) == 0 {
-		return "·"
+		return "ci-pending"
 	}
-	out := "✔"
+	out := "ci-pass"
 	for _, c := range cs {
 		switch Icon(c.Status, c.Conclusion) {
-		case "✘":
-			return "✘"
-		case "⟳", "·":
-			out = "⟳"
+		case "ci-fail":
+			return "ci-fail"
+		case "ci-run", "ci-pending":
+			out = "ci-run"
 		}
 	}
 	return out
 }
 
-func paint(icon string) string { return tint(icon, icon) }
+// paint renders an icon role as its glyph in its colour; anything that is not
+// a role (a literal mark such as "?" or "…") is drawn as given.
+func paint(icon string) string {
+	if _, ok := iconTable[icon]; ok {
+		return tint(icon, ic(icon))
+	}
+	return tint(icon, icon)
+}
 
-// tint renders s in icon's colour.
+// tint renders s in the colour of icon's role.
 func tint(icon, s string) string {
 	switch icon {
-	case "✔":
+	case "ci-pass":
 		return th.safe.Render(s)
-	case "✘":
+	case "ci-fail":
 		return th.out.Render(s)
-	case "⟳", "◇":
+	case "ci-run", "◇":
 		return th.lights.Render(s)
 	}
 	return th.dim.Render(s)
+}
+
+// tile is word in a small square on the strip colour, one cell of padding
+// each side, coloured by its meaning; a word over 10 cells ends in "…".
+func tile(word string) string {
+	st := th.tile.Foreground(th.p.dim)
+	switch word {
+	case "OPEN":
+		st = th.tile.Foreground(th.p.safe).Bold(true)
+	case "DRAFT":
+		st = th.tile.Foreground(th.p.dim).Bold(true)
+	case "MERGED":
+		st = th.tile.Foreground(th.p.clay).Bold(true)
+	case "CLOSED":
+		st = th.tile.Foreground(th.p.out).Bold(true)
+	case "homerun":
+		st = th.tile.Foreground(th.p.clay)
+	}
+	return st.Render(" " + truncate(word, 10) + " ")
 }
 
 func dur(d time.Duration) string {

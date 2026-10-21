@@ -79,7 +79,7 @@ func TestEnterOpensPR(t *testing.T) {
 		t.Fatalf("detail calls %v", f.DetailCalls)
 	}
 	out := screen(m)
-	if got := chipsLine(m); got != "Overview  Checks 2/4" {
+	if got := chipsLine(m); got != "◆ Overview  ◇ Checks 2/4" {
 		t.Fatalf("chips %q:\n%s", got, out)
 	}
 	if !strings.Contains(out, "Timeline") || !strings.Contains(out, "Merged") {
@@ -131,27 +131,30 @@ func TestDescriptionPage(t *testing.T) {
 	m, _ := prOpenModel(t, detailFixture())
 	page := strings.Join(strip(m.prPage(80)), "\n")
 	indexAll(t, page,
-		"#1 e2e PR  @matt · feat → main", "Merged",
+		"✔ Merged into main", "✔ no conflicts",
 		"Heading", "Makes the thing b optional.",
 		"Timeline",
-		"● abc1234 headline · @matt · 2h ago",
-		"💬 @bob · 1h ago", "\n  looks good",
-		"✔ @bob approved · 1h ago",
-		"◆ @matt merged · 5m ago",
-		"Checks", "✔ lint required", "⟳ build",
-		"Merge")
+		ic("commit")+" abc1234 headline · @matt · 2h ago",
+		ic("comments")+" @bob · 1h ago", "\n  looks good",
+		ic("rv-approved")+" @bob approved · 1h ago",
+		ic("pr-merged")+" @matt merged · 5m ago",
+		"Checks", ic("ci-pass")+" lint required", ic("ci-run")+" build",
+		"Merge", "Merged")
+	if strings.Contains(page, "e2e PR") {
+		t.Fatalf("the header has the title; the page repeats it:\n%s", page)
+	}
 	if strings.Contains(page, "# Heading") || strings.Contains(page, "**b**") {
 		t.Fatalf("markdown not rendered:\n%s", page)
 	}
-	if strings.Contains(page, "⟳ build required") {
+	if strings.Contains(page, ic("ci-run")+" build required") {
 		t.Fatal("build is not required")
 	}
-	for state, want := range map[string]string{"OPEN": "Open", "CLOSED": "Closed"} {
+	for _, state := range []string{"OPEN", "CLOSED"} {
 		d := detailFixture()
 		d.State = state
 		m.pr.d = d
-		if p := strings.Join(strip(m.prPage(80)), "\n"); !strings.Contains(p, want) {
-			t.Fatalf("%s: no %q", state, want)
+		if h := m.prHeader(80)[1]; !strings.Contains(h, tile(state)) {
+			t.Fatalf("%s: header %q", state, ansi.Strip(h))
 		}
 	}
 }
@@ -438,7 +441,7 @@ func checksModel(t *testing.T) (*model, *fakeDaemon) {
 func TestChecksSection(t *testing.T) {
 	m, _ := checksModel(t)
 	out := screen(m)
-	for _, want := range []string{"pass homerun required", "ci/gh status required", "✘ ci/gh", "docs status", "Checks 1/5"} {
+	for _, want := range []string{"pass  homerun  required", "ci/gh  status  required", ic("ci-fail") + " ci/gh", "docs  status ", "Checks 1/5"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("lacks %q:\n%s", want, out)
 		}
@@ -658,7 +661,7 @@ func TestSummaryCappedOnShortTerminal(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	lay := m.layout()
 	head := strip(m.previewHead(lay.pw - 2))
-	sources := slices.IndexFunc(head, func(l string) bool { return strings.Contains(l, "1 actions") })
+	sources := slices.IndexFunc(head, func(l string) bool { return strings.Contains(l, " actions ") })
 	if sources < 0 || sources > 6 {
 		t.Fatalf("summary is %d rows:\n%s", sources, strings.Join(head, "\n"))
 	}

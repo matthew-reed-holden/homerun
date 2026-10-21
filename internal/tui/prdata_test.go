@@ -153,7 +153,7 @@ func TestSummaryLines(t *testing.T) {
 		"#1 Make the daemon optional  @matt · feat → main",
 		"⚠ 3 commits behind main · ✔ no conflicts",
 		"Checks ✘ 1 failing (1 required) · ✔ 4 passed",
-		"Reviews: review required · Files 12 (+302 −88) · 💬 3",
+		"Reviews: review required · Files 12 (+302 −88) · " + ic("comments") + " 3",
 		"",
 		"Moves the engine", "behind a flag", "",
 	}

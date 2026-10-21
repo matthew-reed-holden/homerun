@@ -278,7 +278,10 @@ func TestMergedViewSaysMerged(t *testing.T) {
 	f.Details["o/e2e#1"].State = "MERGED"
 	step(m, keysIn(m, "y"))
 	page := strings.Join(strip(m.prPage(80)), "\n")
-	indexAll(t, page, "#1 e2e PR", "Merged", "Merge\nMerged")
+	indexAll(t, page, "Merged into main", "Merge\nMerged")
+	if h := m.prHeader(80)[1]; !strings.Contains(h, tile("MERGED")) {
+		t.Fatalf("header %q", ansi.Strip(h))
+	}
 	if strings.Contains(page, "Ready to merge") {
 		t.Fatalf("page:\n%s", page)
 	}

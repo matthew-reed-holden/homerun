@@ -12,9 +12,9 @@ import (
 
 func TestIconsAndRollup(t *testing.T) {
 	cases := map[[2]string]string{
-		{"completed", "success"}: "✔", {"completed", "failure"}: "✘", {"in_progress", ""}: "⟳",
-		{"queued", ""}: "·", {"completed", "skipped"}: "○", {"completed", "cancelled"}: "○",
-		{"completed", "timed_out"}: "✘",
+		{"completed", "success"}: "ci-pass", {"completed", "failure"}: "ci-fail", {"in_progress", ""}: "ci-run",
+		{"queued", ""}: "ci-pending", {"completed", "skipped"}: "ci-skip", {"completed", "cancelled"}: "ci-skip",
+		{"completed", "timed_out"}: "ci-fail",
 	}
 	for in, want := range cases {
 		if got := Icon(in[0], in[1]); got != want {
@@ -24,7 +24,7 @@ func TestIconsAndRollup(t *testing.T) {
 	ok := api.Check{Status: "completed", Conclusion: "success"}
 	bad := api.Check{Status: "completed", Conclusion: "failure"}
 	q := api.Check{Status: "queued"}
-	if Rollup(nil) != "·" || Rollup([]api.Check{ok}) != "✔" || Rollup([]api.Check{ok, q}) != "⟳" || Rollup([]api.Check{q, bad}) != "✘" {
+	if Rollup(nil) != "ci-pending" || Rollup([]api.Check{ok}) != "ci-pass" || Rollup([]api.Check{ok, q}) != "ci-run" || Rollup([]api.Check{q, bad}) != "ci-fail" {
 		t.Fatal("rollup")
 	}
 }

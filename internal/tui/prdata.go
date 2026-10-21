@@ -137,7 +137,7 @@ func summaryLines(s pr.Summary, behind int, known bool, w int) []string {
 		out = append(out, line(merge...))
 	}
 	out = append(out, line(checksPart(s)...))
-	out = append(out, line("Reviews: "+reviewWord(s.ReviewDecision), fmt.Sprintf("Files %d (+%d −%d)", s.ChangedFiles, s.Additions, s.Deletions), fmt.Sprintf("💬 %d", s.Comments)))
+	out = append(out, line("Reviews: "+reviewWord(s.ReviewDecision), fmt.Sprintf("Files %d (+%d −%d)", s.ChangedFiles, s.Additions, s.Deletions), ic("comments")+fmt.Sprintf(" %d", s.Comments)))
 	var body []string
 	for _, l := range strings.Split(termsafe.Text(s.Body), "\n") {
 		body = append(body, strings.Split(ansi.Wrap(l, max(1, w), ""), "\n")...)

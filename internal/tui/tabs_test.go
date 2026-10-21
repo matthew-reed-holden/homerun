@@ -62,7 +62,7 @@ func searchModelDaemon(t *testing.T, f *pr.Fake, st api.State) (*model, *fakeDae
 // then its second when it has one.
 func rowText(m *model, i int) string {
 	r := m.at().rows.rows[i]
-	s := r.icon + " " + r.text
+	s := paint(r.icon) + " " + r.text
 	if r.sub != "" {
 		s += "\n  " + r.sub
 	}
@@ -139,7 +139,7 @@ func TestTableColumns(t *testing.T) {
 	}}
 	m := searchModel(t, &pr.Fake{Results: e2eResults(res)})
 	row := rowText(m, 0)
-	indexAll(t, row, "✘ #1", "  "+ic("ci-fail")+" 1/3 ", " "+ic("rv-approved")+" ", "+0 −0", "  2h", "\n  e2e PR")
+	indexAll(t, row, ic("ci-fail")+" #1", "  "+ic("ci-fail")+" 1/3 ", " "+ic("rv-approved")+" ", "+0 −0", "  2h", "\n  e2e PR")
 	if strings.Contains(row, "↓") {
 		t.Fatalf("behind shown before it is known: %q", row)
 	}
@@ -147,7 +147,7 @@ func TestTableColumns(t *testing.T) {
 	m.refresh()
 	indexAll(t, rowText(m, 0), ic("ci-fail")+" 1/3", ic("rv-approved"), "↓3", "2h")
 	row = rowText(m, 1)
-	indexAll(t, row, "· #7", ic("ci-skip")+" not run", ic("rv-none"), "2d", "\n   DRAFT  not run here")
+	indexAll(t, row, ic("ci-skip")+" #7", ic("ci-skip")+" not run", ic("rv-none"), "2d", "\n   DRAFT  not run here")
 	if h := ansi.Strip(m.at().rows.head); !strings.Contains(h, "Title") || strings.Contains(h, "CI") {
 		t.Fatalf("head %q", ansi.Strip(m.at().rows.head))
 	}
@@ -310,8 +310,8 @@ func TestBranchesAndRunsArePickedRepoOnly(t *testing.T) {
 	if got := rowKeys(m); !slices.Equal(got, []string{"run:r2", "run:r3", "run:r1"}) {
 		t.Fatalf("runs %v", got)
 	}
-	indexAll(t, rowText(m, 0), "⟳ #1", "d954af8", "running", "\n", "pull_request", "1m12s…")
-	indexAll(t, rowText(m, 2), "✔ main", "fd387ab", "passed", "10m", "\n", "push · main", "1m00s")
+	indexAll(t, rowText(m, 0), ic("ci-run")+" #1", "d954af8", "running", "\n", "pull_request", "1m12s…")
+	indexAll(t, rowText(m, 2), ic("ci-pass")+" main", "fd387ab", "passed", "10m", "\n", "push · main", "1m00s")
 	if h := ansi.Strip(m.strip()); !strings.Contains(h, "RUNS 1") || !strings.Contains(h, "client") {
 		t.Fatalf("strip %q", h)
 	}
@@ -359,7 +359,7 @@ func TestCheckSources(t *testing.T) {
 	}
 	m := searchModel(t, &pr.Fake{Results: e2eResults(res)})
 	out := screen(m)
-	for _, want := range []string{"3 homerun · 2 actions · 1 codecov", "CI / pass homerun", "build actions", "codecov/patch codecov"} {
+	for _, want := range []string{"3  homerun  · 2  actions  · 1  codecov ", "CI / pass  homerun ", "build  actions ", "codecov/patch  codecov "} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("lacks %q:\n%s", want, out)
 		}
@@ -515,7 +515,7 @@ func TestUpdateBehindUnknown(t *testing.T) {
 // chipsLine is the preview pane's first inner line, unstyled and trimmed.
 func chipsLine(m *model) string {
 	lay := m.layout()
-	l := strings.Split(screen(m), "\n")[lay.py+1]
+	l := strings.Split(screen(m), "\n")[lay.py+prHeadH-1]
 	return strings.TrimSpace(strings.Trim(ansi.Cut(l, lay.px, lay.px+lay.pw), "│"))
 }
 
@@ -526,14 +526,14 @@ func TestEnterPreviewFetchesDetail(t *testing.T) {
 	if !slices.Equal(f.DetailCalls, []string{"o/e2e#1"}) || m.focus != onPreview || m.pr == nil {
 		t.Fatalf("calls %v focus %d pr %v", f.DetailCalls, m.focus, m.pr != nil)
 	}
-	if got := chipsLine(m); got != "Overview  Checks 1/3" {
+	if got := chipsLine(m); got != "◆ Overview  ◇ Checks 1/3" {
 		t.Fatalf("chips %q:\n%s", got, screen(m))
 	}
-	if !strings.Contains(m.chips(), chipOn.Render("Overview")) || strings.Contains(m.chips(), chipOn.Render("Checks 1/3")) {
+	if !strings.Contains(m.chips(), claySGR+"m◆") || strings.Contains(m.chips(), "\x1b[7") {
 		t.Fatalf("active chip not marked: %q", m.chips())
 	}
 	lay := m.layout()
-	if top := strings.Split(screen(m), "\n")[lay.py]; strings.TrimSpace(ansi.Cut(top, lay.px, lay.px+lay.pw)) != "#1" {
+	if top := strings.Split(screen(m), "\n")[lay.py]; strings.TrimSpace(ansi.Cut(top, lay.px, lay.px+lay.pw)) != "o/e2e · #1" {
 		t.Fatalf("pane title %q", top)
 	}
 	if !strings.Contains(screen(m), "Title") {
@@ -547,7 +547,7 @@ func TestPreviewTabsSwitch(t *testing.T) {
 		t.Fatalf("not on Overview:\n%s", screen(m))
 	}
 	keysIn(m, "]")
-	if out := screen(m); m.pr.section != 1 || !strings.Contains(out, "lint status required") || strings.Contains(out, "Timeline") {
+	if out := screen(m); m.pr.section != 1 || !strings.Contains(out, "lint  status  required") || strings.Contains(out, "Timeline") {
 		t.Fatalf("] to Checks: section %d\n%s", m.pr.section, out)
 	}
 	keysIn(m, "[")

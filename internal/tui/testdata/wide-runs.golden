@@ -3,11 +3,11 @@ HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 ·  client
 ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
 runs, newest first                                                ╎ #1 · d954af8 · running                              
    Run                                             Status        ╎  no checks yet                                      
-▌⟳ #1 · d954af8                                    running        ╎                                                     
+▌ #1 · d954af8                                    running        ╎                                                     
 ▌  pull_request                                    1m12s…         ╎                                                     
- · #2 · abc1234                                    done        3h ╎                                                     
+  #2 · abc1234                                    done        3h ╎                                                     
    pull_request                                    0s             ╎                                                     
- ✔ main · fd387ab                                  passed     10m ╎                                                     
+  main · fd387ab                                  passed     10m ╎                                                     
    push · main                                     1m00s          ╎                                                     
                                                                   ╎                                                     
                                                                   ╎                                                     
