@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/go-github/v92/github"
 	"github.com/matthew-reed-holden/homerun/internal/api"
+	"github.com/matthew-reed-holden/homerun/internal/config"
 	"github.com/matthew-reed-holden/homerun/internal/tui"
 )
 
@@ -202,5 +203,21 @@ func TestUserPRsReturnsTabs(t *testing.T) {
 	_, cfg, _, err := userPRs(p)
 	if err != nil || cfg == nil || len(cfg.Tabs) != 1 || cfg.Tabs[0].Name != "Mine" {
 		t.Fatalf("cfg %+v err %v", cfg, err)
+	}
+}
+
+func TestAddRepoNeedsNoApp(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir()) // no engine to reload
+	p := filepath.Join(t.TempDir(), "config.yaml")
+	err := addRepo(context.Background(), p, "o/r")
+	if !errors.Is(err, tui.ErrNoChecks) || !strings.Contains(err.Error(), "no GitHub App configured") {
+		t.Fatalf("got %v", err)
+	}
+	cfg, _, lerr := config.LoadUser(p)
+	if lerr != nil {
+		t.Fatal(lerr)
+	}
+	if _, ok := cfg.Repos["o/r"]; !ok {
+		t.Fatalf("not registered: %+v", cfg)
 	}
 }

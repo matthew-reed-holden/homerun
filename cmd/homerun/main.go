@@ -233,11 +233,14 @@ func cmdRepoAdd(args []string) error {
 		return errors.New("usage: homerun repo add [--config F] OWNER/NAME (flags go before the repo)")
 	}
 	name := fs.Arg(0)
-	reload, err := addRepoReload(context.Background(), *cfgPath, name)
+	reload, note, err := addRepoReload(context.Background(), *cfgPath, name)
 	if err != nil {
 		return err
 	}
 	fmt.Printf("Added %s.\n", name)
+	if note != nil {
+		fmt.Printf("homerun cannot run checks on %s yet: %v\n", name, note)
+	}
 	switch {
 	case reload == nil:
 		fmt.Println("The daemon reloaded its config.")
@@ -250,28 +253,32 @@ func cmdRepoAdd(args []string) error {
 	return nil
 }
 
-// addRepo checks the App can see name, registers it, and asks a running engine
-// to reload. A reload that fails is not an error: the repo is registered.
+// addRepo registers name and asks a running engine to reload. Registering
+// needs no App: PRs come from the user's token. When the App cannot run checks
+// there, the repo is still added and the error wraps tui.ErrNoChecks.
 func addRepo(ctx context.Context, cfgPath, name string) error {
-	_, err := addRepoReload(ctx, cfgPath, name)
+	_, note, err := addRepoReload(ctx, cfgPath, name)
+	if err == nil && note != nil {
+		err = fmt.Errorf("%w: %w", tui.ErrNoChecks, note)
+	}
 	return err
 }
 
-func addRepoReload(ctx context.Context, cfgPath, name string) (reload error, err error) {
+// addRepoReload's reload is a failed engine reload and note says why the App
+// cannot run checks on name; neither undoes the registration.
+func addRepoReload(ctx context.Context, cfgPath, name string) (reload, note, err error) {
 	if !config.ValidRepo(name) {
-		return nil, fmt.Errorf("%q is not a valid OWNER/NAME", name)
-	}
-	_, client, err := loadClient(ctx, cfgPath, true)
-	if err != nil {
-		return nil, err
-	}
-	if err := checkInstalled(ctx, client, name); err != nil {
-		return nil, err
+		return nil, nil, fmt.Errorf("%q is not a valid OWNER/NAME", name)
 	}
 	if err := config.AddRepo(cfgPath, name); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return api.NewClient(api.SocketPath()).Reload(ctx), nil
+	reload = api.NewClient(api.SocketPath()).Reload(ctx)
+	_, client, err := loadClient(ctx, cfgPath, true)
+	if err != nil {
+		return reload, err, nil
+	}
+	return reload, checkInstalled(ctx, client, name), nil
 }
 
 type repoAPI interface {
@@ -302,7 +309,7 @@ func checkInstalled(ctx context.Context, c repoAPI, name string) error {
 	if u, uerr := c.AppURL(ctx); uerr == nil && u != "" {
 		return &notInstalledError{Repo: name, InstallURL: u + "/installations/new"}
 	}
-	return fmt.Errorf("%w\nInstall the homerun App on %s, then try again", err, name)
+	return fmt.Errorf("%w\nInstall the homerun App on %s", err, name)
 }
 
 func cmdRun(args []string) error {

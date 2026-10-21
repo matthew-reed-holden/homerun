@@ -97,15 +97,23 @@ func quitDialog(n int) *dialog {
 // InstallLinker is an AddRepo error that knows the App's install page.
 type InstallLinker interface{ InstallLink() string }
 
+// ErrNoChecks marks an AddRepo error returned after the repo was registered:
+// its PRs show, but the App cannot run checks there yet.
+var ErrNoChecks = errors.New("checks are off")
+
 // addFailedDialog offers the App's install page when the error carries one;
 // a URL in the error's text (an API request, say) is never offered.
 func addFailedDialog(name string, err error) *dialog {
 	msg := termsafe.Line(err.Error())
 	d := &dialog{title: "Could not add " + termsafe.Line(name), body: msg + "\n\nany key closes"}
+	if errors.Is(err, ErrNoChecks) {
+		d.title = "Added " + termsafe.Line(name)
+		d.body = "Its PRs show; " + msg + "\n\nany key closes"
+	}
 	var il InstallLinker
 	if errors.As(err, &il) && httpURL(il.InstallLink()) {
 		d.open = il.InstallLink()
-		d.body = msg + "\n\n[o] open · any other key closes"
+		d.body = strings.TrimSuffix(d.body, "any key closes") + "[o] open · any other key closes"
 	}
 	return d
 }

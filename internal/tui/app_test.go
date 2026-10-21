@@ -1019,3 +1019,14 @@ func TestNeverConnectedHostingSaysStarting(t *testing.T) {
 		t.Fatalf("screen:\n%s", s)
 	}
 }
+
+func TestAddedWithoutAppStillAdds(t *testing.T) {
+	const link = "https://github.com/apps/homerun/installations/new"
+	m := launchModel(t, "o/new", func(context.Context, string) error {
+		return fmt.Errorf("%w: %w", ErrNoChecks, installErr{link})
+	}, "o/a")
+	m.Update(keysIn(m, "down", "enter")())
+	if m.dlg == nil || !strings.HasPrefix(m.dlg.title, "Added o/new") || !strings.Contains(m.dlg.body, "PRs show") || m.dlg.open != link {
+		t.Fatalf("%+v", m.dlg)
+	}
+}

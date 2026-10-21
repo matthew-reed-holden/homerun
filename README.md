@@ -23,7 +23,7 @@ Or download a release tarball (linux amd64 or arm64) and put `homerun` on your `
 
 1. `homerun setup [--org ORG] [--public] [--key-file PATH]` creates the GitHub App. A private App can only be installed on the account that owns it, so pass `--org ORG` to create it under an organization, or `--public` to install one App across several owners. By default the private key is printed once, for a secret manager; `--key-file PATH` writes it to a mode-600 file instead.
 2. Install the App on your repos.
-3. `homerun repo add OWNER/NAME`
+3. `homerun repo add OWNER/NAME`. Adding needs no App: PRs show through your own token, and checks start once the App is installed.
 4. `homerun daemon --install` writes and enables a systemd user unit.
 5. `homerun` opens the TUI.
 6. In branch protection, require `homerun / <workflow> / <job>`.
