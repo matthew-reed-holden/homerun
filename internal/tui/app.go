@@ -455,6 +455,9 @@ func (m *model) addRepo(name string) tea.Cmd {
 
 func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 	m.fltErr = ""
+	if k.String() == "ctrl+c" && m.dlg == nil { // the picker and filter inputs would swallow it
+		m.pk, m.flt = nil, nil
+	}
 	if m.dlg != nil {
 		d := m.dlg
 		if d.onKey != nil && d.onKey(k) {

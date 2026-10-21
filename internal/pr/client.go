@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -133,9 +134,11 @@ func (c *Client) query(ctx context.Context, q string, vars map[string]any, out a
 		return err
 	}
 	// A missing PR alias comes back as null data plus a NOT_FOUND error; that is not a failure.
+	// Nor is a token that may not read Actions: those check source fields just decode as null.
 	fatal := errs[:0:0]
 	for _, e := range errs {
-		if e.Type != "NOT_FOUND" || len(e.Path) == 1 { // path ["repository"] is the repo itself, not a PR alias
+		missingPR := e.Type == "NOT_FOUND" && len(e.Path) != 1 // path ["repository"] is the repo itself, not a PR alias
+		if !missingPR && !(e.Type == "FORBIDDEN" && slices.Contains(e.Path, any("checkSuite"))) {
 			fatal = append(fatal, e)
 		}
 	}
@@ -171,12 +174,14 @@ commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100){nodes{__typen
 ... on CheckRun{name status conclusion detailsUrl isRequired(pullRequestNumber: %[1]d) checkSuite{app{slug} workflowRun{workflow{resourcePath}}}}
 ... on StatusContext{context state targetUrl}}}}}}}`
 
-// searchFields is fields without isRequired, which needs a PR number a search does not have.
-var searchFields = strings.Replace(fields, " isRequired(pullRequestNumber: %[1]d)", "", 1)
+// searchFields is fields without isRequired, which needs a PR number a search
+// does not have, plus the repo, since a repo: qualifier in the query widens it.
+var searchFields = "repository{nameWithOwner} " + strings.Replace(fields, " isRequired(pullRequestNumber: %[1]d)", "", 1)
 
 const searchQuery = `query($q:String!){search(type:ISSUE,query:$q,first:50){issueCount nodes{__typename ... on PullRequest{%s}}}}`
 
 type gqlPR struct {
+	Repository       struct{ NameWithOwner string }
 	Number           int
 	UpdatedAt        time.Time
 	State            string
@@ -220,7 +225,7 @@ type gqlPR struct {
 }
 
 func (p gqlPR) summary() Summary {
-	s := Summary{Number: p.Number, Title: p.Title, Author: p.Author.Login, Body: p.Body,
+	s := Summary{Number: p.Number, Repo: p.Repository.NameWithOwner, Title: p.Title, Author: p.Author.Login, Body: p.Body,
 		HeadRef: p.HeadRefName, BaseRef: p.BaseRefName, HeadSHA: p.HeadRefOid, IsDraft: p.IsDraft,
 		Mergeable: p.Mergeable, MergeState: p.MergeStateStatus, ReviewDecision: p.ReviewDecision,
 		Additions: p.Additions, Deletions: p.Deletions, ChangedFiles: p.ChangedFiles, Comments: p.Comments.TotalCount, Updated: p.UpdatedAt}
@@ -267,7 +272,8 @@ func workflowPath(resourcePath string) string {
 }
 
 // Search runs "is:pr repo:<repo> <query>" and returns the first 50 matches.
-// The query travels as a GraphQL variable, never in the query text.
+// The query travels as a GraphQL variable, never in the query text. GitHub ORs
+// a second repo: qualifier with ours, so PRs from other repos are dropped.
 func (c *Client) Search(ctx context.Context, repo, query string) (SearchResult, error) {
 	var data struct {
 		Search struct {
@@ -284,7 +290,7 @@ func (c *Client) Search(ctx context.Context, repo, query string) (SearchResult, 
 	}
 	res := SearchResult{Total: data.Search.IssueCount}
 	for _, n := range data.Search.Nodes {
-		if n.Typename == "PullRequest" {
+		if n.Typename == "PullRequest" && strings.EqualFold(n.Repository.NameWithOwner, repo) {
 			res.PRs = append(res.PRs, n.summary())
 		}
 	}

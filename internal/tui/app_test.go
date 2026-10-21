@@ -128,6 +128,8 @@ func press(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyDown}
 	case "ctrl+u":
 		return tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl}
+	case "ctrl+c":
+		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
 	}
 	r := []rune(s)[0]
 	return tea.KeyPressMsg{Code: r, Text: s}
@@ -342,6 +344,28 @@ func TestRefreshKeepsLogOpen(t *testing.T) {
 	m.Update(stateMsg{&st})
 	if m.log == nil {
 		t.Fatal("refresh closed the log")
+	}
+}
+
+func TestCtrlCQuitsFromPickerAndFilter(t *testing.T) {
+	m := launchModel(t, "o/new", func(context.Context, string) error { return nil }, "o/a")
+	if m.pk == nil {
+		t.Fatal("picker did not open on launch")
+	}
+	if cmd := keysIn(m, "ctrl+c"); cmd == nil {
+		t.Fatal("ctrl+c in the launch picker did nothing")
+	} else if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatal("ctrl+c in the launch picker is not quit")
+	}
+	m, _ = newTestModel(t)
+	keysIn(m, "/")
+	if m.flt == nil {
+		t.Fatal("/ did not open the filter")
+	}
+	if cmd := keysIn(m, "ctrl+c"); cmd == nil {
+		t.Fatal("ctrl+c in the filter did nothing")
+	} else if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatal("ctrl+c in the filter is not quit")
 	}
 }
 

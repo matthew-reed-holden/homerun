@@ -284,7 +284,8 @@ func (m *model) prPreviewView(w, h int) string {
 
 // checksHead is what the Checks tab shows above the tree: the doubled and
 // left-to-Actions lines with a rule under them, judged by the detail's checks
-// or, before it lands, the search's; nil when there are none.
+// or, before it lands, the search's, led by why homerun has not run a PR it
+// has no item for; nil when there are none.
 func (m *model) checksHead(inner int) []string {
 	var gh []pr.Check
 	if m.pr.d != nil {
@@ -293,7 +294,11 @@ func (m *model) checksHead(inner int) []string {
 		gh = s.Checks
 	}
 	_, it := m.prItem()
-	out := actionsLines(m.rowDoubled(it, gh), m.repo(), inner)
+	var out []string
+	if it == nil {
+		out = append(out, dim.Render(truncate("· not run by homerun: its branch has no workflow homerun handles, or the PR was opened before homerun watched it.", inner)))
+	}
+	out = append(out, actionsLines(m.rowDoubled(it, gh), m.repo(), inner)...)
 	if len(out) == 0 {
 		return nil
 	}

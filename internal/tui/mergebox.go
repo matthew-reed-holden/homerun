@@ -255,9 +255,9 @@ func (m *model) rowMutate(merge bool) tea.Cmd {
 }
 
 // onRowDetail opens the dialog unless the user has moved on since: another
-// row or repo, a dialog or into the preview.
+// row or repo, a dialog, the picker or filter bar, or into the preview.
 func (m *model) onRowDetail(msg rowDetailMsg) {
-	if m.pr != nil || m.dlg != nil || m.focus != onTable || m.repo().Name != msg.repo {
+	if m.pr != nil || m.dlg != nil || m.pk != nil || m.flt != nil || m.focus != onTable || m.repo().Name != msg.repo {
 		return
 	}
 	if s, ok := m.selPR(); !ok || s.Number != msg.n {

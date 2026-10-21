@@ -28,7 +28,7 @@ func TestSearchParsesChecks(t *testing.T) {
 	var gotAuth, gotPath string
 	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
 		gotAuth, gotPath = r.Header.Get("Authorization"), r.Method+" "+r.URL.Path
-		io.WriteString(w, `{"data":{"search":{"issueCount":1,"nodes":[{"__typename":"PullRequest","number":14,"state":"OPEN","title":"t","author":{"login":"a"},
+		io.WriteString(w, `{"data":{"search":{"issueCount":1,"nodes":[{"__typename":"PullRequest","repository":{"nameWithOwner":"O/R"},"number":14,"state":"OPEN","title":"t","author":{"login":"a"},
 "headRefOid":"abc","commits":{"nodes":[{"commit":{"statusCheckRollup":{"contexts":{"nodes":[
 {"__typename":"CheckRun","name":"lint","status":"COMPLETED","conclusion":"FAILURE","detailsUrl":"https://x/1","isRequired":true},
 {"__typename":"StatusContext","context":"ci/x","state":"PENDING","targetUrl":""}]}}}}]}}]}}}`)
@@ -304,7 +304,7 @@ func TestMutations(t *testing.T) {
 	}
 }
 
-const searchNode = `{"__typename":"PullRequest","number":41,"state":"OPEN","title":"t","updatedAt":"2026-10-20T10:00:00Z","author":{"login":"a"},
+const searchNode = `{"__typename":"PullRequest","repository":{"nameWithOwner":"o/r"},"number":41,"state":"OPEN","title":"t","updatedAt":"2026-10-20T10:00:00Z","author":{"login":"a"},
 "commits":{"nodes":[{"commit":{"statusCheckRollup":{"contexts":{"nodes":[
 {"__typename":"CheckRun","name":"build","status":"COMPLETED","conclusion":"SUCCESS","detailsUrl":"https://x/1",
 "checkSuite":{"app":{"slug":"github-actions"},"workflowRun":{"workflow":{"resourcePath":"/o/r/actions/workflows/ci.yml"}}}},
@@ -416,5 +416,61 @@ func TestWorkflows(t *testing.T) {
 		if _, err := c.Workflows(context.Background(), "o/r"); !errors.Is(err, ErrNoAccess) {
 			t.Errorf("%d: err %v", code, err)
 		}
+	}
+}
+
+func TestSearchDropsOtherRepos(t *testing.T) {
+	other := strings.Replace(strings.Replace(searchNode, `"o/r"`, `"x/y"`, 1), `"number":41`, `"number":42`, 1)
+	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, `{"data":{"search":{"issueCount":2,"nodes":[`+other+`,`+searchNode+`]}}}`)
+	})
+	res, err := c.Search(context.Background(), "O/R", "repo:x/y")
+	if err != nil || len(res.PRs) != 1 || res.PRs[0].Number != 41 || res.PRs[0].Repo != "o/r" {
+		t.Fatalf("res %+v err %v", res, err)
+	}
+}
+
+// forbiddenCheckSuite is the error GitHub adds for a token that may not read Actions.
+const forbiddenCheckSuite = `{"type":"FORBIDDEN","message":"Resource not accessible by integration",
+"path":["x","commits","nodes",0,"commit","statusCheckRollup","contexts","nodes",0,"checkSuite","workflowRun"]}`
+
+const nullSuiteNode = `{"__typename":"PullRequest","repository":{"nameWithOwner":"o/r"},"number":41,"commits":{"nodes":[{"commit":{"statusCheckRollup":{"contexts":{"nodes":[
+{"__typename":"CheckRun","name":"build","status":"COMPLETED","conclusion":"SUCCESS","checkSuite":{"app":null,"workflowRun":null}}]}}}}]}}`
+
+func TestCheckSuiteForbiddenIsNotFatal(t *testing.T) {
+	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, `{"data":{"search":{"issueCount":1,"nodes":[`+nullSuiteNode+`]}},"errors":[`+forbiddenCheckSuite+`]}`)
+	})
+	res, err := c.Search(context.Background(), "o/r", "")
+	if err != nil || len(res.PRs) != 1 || len(res.PRs[0].Checks) != 1 {
+		t.Fatalf("search: res %+v err %v", res, err)
+	}
+	if ck := res.PRs[0].Checks[0]; ck.App != "" || ck.Workflow != "" || ck.Conclusion != "success" {
+		t.Fatalf("search check %+v", ck)
+	}
+
+	c = newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			io.WriteString(w, `{"behind_by":0}`)
+			return
+		}
+		page := detailPage(``, `{"hasNextPage":false,"endCursor":""}`)
+		page = strings.Replace(page, `"headRefOid":"sha1",`, `"headRefOid":"sha1","commits":{"nodes":[{"commit":{"statusCheckRollup":{"contexts":{"nodes":[
+{"__typename":"CheckRun","name":"build","status":"COMPLETED","conclusion":"SUCCESS","checkSuite":{"app":null,"workflowRun":null}}]}}}}]},`, 1)
+		io.WriteString(w, strings.TrimSuffix(page, "}")+`,"errors":[`+forbiddenCheckSuite+`]}`)
+	})
+	d, err := c.Detail(context.Background(), "o/r", 7)
+	if err != nil || len(d.Checks) != 1 || d.Checks[0].App != "" || d.Checks[0].Workflow != "" {
+		t.Fatalf("detail: %+v err %v", d, err)
+	}
+}
+
+func TestForbiddenElsewhereIsFatal(t *testing.T) {
+	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, `{"data":{"search":{"issueCount":1,"nodes":[`+searchNode+`]}},"errors":[
+{"type":"FORBIDDEN","message":"no reviews for you","path":["search","nodes",0,"reviewDecision"]}]}`)
+	})
+	if _, err := c.Search(context.Background(), "o/r", ""); err == nil || !strings.Contains(err.Error(), "no reviews for you") {
+		t.Fatalf("err %v", err)
 	}
 }

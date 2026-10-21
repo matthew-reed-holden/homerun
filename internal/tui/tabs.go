@@ -424,7 +424,8 @@ func sourceCounts(cs []api.Check) string {
 func doubled(r api.Repo, flows []pr.Workflow, seen []pr.Check) (paths []string, known bool) {
 	if flows != nil {
 		for _, f := range flows {
-			if f.State == "active" && !slices.Contains(r.Unhandled, f.Path) {
+			// GitHub's own workflows (dynamic/…) are never the engine's to handle.
+			if f.State == "active" && strings.HasPrefix(f.Path, ".github/workflows/") && !slices.Contains(r.Unhandled, f.Path) {
 				paths = append(paths, f.Path)
 			}
 		}

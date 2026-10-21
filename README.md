@@ -33,18 +33,21 @@ To run a commit by hand: `homerun run [--pr N] OWNER/NAME [BRANCH]`. It exits no
 
 ### TUI
 
-`homerun` opens a lazygit-style view: **1** repos, **2** branches and PRs, **3** recent runs, and a main pane that follows the selection.
+`homerun` opens a row of tabs for the picked repo: the PR search tabs, then **Branches** and **Runs**. Each tab is a table with a preview beside it that follows the selection. A PR's preview has two tabs, **Overview** and **Checks**. PR tabs use your own GitHub token (`gh auth token`, or `user_token` in the user config); without one, only Branches and Runs work.
 
 | Keys | |
 |---|---|
-| `1` `2` `3`, `tab`/`shift+tab` | focus a panel / cycle panes |
+| `[`/`]`, `1`–`9` | previous/next tab, jump to a tab |
+| `/` | filter the PR tab with a GitHub search query (`enter` apply, `esc` keep the old one, `ctrl+u` clear) |
+| `R` | pick a repo (fuzzy search) |
 | `j`/`k`, `g`/`G`, mouse | move, top/bottom, click and scroll |
-| `l`/`enter`, `h` | into the main pane / back to the panels |
+| `l`/`enter`, `h`/`esc`, `tab` | into the preview / back to the table / switch between them |
+| in a PR's preview: `[`/`]` | Overview or Checks |
+| `m` `u`, in a PR's preview `c` | merge, update the branch, comment |
 | `space` | fold or unfold a job |
 | `enter` on a job or step | open its log at that step |
 | in a log: `/` `n` `N` `e` `f` `+` `esc` | search, next/prev match, next failure, follow, zoom, back |
-| `r` `c` `o` `y` `ctrl+r` | rerun (forks ask first), cancel, open on GitHub, copy SHA, reload config |
-| `R` | pick a repo (fuzzy search) |
+| `r` `x` `o` `y` `ctrl+r` | rerun (forks ask first), cancel, open on GitHub, copy SHA, reload config |
 | `?` `q` | help, quit |
 
 ## When this machine is off
@@ -70,6 +73,15 @@ repos:
       GCP_SA_KEY: {cmd: "op read op://ci/gcp-key"}   # preferred
       NPM_TOKEN:  {env: NPM_TOKEN}                   # from the daemon's environment
       DB_PASS:    hunter2                            # allowed, with a warning
+```
+
+`tabs:` (optional) replaces the PR search tabs: at most 5 entries, each with a `name` and a `query`. homerun adds `is:pr repo:<picked repo>` to the query. A bad entry fails config loading. Without the key you get these:
+
+```yaml
+tabs:
+  - {name: My PRs, query: "is:open author:@me"}
+  - {name: Review requested, query: "is:open review-requested:@me"}
+  - {name: All open, query: "is:open"}
 ```
 
 A secret takes one of three forms:

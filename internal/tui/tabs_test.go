@@ -364,6 +364,7 @@ func TestDoubledWorkflows(t *testing.T) {
 		{Path: ".github/workflows/ci.yml", State: "active"},
 		{Path: ".github/workflows/pages.yml", State: "active"},
 		{Path: ".github/workflows/old.yml", State: "disabled_manually"},
+		{Path: "dynamic/pages/pages-build-deployment", State: "active"}, // GitHub's own, never Unhandled
 	}
 	r := api.Repo{Name: "o/e2e", Unhandled: []string{".github/workflows/pages.yml"}, Items: fixture().Repos[0].Items}
 	if paths, known := doubled(r, flows, nil); !known || !slices.Equal(paths, []string{".github/workflows/ci.yml"}) {
@@ -469,7 +470,15 @@ func TestRowMutateOffGoroutineAndGuards(t *testing.T) {
 	if m.Update(msg); m.dlg != nil {
 		t.Fatal("opened while in the preview")
 	}
-	keysIn(m, "h")
+	keysIn(m, "h", "R") // the repo picker is open
+	if m.Update(msg); m.dlg != nil {
+		t.Fatal("opened under the repo picker")
+	}
+	keysIn(m, "esc", "/") // the filter bar is open
+	if m.Update(msg); m.dlg != nil {
+		t.Fatal("opened under the filter bar")
+	}
+	keysIn(m, "esc")
 	if m.Update(msg); m.dlg == nil || m.dlg.title != "Merge #1 into main?" {
 		t.Fatalf("dlg %v status %q", m.dlg, m.status)
 	}
@@ -697,6 +706,26 @@ func TestPRChecksShowActionsLines(t *testing.T) {
 	m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + 1 + len(m.checksHead(lay.pw-2)) + 2, Button: tea.MouseLeft})
 	if m.tree.cur != 1 {
 		t.Fatalf("cur %d", m.tree.cur)
+	}
+}
+
+func TestPRChecksSaysWhyNotRun(t *testing.T) {
+	recordDetailTicks(t)
+	d := detailFixture()
+	d.Number = 2
+	st := fixture()
+	st.Repos[0].Items = st.Repos[0].Items[:2] // the daemon has no item for #2
+	m := searchModelState(t, &pr.Fake{Results: e2eResults(e2eResult()), Details: map[string]*pr.Detail{"o/e2e#1": detailFixture(), "o/e2e#2": d}}, st)
+	const why = "· not run by homerun: its branch has no workflow"
+	run(m, keysIn(m, "enter"))
+	if keysIn(m, "]"); strings.Contains(screen(m), why) {
+		t.Fatalf("#1 runs here, yet:\n%s", screen(m))
+	}
+	keysIn(m, "esc", "j")
+	run(m, keysIn(m, "enter"))
+	keysIn(m, "]")
+	if out := screen(m); !strings.Contains(out, why) {
+		t.Fatalf("#2 Checks lacks %q:\n%s", why, out)
 	}
 }
 

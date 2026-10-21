@@ -17,6 +17,7 @@ type Check struct {
 
 type Summary struct {
 	Number                                         int
+	Repo                                           string // owner/name; set by Search
 	Title, Author, Body, HeadRef, BaseRef, HeadSHA string
 	IsDraft                                        bool
 	Mergeable, MergeState, ReviewDecision          string // GitHub enums as returned
