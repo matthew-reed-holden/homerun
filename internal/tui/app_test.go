@@ -289,7 +289,7 @@ func TestStackedBelow100(t *testing.T) {
 	lines := strings.Split(screen(m), "\n")
 	lay := m.layout()
 	if !strings.HasPrefix(lines[lay.top], "is:open author:@me") || !strings.HasPrefix(lines[lay.py-1], "╌╌╌") ||
-		!strings.HasPrefix(lines[lay.py], "#1 e2e PR") || lay.th != 9 || lay.ph != 15 || !strings.HasSuffix(lines[29], "? help") {
+		!strings.HasPrefix(lines[lay.py], "#1 e2e PR") || lay.th != 8 || lay.ph != 16 || !strings.HasSuffix(lines[29], "? help") {
 		t.Fatalf("layout %+v:\n%s", lay, strings.Join(lines, "\n"))
 	}
 }

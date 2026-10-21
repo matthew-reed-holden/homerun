@@ -153,3 +153,21 @@ func TestDugoutKeepsHelp(t *testing.T) {
 		t.Fatalf("position outside a PR row: %q", d)
 	}
 }
+
+// Stacked at 90×30 the preview keeps every line part 1 showed, down to the
+// failing required check; 80×24 keeps its 6-line table.
+func TestStackedPreviewKeepsPart1Lines(t *testing.T) {
+	m, _ := newTestModel(t)
+	m.Update(searchMsg{repo: "o/e2e", tab: 0, query: "is:open author:@me", res: goldenResult()})
+	m.Update(tea.WindowSizeMsg{Width: 90, Height: 30})
+	if out := screen(m); !strings.Contains(out, "✘ ci/gh actions required") {
+		t.Fatalf("failing required check below the fold:\n%s", out)
+	}
+	if lay := m.layout(); lay.ph-1 < 15 {
+		t.Fatalf("preview body %d lines, part 1 had 15", lay.ph-1)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	if lay := m.layout(); lay.th != 6 || lay.ph != 12 {
+		t.Fatalf("80×24 layout %+v", lay)
+	}
+}

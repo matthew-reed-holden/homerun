@@ -759,7 +759,9 @@ func (m *model) layout() layout {
 		l.tw, l.th = m.w*11/20, bodyH
 		l.px, l.py, l.pw, l.ph = l.tw+2, l.top, m.w-l.tw-2, bodyH
 	default:
-		l.tw, l.th = m.w, max(5, bodyH*2/5-1) // the foul line between comes out of the table's share
+		// Part 1's share (2/5 of a body two lines taller) less the two lines
+		// of chrome it lacked, so the preview keeps every line it had.
+		l.tw, l.th = m.w, max(5, (bodyH+2)*2/5-2)
 		l.py, l.pw, l.ph = l.top+l.th+1, m.w, bodyH-l.th-1
 	}
 	return l
