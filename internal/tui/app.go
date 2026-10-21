@@ -3,6 +3,7 @@ package tui
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -61,8 +62,13 @@ type Options struct {
 	AddRepo func(ctx context.Context, name string) error
 	Quit    <-chan struct{} // closed on a signal that must quit at once (SIGHUP)
 	PRs     pr.API          // nil: PR pages off
-	PRsErr  error           // why they are off
+	PRsErr  error           // why they are off; wraps ErrConfig for a broken config
+	Warns   []string        // config warnings, listed in help
+	Log     string          // where the engine logs while the TUI runs
 }
+
+// ErrConfig marks a PRsErr caused by the config file, not the token.
+var ErrConfig = errors.New("config error")
 
 type model struct {
 	c   *api.Client
@@ -107,8 +113,28 @@ type model struct {
 }
 
 func newModel(c *api.Client, now func() time.Time, o Options) *model {
-	return &model{c: c, now: now, o: o, hostErr: o.HostErr, prDelay: prPoll, w: 120, h: 40, focus: paneItems, left: paneItems, help: help.New(),
+	m := &model{c: c, now: now, o: o, hostErr: o.HostErr, prDelay: prPoll, w: 120, h: 40, focus: paneItems, left: paneItems, help: help.New(),
 		repos: list{n: 1, title: "Repos"}, items: list{n: 2, title: "Branches & PRs"}, runs: list{n: 3, title: "Runs"}}
+	if n := len(o.Warns); n > 0 {
+		m.say(fmt.Sprintf("config: %d warning(s), press ? to see them", n))
+	}
+	return m
+}
+
+// notes are what help shows below the keys: why PR pages are off in full,
+// config warnings, and where the log is.
+func (m *model) notes() []string {
+	var out []string
+	if m.o.PRs == nil && m.o.PRsErr != nil {
+		out = append(out, "PR pages off: "+termsafe.Text(m.o.PRsErr.Error()))
+	}
+	for _, w := range m.o.Warns {
+		out = append(out, "warning: "+termsafe.Line(w))
+	}
+	if m.o.Log != "" {
+		out = append(out, "log: "+termsafe.Line(m.o.Log))
+	}
+	return out
 }
 
 func Run(c *api.Client, o Options) error {
@@ -481,7 +507,7 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 		m.closeLog()
 		return tea.Quit
 	case key.Matches(k, keys.Help):
-		m.dlg = helpDialog()
+		m.dlg = helpDialog(m.notes()...)
 	case key.Matches(k, keys.Panel1):
 		m.focusLeft(paneRepos)
 	case key.Matches(k, keys.Panel2):

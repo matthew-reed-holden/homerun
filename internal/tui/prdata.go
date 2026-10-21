@@ -61,6 +61,9 @@ func (m *model) prOff() string {
 	if m.o.PRs != nil || m.o.PRsErr == nil {
 		return ""
 	}
+	if errors.Is(m.o.PRsErr, ErrConfig) {
+		return "PR pages off: config error. Press ? for details."
+	}
 	reason, _, _ := strings.Cut(m.o.PRsErr.Error(), "\n")
 	// ponytail: the reason is cut to 20 columns so the fix fits an 80-column bar.
 	return "PR pages off: " + truncate(termsafe.Line(reason), 20) + ". Run gh auth login or set user_token."

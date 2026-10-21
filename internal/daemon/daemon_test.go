@@ -790,3 +790,45 @@ func TestStartBaselinesBranchesMovedWhileStopped(t *testing.T) {
 		t.Fatalf("push after the first poll must be claimed, got %d checks", len(cs))
 	}
 }
+
+// A call already waiting out gh.Retry's backoff when a foreground close begins
+// gives up at once with its own error, and later calls make one attempt.
+func TestCloseCutsRetryBackoffShort(t *testing.T) {
+	d := &Daemon{closed: make(chan struct{})}
+	down := errors.New("dial tcp: connection refused")
+	var mu sync.Mutex
+	calls := 0
+	first := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- d.ghRetry(context.Background(), func() error {
+			mu.Lock()
+			calls++
+			if calls == 1 {
+				close(first)
+			}
+			mu.Unlock()
+			return down
+		})
+	}()
+	<-first
+	d.closeForeground()
+	select {
+	case err := <-done:
+		if !errors.Is(err, down) {
+			t.Fatalf("err %v, want the call's own error", err)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("backoff not cut short by close")
+	}
+	mu.Lock()
+	n := calls
+	mu.Unlock()
+	if n != 1 {
+		t.Fatalf("%d attempts before close returned", n)
+	}
+	start := time.Now()
+	if err := d.ghRetry(context.Background(), func() error { return down }); !errors.Is(err, down) || time.Since(start) > 500*time.Millisecond {
+		t.Fatalf("after close: %v in %v", err, time.Since(start))
+	}
+}

@@ -51,7 +51,8 @@ type Daemon struct {
 	stop   context.CancelFunc
 	lock   *os.File                                  // flocked for the daemon's lifetime
 	wg     sync.WaitGroup                            // scheduled runs, so shutdown can wait for them
-	retry  func(context.Context, func() error) error // gh.Retry; tests replace its backoff
+	retry  func(context.Context, func() error) error // d.ghRetry; tests replace its backoff
+	closed chan struct{}                             // closed when a foreground close begins
 	kick   chan struct{}                             // buffered 1: a poll requested before the next tick
 
 	mu        sync.Mutex
@@ -97,8 +98,8 @@ func New(o Options) (*Daemon, error) {
 		return nil, err
 	}
 	base, stop := context.WithCancel(context.Background())
-	return &Daemon{
-		opts: o, store: st, state: state, cfg: o.Config, base: base, stop: stop, lock: lock, retry: gh.Retry,
+	d := &Daemon{
+		opts: o, store: st, state: state, cfg: o.Config, base: base, stop: stop, lock: lock, closed: make(chan struct{}),
 		kick:      make(chan struct{}, 1),
 		runner:    &runner.Runner{Act: o.Act, Platforms: o.Config.Platforms, CacheRoot: filepath.Join(o.StateDir, "act-cache")},
 		sched:     sched.New(o.Config.MaxParallel),
@@ -110,7 +111,29 @@ func New(o Options) (*Daemon, error) {
 		repoLocks: map[string]*sync.Mutex{},
 		sendLocks: map[string]*sync.Mutex{},
 		polled:    map[string]bool{},
-	}, nil
+	}
+	d.retry = d.ghRetry
+	return d, nil
+}
+
+// ghRetry is gh.Retry whose backoff a foreground close cuts short, so a call
+// already waiting to retry when quit begins gives up with its last error.
+func (d *Daemon) ghRetry(ctx context.Context, fn func() error) error {
+	wctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		select {
+		case <-d.closed:
+			cancel()
+		case <-wctx.Done():
+		}
+	}()
+	var last error
+	err := gh.Retry(wctx, func() error { last = fn(); return last })
+	if err != nil && last != nil && ctx.Err() == nil {
+		return last
+	}
+	return err
 }
 
 // lockState makes sure only one engine uses a state directory: two would
@@ -208,6 +231,9 @@ func (d *Daemon) close() {
 // fails stays Pending for the next engine to send.
 func (d *Daemon) closeForeground() {
 	d.mu.Lock()
+	if !d.closing {
+		close(d.closed)
+	}
 	d.closing = true
 	d.retry = func(_ context.Context, fn func() error) error { return fn() }
 	var ids []string
@@ -573,7 +599,10 @@ func (d *Daemon) start(ctx context.Context, ev event.Event, handover func(tracke
 	cctx := context.WithoutCancel(ctx)
 	for i, c := range run.Checks {
 		var id int64
-		err := gh.Retry(cctx, func() (err error) {
+		d.mu.Lock()
+		retry := d.retry
+		d.mu.Unlock()
+		err := retry(cctx, func() (err error) {
 			id, err = d.opts.Reporter.CreateCheck(cctx, ev.Repo, ev.SHA, c.Name, ev.Key())
 			return err
 		})
@@ -714,7 +743,10 @@ func (d *Daemon) failSetup(ctx context.Context, ev event.Event, cause error) err
 // update retry separately so a failed update cannot create a second check.
 func (d *Daemon) singleCheck(ctx context.Context, ev event.Event, conclusion, title, summary string) error {
 	var id int64
-	err := gh.Retry(ctx, func() (err error) {
+	d.mu.Lock()
+	retry := d.retry
+	d.mu.Unlock()
+	err := retry(ctx, func() (err error) {
 		id, err = d.opts.Reporter.CreateCheck(ctx, ev.Repo, ev.SHA, "homerun", ev.Key())
 		return err
 	})
@@ -725,7 +757,7 @@ func (d *Daemon) singleCheck(ctx context.Context, ev event.Event, conclusion, ti
 	uctx := context.WithoutCancel(ctx)
 	u := gh.Update{Name: "homerun", Status: "completed", Conclusion: conclusion, Title: title, Summary: summary}
 	d.mu.Lock()
-	retry := d.retry
+	retry = d.retry
 	d.mu.Unlock()
 	err = retry(uctx, func() error { return d.opts.Reporter.UpdateCheck(uctx, ev.Repo, id, u) })
 	if err != nil {

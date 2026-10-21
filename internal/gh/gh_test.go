@@ -320,3 +320,16 @@ func TestTimeoutTransportBodyReadableAfterRoundTrip(t *testing.T) {
 		t.Fatalf("read %d bytes, err %v; want %d", len(b), err, len(want))
 	}
 }
+
+func TestInstallErrSaysNotInstalledOnlyOn404And403(t *testing.T) {
+	er := func(code int) error { return &github.ErrorResponse{Response: &http.Response{StatusCode: code}} }
+	for _, tc := range []struct {
+		err  error
+		want bool
+	}{{er(404), true}, {er(403), true}, {er(500), false}, {er(429), false}, {errors.New("dial tcp: connection refused"), false}} {
+		err := installErr("o/r", tc.err)
+		if got := strings.Contains(err.Error(), "not installed"); got != tc.want || !errors.Is(err, tc.err) {
+			t.Errorf("%v: %v", tc.err, err)
+		}
+	}
+}

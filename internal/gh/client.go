@@ -71,7 +71,7 @@ func (c *Client) repo(ctx context.Context, repo string) (*installation, error) {
 	}
 	inst, _, err := app.Apps.GetRepositoryInstallation(ctx, owner, name)
 	if err != nil {
-		return nil, fmt.Errorf("the homerun GitHub App is not installed on %s (or cannot see it): %w", repo, err)
+		return nil, installErr(repo, err)
 	}
 	tr := ghinstallation.NewFromAppsTransport(c.apps, inst.GetID())
 	gc, err := github.NewClient(github.WithTransport(tr))
@@ -81,6 +81,15 @@ func (c *Client) repo(ctx context.Context, repo string) (*installation, error) {
 	in := &installation{tr: tr, gh: gc}
 	c.inst[repo] = in
 	return in, nil
+}
+
+// installErr says the App is not installed only when GitHub said so (404/403);
+// a network, rate-limit or 5xx error is not a reason to install anything.
+func installErr(repo string, err error) error {
+	if NoAccess(err) {
+		return fmt.Errorf("the homerun GitHub App is not installed on %s (or cannot see it): %w", repo, err)
+	}
+	return fmt.Errorf("looking up the homerun App installation on %s: %w", repo, err)
 }
 
 func (c *Client) DefaultBranch(ctx context.Context, repo string) (string, error) {

@@ -111,7 +111,7 @@ func cmdDaemon(args []string) error {
 	if *install {
 		return setup.InstallSystemd(*cfgPath, os.Stdout)
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
 	cfg, client, err := loadClient(ctx, *cfgPath, false)
 	if err != nil {
@@ -152,7 +152,8 @@ func cmdTUI() error {
 	if err := os.MkdirAll(stateDir(), 0o700); err != nil {
 		return err
 	}
-	logf, err := os.OpenFile(filepath.Join(stateDir(), "homerun.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	logPath := filepath.Join(stateDir(), "homerun.log")
+	logf, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return err
 	}
@@ -169,11 +170,11 @@ func cmdTUI() error {
 	defer signal.Stop(hup)
 	quit := make(chan struct{})
 	go func() { <-hup; close(quit) }()
-	prs, prsErr := userPRs(cfgPath)
+	prs, warns, prsErr := userPRs(cfgPath)
 	err = tui.Run(api.NewClient(api.SocketPath()), tui.Options{Host: e.tryHost, Hosting: e.hosting, HostErr: hostErr,
 		Launch:  git.OriginRepo(context.Background(), cwd),
 		AddRepo: func(ctx context.Context, n string) error { return addRepo(ctx, cfgPath, n) },
-		Quit:    quit, PRs: prs, PRsErr: prsErr})
+		Quit:    quit, PRs: prs, PRsErr: prsErr, Warns: warns, Log: logPath})
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	return errors.Join(err, e.shutdown())
 }
@@ -181,14 +182,16 @@ func cmdTUI() error {
 // userPRs builds the PR client from the user's own token; the error says why
 // PR pages are off. The token stays in this process. Only a missing config
 // falls back to gh: a broken one must not act as a different account.
-func userPRs(cfgPath string) (pr.API, error) {
+// userPRs also returns the config's warnings: while the TUI runs, the log
+// file is the only other place they would appear.
+func userPRs(cfgPath string) (pr.API, []string, error) {
 	sec := config.Secret{Cmd: "gh auth token"}
-	cfg, _, err := config.LoadUser(cfgPath)
+	cfg, warns, err := config.LoadUser(cfgPath)
 	switch {
 	case err == nil:
 		sec = cfg.UserTokenSecret()
 	case !errors.Is(err, fs.ErrNotExist):
-		return nil, err
+		return nil, nil, fmt.Errorf("%w: %w", tui.ErrConfig, err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -200,9 +203,9 @@ func userPRs(cfgPath string) (pr.API, error) {
 		if d := config.Detail(err); d != "" {
 			err = fmt.Errorf("%w: %s", err, d)
 		}
-		return nil, err
+		return nil, warns, err
 	}
-	return pr.New(tok), nil
+	return pr.New(tok), warns, nil
 }
 
 func cmdSetup(args []string) error {
@@ -286,10 +289,11 @@ func checkInstalled(ctx context.Context, c repoAPI, name string) error {
 	if err == nil {
 		return nil
 	}
-	if gh.NoAccess(err) {
-		if u, uerr := c.AppURL(ctx); uerr == nil && u != "" {
-			return &notInstalledError{Repo: name, InstallURL: u + "/installations/new"}
-		}
+	if !gh.NoAccess(err) {
+		return err
+	}
+	if u, uerr := c.AppURL(ctx); uerr == nil && u != "" {
+		return &notInstalledError{Repo: name, InstallURL: u + "/installations/new"}
 	}
 	return fmt.Errorf("%w\nInstall the homerun App on %s, then try again", err, name)
 }
@@ -430,5 +434,7 @@ func summarize(run *api.Run) (string, error) {
 func cmdDoctor(args []string) error {
 	fs, cfgPath := flags("doctor")
 	fs.Parse(args)
-	return setup.Doctor(context.Background(), *cfgPath, os.Stdout)
+	err := setup.Doctor(context.Background(), *cfgPath, os.Stdout)
+	fmt.Printf("TUI log: %s\n", filepath.Join(stateDir(), "homerun.log"))
+	return err
 }

@@ -77,8 +77,12 @@ func cancelDialog(runID, label string, cancel func(string) tea.Cmd) *dialog {
 	}
 }
 
-func helpDialog() *dialog {
-	return &dialog{title: "Keys", body: help.New().FullHelpView(keys.groups())}
+func helpDialog(notes ...string) *dialog {
+	body := help.New().FullHelpView(keys.groups())
+	if len(notes) > 0 {
+		body += "\n\n" + strings.Join(notes, "\n")
+	}
+	return &dialog{title: "Keys", body: body}
 }
 
 // quitDialog asks before a hosting TUI quits, which cancels its n active runs.

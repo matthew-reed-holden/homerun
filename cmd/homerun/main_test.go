@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/go-github/v92/github"
 	"github.com/matthew-reed-holden/homerun/internal/api"
+	"github.com/matthew-reed-holden/homerun/internal/tui"
 )
 
 func build(t *testing.T) string {
@@ -159,7 +160,7 @@ func TestCheckInstalled(t *testing.T) {
 			if errors.As(err, &ni) || !errors.Is(err, tc.err) && !strings.Contains(err.Error(), tc.err.Error()) {
 				t.Errorf("%s: got %v (%T), want the real error", tc.name, err, err)
 			}
-			if strings.Contains(err.Error(), "is not installed on o/r: install it at") || f.urls != 0 {
+			if strings.Contains(err.Error(), "is not installed on o/r: install it at") || strings.Contains(err.Error(), "Install the homerun App") || f.urls != 0 {
 				t.Errorf("%s: claims the App is not installed: %v", tc.name, err)
 			}
 		default:
@@ -179,15 +180,15 @@ func TestUserPRsBrokenConfigTurnsPRPagesOff(t *testing.T) {
 	if err := os.WriteFile(p, []byte("user_token: [not a secret\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	api, err := userPRs(p)
-	if api != nil || err == nil || !strings.Contains(err.Error(), p) {
+	api, _, err := userPRs(p)
+	if api != nil || !errors.Is(err, tui.ErrConfig) || !strings.Contains(err.Error(), p) {
 		t.Fatalf("api %v err %v", api, err)
 	}
 	if err := os.WriteFile(p, []byte("user_token: {env: HOMERUN_TEST_TOKEN}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("HOMERUN_TEST_TOKEN", "tok")
-	if api, err := userPRs(p); api == nil || err != nil {
+	if api, _, err := userPRs(p); api == nil || err != nil {
 		t.Fatalf("configured token: api %v err %v", api, err)
 	}
 }

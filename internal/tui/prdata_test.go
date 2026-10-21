@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -497,6 +498,27 @@ func TestBarPROffCapsReason(t *testing.T) {
 		}
 		if w == 120 && !strings.Contains(rest, "1-3 panel") {
 			t.Fatalf("120: hints hidden: %q", b)
+		}
+	}
+}
+
+// A broken config says so instead of sending the user to gh auth login, and
+// help shows the full error, the config warnings and the log path.
+func TestConfigErrorAndNotesInHelp(t *testing.T) {
+	st := fixture()
+	_, c := newFake(t, st)
+	reason := fmt.Errorf("%w: %w", ErrConfig, errors.New("/home/u/.config/homerun/config.yml: yaml: line 3: did not find expected key"))
+	m := newModel(c, func() time.Time { return now }, Options{PRsErr: reason, Warns: []string{"user_token is stored as plaintext"}, Log: "/state/homerun.log"})
+	m.Update(stateMsg{&st})
+	if b := barText(m); !strings.HasPrefix(b, "PR pages off: config error. Press ? for details.") || strings.Contains(b, "gh auth login") {
+		t.Fatalf("bar %q", b)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 200, Height: 60})
+	keysIn(m, "?")
+	out := ansi.Strip(m.render())
+	for _, want := range []string{"did not find expected key", "warning: user_token is stored as plaintext", "log: /state/homerun.log"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("help lacks %q:\n%s", want, out)
 		}
 	}
 }
