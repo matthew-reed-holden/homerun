@@ -153,3 +153,18 @@ func addFailedDialog(name string, err error) *dialog {
 	}
 	return d
 }
+
+// helpView is help with the model's notes, and how this homerun reaches its
+// engine on the closing line.
+func (m *model) helpView() *dialog {
+	d := helpDialog(m.notes()...)
+	mode := "client"
+	switch {
+	case m.err != nil:
+		mode = "unreachable"
+	case m.hosting():
+		mode = "hosted here"
+	}
+	d.body += th.dim.Render(" · engine: " + mode)
+	return d
+}

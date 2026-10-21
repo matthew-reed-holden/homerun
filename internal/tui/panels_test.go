@@ -75,7 +75,7 @@ func TestListClampsOnShrink(t *testing.T) {
 func TestListClickSelects(t *testing.T) {
 	l := &list{}
 	l.set(rows(5))
-	l.click(3) // border is row 0, so row 3 is the third entry
+	l.click(5) // the title is line 0 and a gap follows each row, so line 5 is the third entry
 	if l.cur != 2 {
 		t.Fatalf("cur %d", l.cur)
 	}
@@ -94,7 +94,11 @@ func TestListHeadOffsetsRows(t *testing.T) {
 		t.Fatalf("head:\n%s", strings.Join(out, "\n"))
 	}
 	l.click(1) // the head
-	l.click(3)
+	l.click(3) // the gap
+	if l.cur != 0 {
+		t.Fatalf("gap click: cur %d", l.cur)
+	}
+	l.click(4)
 	if l.cur != 1 {
 		t.Fatalf("cur %d", l.cur)
 	}
@@ -104,7 +108,7 @@ func TestBranchAndPRRows(t *testing.T) {
 	st := fixture()
 	st.Repos[0].Items = append(st.Repos[0].Items, api.Item{Label: "spike/\x1b]52;c;aGk=\x07x", Ref: "spike", SHA: "0c41e9a0000", Updated: now.Add(-50 * time.Hour)})
 	m := searchModelState(t, &pr.Fake{Results: e2eResults(e2eResult())}, st)
-	if r := rowText(m, 1); !strings.HasPrefix(r, "◇ #2 · typo · @bob") || !strings.Contains(r, "\n  typo fix") { // a fork PR awaiting the owner
+	if r := rowText(m, 1); !strings.HasPrefix(r, ic("pr-open")+" #2 · typo · @bob") || !strings.Contains(r, "◇ held") || !strings.Contains(r, "\n  typo fix") { // a fork PR awaiting the owner
 		t.Fatalf("fork row %q", rowText(m, 1))
 	}
 	keysIn(m, "4")
@@ -138,6 +142,6 @@ func TestRepoAndRunRows(t *testing.T) {
 	}
 	keysIn(m, "5")
 	indexAll(t, rowText(m, 0), ic("ci-pending")+" main", "queued", "1m")
-	indexAll(t, rowText(m, 1), ic("ci-skip")+" #2", "cancelled", "10m", "\n", "1m00s")
-	indexAll(t, rowText(m, 2), ic("ci-fail")+" #1", "failed", "10m", "\n", "pull_request", "1m00s")
+	indexAll(t, rowText(m, 1), ic("ci-skip")+" #2", "cancelled", "1m00s", "10m", "\n", "pull_request")
+	indexAll(t, rowText(m, 2), ic("ci-fail")+" #1", "failed", "1m00s", "10m", "\n", "pull_request")
 }

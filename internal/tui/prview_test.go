@@ -229,7 +229,7 @@ func TestDetailErrorShowsInPage(t *testing.T) {
 func TestPRKeysByContext(t *testing.T) {
 	m, _ := prOpenModel(t, detailFixture())
 	bar := barText(m)
-	for _, want := range []string{"[ ] tabs", "m merge", "u update", "c comment", "o open", "h table", "?", "q"} {
+	for _, want := range []string{"[ ] tabs", "m merge", "u update", "c comment", "o open", "h table", "? help"} {
 		if !strings.Contains(bar, want) {
 			t.Fatalf("Overview bar %q lacks %q", bar, want)
 		}

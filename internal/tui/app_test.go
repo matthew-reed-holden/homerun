@@ -288,8 +288,8 @@ func TestStackedBelow100(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 90, Height: 30})
 	lines := strings.Split(screen(m), "\n")
 	lay := m.layout()
-	if !strings.HasPrefix(lines[lay.top], "is:open author:@me") || !strings.HasPrefix(lines[lay.py-1], "╌╌╌") ||
-		!strings.HasPrefix(lines[lay.py], "#1 e2e PR") || lay.th != 8 || lay.ph != 16 || !strings.HasSuffix(lines[29], "? help") {
+	if !strings.Contains(lines[lay.top], "is:open author:@me") || !strings.HasPrefix(lines[lay.py-1], " ╌╌╌") ||
+		!strings.HasPrefix(lines[lay.py], "  #1 e2e PR") || lay.th != 8 || lay.ph != 16 || !strings.HasSuffix(lines[29], "? help ") {
 		t.Fatalf("layout %+v:\n%s", lay, strings.Join(lines, "\n"))
 	}
 }
@@ -410,12 +410,12 @@ func TestClickBounds(t *testing.T) {
 		}
 	}
 	m.tableView(lay.tw, lay.th)
-	n := (lay.th - 2) / 2                                                 // whole two-line rows below the title and head
-	m.click(tea.Mouse{X: 5, Y: lay.top + 1 + 2*n, Button: tea.MouseLeft}) // the last row in view, its second line
+	n := (lay.th - 2 + 1) / 3                                                     // whole two-line rows, a gap between, below the title and head
+	m.click(tea.Mouse{X: 5, Y: lay.top + 2 + 3*(n-1) + 1, Button: tea.MouseLeft}) // the last row in view, its second line
 	if want := n - 1; m.at().rows.cur != want {
 		t.Fatalf("last row click selected %d, want %d", m.at().rows.cur, want)
 	}
-	if (lay.th-2)%2 == 1 { // the leftover line selects nothing
+	if lay.th-2 > 3*n-1 { // the leftover line selects nothing
 		m.click(tea.Mouse{X: 5, Y: lay.top + lay.th - 1, Button: tea.MouseLeft})
 		if m.at().rows.cur != n-1 {
 			t.Fatalf("leftover line selected %d", m.at().rows.cur)
@@ -563,12 +563,13 @@ func TestMouseSelects(t *testing.T) {
 	m, _ := newTestModel(t)
 	keysIn(m, "5", "tab")
 	// 120×40: the strip, bases and foul line are rows 0-2, the table's title row 3,
-	// its column head row 4, and each run two lines, so row 7 is the second run.
-	m.Update(tea.MouseClickMsg{X: 3, Y: 7, Button: tea.MouseLeft})
+	// its column head row 4, and each run two lines and a gap, so row 9 is the
+	// second run's second line.
+	m.Update(tea.MouseClickMsg{X: 3, Y: 9, Button: tea.MouseLeft})
 	if m.focus != onTable || m.at().rows.cur != 1 {
 		t.Fatalf("click: focus %d cur %d", m.focus, m.at().rows.cur)
 	}
-	m.Update(tea.MouseWheelMsg{X: 3, Y: 7, Button: tea.MouseWheelDown})
+	m.Update(tea.MouseWheelMsg{X: 3, Y: 9, Button: tea.MouseWheelDown})
 	if m.at().rows.cur != 2 {
 		t.Fatalf("wheel: cur %d", m.at().rows.cur)
 	}

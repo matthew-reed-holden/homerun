@@ -225,7 +225,7 @@ type gqlPR struct {
 }
 
 func (p gqlPR) summary() Summary {
-	s := Summary{Number: p.Number, Repo: p.Repository.NameWithOwner, Title: p.Title, Author: p.Author.Login, Body: p.Body,
+	s := Summary{Number: p.Number, Repo: p.Repository.NameWithOwner, State: p.State, Title: p.Title, Author: p.Author.Login, Body: p.Body,
 		HeadRef: p.HeadRefName, BaseRef: p.BaseRefName, HeadSHA: p.HeadRefOid, IsDraft: p.IsDraft,
 		Mergeable: p.Mergeable, MergeState: p.MergeStateStatus, ReviewDecision: p.ReviewDecision,
 		Additions: p.Additions, Deletions: p.Deletions, ChangedFiles: p.ChangedFiles, Comments: p.Comments.TotalCount, Updated: p.UpdatedAt}

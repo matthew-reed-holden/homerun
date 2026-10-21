@@ -23,11 +23,12 @@ func (e entry) height() int {
 }
 
 // list is a sectioned list of rows, numbered unless n is 0, under an optional
-// column head. It owns its cursor and scroll offset, in rows, so a state
-// refresh never moves the user's place.
+// column head, with a blank line between rows. It owns its cursor and scroll
+// offset, in rows, so a state refresh never moves the user's place.
 type list struct {
 	n     int
 	title string
+	lead  string // a styled first line in place of the title, as a PR tab's search line; "" for the title
 	head  string // a dim first line naming the columns; "" for none
 	rows  []entry
 	empty []string // shown in place of rows when there are none
@@ -62,10 +63,13 @@ func (l *list) first() int {
 	return 1
 }
 
-// span is the lines rows[from..to] take.
+// span is the lines rows[from..to] take, the gaps between them included.
 func (l *list) span(from, to int) int {
 	h := 0
 	for i := from; i <= to && i < len(l.rows); i++ {
+		if i > from {
+			h++
+		}
 		h += l.rows[i].height()
 	}
 	return h
@@ -86,11 +90,12 @@ func (l *list) scroll(inner int) {
 	l.off = clampInt(l.off, 0, max(0, len(l.rows)-1))
 }
 
-// click selects the row on the line y lines below the section's title line.
-// Once a view has drawn the list, only the rows it showed whole take clicks.
+// click selects the row on the line y lines below the section's title line;
+// a gap between rows selects nothing. Once a view has drawn the list, only
+// the rows it showed whole take clicks.
 func (l *list) click(y int) {
 	y -= l.first()
-	for i, top := l.off, 0; y >= 0 && i < len(l.rows); i++ {
+	for i, top := l.off, 0; y >= top && i < len(l.rows); i++ {
 		bottom := top + l.rows[i].height()
 		if l.inner > 0 && bottom > l.inner && i != l.cur {
 			return
@@ -99,7 +104,7 @@ func (l *list) click(y int) {
 			l.cur = i
 			return
 		}
-		top = bottom
+		top = bottom + 1
 	}
 }
 
@@ -115,13 +120,18 @@ func (l *list) view(w, h int, focused bool) string {
 	}
 	// Only whole rows, but always the cursor's first line.
 	l.inner = inner
-	for i, used := l.off, 0; i < len(l.rows) && (used+l.rows[i].height() <= inner || i == l.cur); i++ {
+	for i := l.off; i < len(l.rows) && (l.span(l.off, i) <= inner || i == l.cur); i++ {
 		r := l.rows[i]
+		if i > l.off {
+			lines = append(lines, "")
+		}
 		lines = append(lines, box(paint(r.icon)+" "+r.text, w, i == l.cur, focused))
 		if r.sub != "" {
 			lines = append(lines, box("  "+r.sub, w, i == l.cur, focused))
 		}
-		used += r.height()
+	}
+	if l.lead != "" {
+		return sectionLines(fit(l.lead, w), lines, w, h)
 	}
 	title := l.title
 	if l.n > 0 {
@@ -155,6 +165,11 @@ func section(title string, lines []string, w, h int, focused bool) string {
 	if focused {
 		t = th.clay.Bold(true).Render(fit(title, w))
 	}
+	return sectionLines(t, lines, w, h)
+}
+
+// sectionLines is the styled first line t over the body, exactly w×h.
+func sectionLines(t string, lines []string, w, h int) string {
 	out := []string{t}
 	for i := range max(0, h-1) {
 		l := ""

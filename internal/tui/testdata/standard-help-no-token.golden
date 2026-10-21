@@ -1,15 +1,15 @@
-HO┌──────────────────────────────────────────────────────────────────────────┐ …
-◇ │  Keys                                                                   │  
-╌╌│                                                                          │╌╌
-br│ [ ]     tabs             k/↑   up              f      follow             │  
-  │ 1-9     tab              j/↓   down            +      zoom               │ 
-▌│ tab     table/preview    g     top             esc    back               │  
-▌ │ l/enter preview          G     bottom          r      rerun              │  
+ H┌──────────────────────────────────────────────────────────────────────────┐… 
+ ◇│  Keys                                                                   │  
+ ╌│                                                                          │╌ 
+ b│ [ ]     tabs             k/↑   up              f      follow             │  
+  │ 1-9     tab              j/↓   down            +      zoom               │  
+ ▌│ tab     table/preview    g     top             esc    back               │  
+ ▌│ l/enter preview          G     bottom          r      rerun              │  
   │ h       table            space fold            x      cancel             │  
   │ R       repo             enter log             o      open               │  
-╌╌│ /       filter           /     search          y      copy sha           │╌╌
-ma│ ctrl+r  reload config    n     next match      m      merge              │  
- │ T       theme            N     prev match      u      update branch      │s 
+  │ /       filter           /     search          y      copy sha           │  
+ ╌│ ctrl+r  reload config    n     next match      m      merge              │╌ 
+  │ T       theme            N     prev match      u      update branch      │  
   │ ?       help             e     next failure    c      comment            │  
   │ q       quit                                   ctrl+s send               │  
   │                                                                          │  
@@ -19,6 +19,6 @@ ma│ ctrl+r  reload config    n     next match      m      merge              �
   │ log: /home/someone/.local/state/homerun/homerun.log                      │  
   │ icons: nerd | unicode | ascii, now nerd · boxes here? set unicode        │  
   │                                                                          │  
-  │ any key closes                                                           │  
-╌╌└──────────────────────────────────────────────────────────────────────────┘╌╌
-[ ] tabs · l/enter preview · r rerun · x cancel · y copy sha · o open ·…  ? help
+  │ any key closes · engine: client                                          │  
+ ╌└──────────────────────────────────────────────────────────────────────────┘╌ 
+ l/enter preview · r rerun · x cancel · y copy sha · o open · R repo     ? help 

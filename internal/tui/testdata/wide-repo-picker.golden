@@ -1,18 +1,18 @@
-HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 ·  client                                                                     
-◆ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◇ 5 Runs 3                                        
-╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
-is:open author:@me                                                ╎ #1 e2e PR · d954af8 · @matt · 5m ago                
-   Title                                                     ╎ #1 e2e PR  @matt · main ← feat                      
-▌ #1 · feat · @matt               1/2           +0 −0        5m ╎ Checks none                                         
-▌  e2e PR                                                         ╎ Reviews: none · Files 0 (+0 −0) ·  0               
- ◇ #2 · typo · @bob               ·               +0 −0        3h ╎ 2  homerun                                          
-   typo fix                                                       ╎ ──────────────────────────────────────────────────  
-                                                                  ╎   CI / pass  homerun                            4s 
-                                                                  ╎   CI / fail  homerun  — echo bad; exit 1        3s 
-                                                                  ╎    exit status 1                                    
-                                                                  ╎     Set up job                                  1s 
-                                                                  ╎     echo bad; exit 1                            0s 
-                                                                  ╎                                                     
+ HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 · engine ●                                                     updated 0s ago 
+ ◆ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◇ 5 Runs 3                                       
+ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
+  is:pr repo:o/e2e is:open author:@me                           ╎ #1 e2e PR · d954af8 · @matt · 5m ago                 
+   Title                      CI                           ╎ #1 e2e PR  @matt · main ← feat                       
+ ▌ #1 · feat · @matt          1/2                  +0 −0    5m ╎ Checks none                                          
+ ▌  e2e PR                                                       ╎ Reviews: none · Files 0 (+0 −0) ·  0                
+                                                                 ╎ 2  homerun                                           
+   #2 · typo · @bob          ◇ held                 +0 −0    3h ╎ ─────────────────────────────────────────────────    
+    typo fix                                                     ╎   CI / pass  homerun                           4s   
+                                                                 ╎   CI / fail  homerun  — echo bad; exit 1       3s   
+                                                                 ╎    exit status 1                                     
+                                                                 ╎     Set up job                                 1s   
+                                                                 ╎     echo bad; exit 1                           0s   
+                                                                 ╎                                                      
                                       ┌──────────────────────────────────────────┐                                      
                                       │  Pick a repo                            │                                      
                                       │                                          │                                      
@@ -23,18 +23,18 @@ is:open author:@me                                                ╎ #1 e2e PR 
                                       │                                          │                                      
                                       │ enter pick · esc cancel                  │                                      
                                       └──────────────────────────────────────────┘                                      
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
-[ ] tabs · l/enter preview · r rerun · x cancel · m merge · u update branch · o open · R repo · q quit   PR 1/2   ? help
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
+ l/enter preview · / filter · r rerun · m merge · u update branch · o open                              PR 1/2   ? help 

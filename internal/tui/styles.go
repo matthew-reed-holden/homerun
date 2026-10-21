@@ -60,10 +60,12 @@ func paint(icon string) string {
 // tint renders s in the colour of icon's role.
 func tint(icon, s string) string {
 	switch icon {
-	case "ci-pass":
+	case "ci-pass", "pr-open":
 		return th.safe.Render(s)
-	case "ci-fail":
+	case "ci-fail", "pr-closed":
 		return th.out.Render(s)
+	case "pr-merged":
+		return th.clay.Render(s)
 	case "ci-run", "◇":
 		return th.lights.Render(s)
 	}

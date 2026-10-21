@@ -66,19 +66,20 @@ const (
 	inLog
 )
 
-// bar is the dugout line's hints for c; the line adds ? help itself.
+// bar is the dugout line's hints for c, at most maxHints; the line adds
+// ? help itself, and help lists the rest.
 func (k keyMap) bar(c barCtx) []key.Binding {
 	switch c {
 	case inTablePR:
-		return []key.Binding{k.Tabs, k.Into, k.Rerun, k.Cancel, k.Merge, k.Update, k.Open, k.Repo, k.Quit}
+		return []key.Binding{k.Into, k.Filter, k.Rerun, k.Merge, k.Update, k.Open}
 	case inPreviewOverview:
-		return []key.Binding{k.Tabs, k.Merge, k.Update, k.Comment, k.Open, k.Back, k.Quit}
+		return []key.Binding{k.Tabs, k.Comment, k.Merge, k.Update, k.Open, k.Back}
 	case inPreviewChecks:
-		return []key.Binding{k.Tabs, k.Enter, k.Fold, k.Rerun, k.Cancel, k.Open, k.Back, k.Quit}
+		return []key.Binding{k.Enter, k.Fold, k.Rerun, k.Cancel, k.Open, k.Back}
 	case inLog:
 		return []key.Binding{k.Search, k.NextMatch, k.NextFail, k.Follow, k.Zoom, k.Esc}
 	}
-	return []key.Binding{k.Tabs, k.Into, k.Rerun, k.Cancel, k.Copy, k.Open, k.Repo, k.Quit}
+	return []key.Binding{k.Into, k.Rerun, k.Cancel, k.Copy, k.Open, k.Repo}
 }
 
 // groups are help's columns: moving around, the tree and the log, the rest

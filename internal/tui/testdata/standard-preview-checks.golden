@@ -1,24 +1,24 @@
-HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 ·  client                             
-◆ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◇ 5 Runs 3
-╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
-is:open author:@me                                                              
-   Title                                                                     
-▌ #1 · feat · @matt                                    1/2         +0 −0   ↓2 
-▌  e2e PR                                                                       
- ◇ #2 · typo · @bob                                    ·             +0 −0      
-   typo fix                                                                     
-╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
-o/e2e · #1                                                                      
-e2e PR                                                                          
- MERGED   main ← feat  @matt                                                    
-◇ Overview  ◆ Checks 2/4                                                        
-▌ CI / pass  homerun                                                        4s 
-  CI / fail  homerun  — echo bad; exit 1                                    3s 
-   exit status 1                                                                
-    Set up job                                                              1s 
-    echo bad; exit 1                                                        0s 
-  lint  status  required                                                       
-  build  status                                                         queued 
+ HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 · engine ●             updated 0s ago 
+ ◆ 1 My PRs 2 ◇ 2 Review requested 2 ◇ 3 All open 2 ◇ 4 Branches 1 ◇ 5 Runs 3   
+ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
+  is:pr repo:o/e2e is:open author:@me                                          
+   Title                                             CI                     
+ ▌ #1 · feat · @matt                                 1/2        2      +0 −0  
+ ▌  e2e PR                                                                      
                                                                                 
-╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
-[ ] tabs · enter log · space fold · r rerun · x cancel · o ope…  PR 1/2   ? help
+   #2 · typo · @bob                                 ◇ held              +0 −0  
+    typo fix                                                                    
+ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
+  o/e2e · #1                                                                    
+  e2e PR                                                                        
+   MERGED   main ← feat  @matt                                                  
+  ◇ Overview  ◆ Checks 2/4                                                      
+  ▌ CI / pass  homerun                                                    4s   
+    CI / fail  homerun  — echo bad; exit 1                                3s   
+     exit status 1                                                              
+      Set up job                                                          1s   
+      echo bad; exit 1                                                    0s   
+    lint  status  required                                                     
+    build  status                                                     queued   
+ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
+ enter log · space fold · r rerun · x cancel · o open           PR 1/2   ? help 

@@ -1,40 +1,40 @@
-HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 ·  client                                                                     
-◇ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◆ 5 Runs 3                                        
-╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
-runs, newest first                                                ╎ #1 · d954af8 · running                              
-   Run                                             Status        ╎  no checks yet                                      
-▌ #1 · d954af8                                    running        ╎                                                     
-▌  pull_request                                    1m12s…         ╎                                                     
-  #2 · abc1234                                    done        3h ╎                                                     
-   pull_request                                    0s             ╎                                                     
-  main · fd387ab                                  passed     10m ╎                                                     
-   push · main                                     1m00s          ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
-[ ] tabs · l/enter preview · r rerun · x cancel · y copy sha · o open · R repo · q quit                           ? help
+ HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 · engine ●                                                     updated 0s ago 
+ ◇ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◆ 5 Runs 3                                       
+ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
+ runs, newest first                                              ╎ #1 · d954af8 · running                               
+   Run                                 Status        Took      ╎  no checks yet                                       
+ ▌ #1 · d954af8                        running     1m12s…       ╎                                                      
+ ▌  pull_request                                                 ╎                                                      
+                                                                 ╎                                                      
+   #2 · abc1234                        done            0s    3h ╎                                                      
+    pull_request                                                 ╎                                                      
+                                                                 ╎                                                      
+   main · fd387ab                      passed       1m00s   10m ╎                                                      
+    push · main                                                  ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+                                                                 ╎                                                      
+ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
+ l/enter preview · r rerun · x cancel · y copy sha · o open · R repo                                             ? help 

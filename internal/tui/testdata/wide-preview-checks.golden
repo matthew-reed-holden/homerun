@@ -1,40 +1,40 @@
-HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 ·  client                                                                     
-◆ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◇ 5 Runs 3                                        
-╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
-is:open author:@me                                                ╎ o/e2e · #1                                          
-   Title                                                     ╎ e2e PR                                              
-▌ #1 · feat · @matt               1/2           +0 −0   ↓2   5m ╎  MERGED   main ← feat  @matt                        
-▌  e2e PR                                                         ╎ ◇ Overview  ◆ Checks 2/4                            
- ◇ #2 · typo · @bob               ·               +0 −0        3h ╎ ▌ CI / pass  homerun                            4s 
-   typo fix                                                       ╎   CI / fail  homerun  — echo bad; exit 1        3s 
-                                                                  ╎    exit status 1                                    
-                                                                  ╎     Set up job                                  1s 
-                                                                  ╎     echo bad; exit 1                            0s 
-                                                                  ╎   lint  status  required                           
-                                                                  ╎   build  status                             queued 
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-                                                                  ╎                                                     
-╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
-[ ] tabs · enter log · space fold · r rerun · x cancel · o open · h table · q quit                       PR 1/2   ? help
+ HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 · engine ●                                                     updated 0s ago 
+ ◆ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◇ 5 Runs 3                                       
+ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
+  is:open author:@me               ╎ o/e2e · #1                                                                        
+   Title                  CI      ╎ e2e PR                                                                            
+ ▌ #1 · @matt             1/2     ╎  MERGED   main ← feat  @matt                                                      
+ ▌  e2e PR                          ╎ ◇ Overview  ◆ Checks 2/4                                                          
+                                    ╎ ▌ CI / pass  homerun                                                        4s   
+   #2 · @bob             ◇ held    ╎   CI / fail  homerun  — echo bad; exit 1                                    3s   
+    typo fix                        ╎    exit status 1                                                                  
+                                    ╎     Set up job                                                              1s   
+                                    ╎     echo bad; exit 1                                                        0s   
+                                    ╎   lint  status  required                                                         
+                                    ╎   build  status                                                         queued   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
+ enter log · space fold · r rerun · x cancel · o open · h table                                         PR 1/2   ? help 

@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
@@ -110,7 +109,7 @@ type model struct {
 	status      string
 	statusAt    time.Time
 	w, h        int
-	help        help.Model
+	updated     time.Time            // the last good state fetch or search
 	profile     colorprofile.Profile // from tea.ColorProfileMsg; zero is Unknown, which gets no fill
 	themeChoice ThemeChoice          // auto follows the terminal; night or day ignores it
 	termDark    bool                 // what the terminal last said its background was
@@ -136,7 +135,7 @@ type model struct {
 }
 
 func newModel(c *api.Client, now func() time.Time, o Options) *model {
-	m := &model{c: c, now: now, o: o, hostErr: o.HostErr, prDelay: prPoll, w: 120, h: 40, help: help.New(), tabs: newTabs(o.Tabs), draft: newDraft()}
+	m := &model{c: c, now: now, o: o, hostErr: o.HostErr, prDelay: prPoll, w: 120, h: 40, tabs: newTabs(o.Tabs), draft: newDraft()}
 	icons, _ = ParseIcons(o.Icons)
 	m.themeChoice, _ = parseTheme(o.Theme)
 	m.termDark = true
@@ -406,6 +405,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refresh()
 	case stateMsg:
 		m.state, m.connected, m.err, m.hostErr = *msg.s, true, nil, nil
+		m.updated = m.now()
 		m.pinLaunch()
 		m.refresh()
 		if m.o.Launch != "" && !m.offered && m.o.AddRepo != nil && m.dlg == nil && !m.hasRepo(m.o.Launch) {
@@ -539,7 +539,7 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 		m.closeLog()
 		return tea.Quit
 	case key.Matches(k, keys.Help):
-		m.dlg = helpDialog(m.notes()...)
+		m.dlg = m.helpView()
 	case key.Matches(k, keys.Theme):
 		m.themeChoice = m.themeChoice.next()
 		m.applyTheme()
@@ -789,51 +789,51 @@ func readLine(lines <-chan string, errc <-chan error, gen int) tea.Cmd {
 	}
 }
 
-// layout places the sections below the strip, the bases and a foul line:
-// side by side from 100 columns, split by a vertical foul line and a space,
-// else the table over a foul line over the preview. A foul line and the
-// dugout line (with the filter error above it) close the screen. An open
-// filter bar takes its rows at the top of the table section, pushing the
-// table down; stacked, those rows come out of the preview.
+// layout places the sections below the strip, the bases and a foul line,
+// inside a one-cell gutter each side: side by side from 100 columns, split by
+// a vertical foul line, else the table over a foul line over the preview. A
+// foul line and the dugout line (with the filter error above it) close the
+// screen. The preview's content has a cell of padding each side; with the
+// preview focused, the table narrows to give it room.
 type layout struct {
 	top            int // the first body row
-	ty             int // the table's first row: top, or below the filter bar
-	tw, th         int // the table section, at (0, ty); 0×0 while zoomed
-	px, py, pw, ph int // the preview section
+	tx, tw, th     int // the table section, at (tx, top); 0×0 while zoomed
+	px, py, pw, ph int // the preview's content, inside its padding
 }
 
 func (m *model) layout() layout {
+	iw := m.w - 2
 	bodyH := max(0, m.h-5)
 	if m.fltErr != "" {
 		bodyH--
 	}
-	l := layout{top: 3, ty: 3}
-	bar := 0
-	if m.flt != nil && !m.zoom {
-		bar = filterH
-		l.ty += bar
-	}
+	l := layout{top: 3, tx: 1}
 	switch {
 	case m.zoom:
-		l.py, l.pw, l.ph = l.top, m.w, bodyH
+		l.px, l.py, l.pw, l.ph = 2, l.top, iw-2, bodyH
 	case m.w >= 100:
-		l.tw, l.th = m.w*11/20, bodyH-bar
-		l.px, l.py, l.pw, l.ph = l.tw+2, l.top, m.w-l.tw-2, bodyH
+		l.tw, l.th = iw*11/20, bodyH
+		if m.narrow() {
+			l.tw = max(30, iw*3/10)
+		}
+		l.px, l.py, l.pw, l.ph = l.tx+l.tw+2, l.top, iw-l.tw-3, bodyH // the divider and a pad before
 	default:
-		// Part 1's share (2/5 of a body two lines taller) less the two lines
-		// of chrome it lacked, so the preview keeps every line it had.
-		l.tw, l.th = m.w, max(5, (bodyH+2)*2/5-2)
-		l.py, l.pw, l.ph = l.ty+l.th+1, m.w, bodyH-bar-l.th-1
+		// Two whole rows under the search line and the head: 2+1+2 lines.
+		l.tw, l.th = iw, max(7, (bodyH+2)*2/5-2)
+		l.px, l.py, l.pw, l.ph = 2, l.top+l.th+1, iw-2, bodyH-l.th-1
 	}
 	return l
 }
 
+// beside reports the preview to the table's right.
+func (l layout) beside() bool { return l.tw > 0 && l.py == l.top }
+
 func (l layout) inTable(x, y int) bool {
-	return x < l.tw && y >= l.ty && y < l.ty+l.th
+	return x >= l.tx && x < l.tx+l.tw && y >= l.top && y < l.top+l.th
 }
 
 func (l layout) inPreview(x, y int) bool {
-	return x >= l.px && x < l.px+l.pw && y >= l.py && y < l.py+l.ph
+	return x >= l.px-1 && x <= l.px+l.pw && y >= l.py && y < l.py+l.ph
 }
 
 func (m *model) View() tea.View {
@@ -869,29 +869,30 @@ func (m *model) render() string {
 		return m.sign(msg)
 	}
 	lay := m.layout()
-	body := m.mainView(lay.pw, lay.ph)
+	iw := m.w - 2
+	body := pad(m.mainView(lay.pw, lay.ph))
 	onPv := m.focus == onPreview
-	if lay.tw > 0 {
-		table := m.tableView(lay.tw, lay.th)
-		if lay.ty > lay.top {
-			table = m.filterBar() + "\n" + table
-		}
-		if lay.px > 0 {
-			div := strings.Join(vfoul(lay.ph, onPv), " \n") + " "
-			body = lipgloss.JoinHorizontal(lipgloss.Top, table, div, body)
-		} else {
-			body = table + "\n" + foul(m.w, onPv) + "\n" + body
-		}
+	switch {
+	case lay.beside():
+		div := strings.Join(vfoul(lay.ph, onPv), "\n")
+		body = lipgloss.JoinHorizontal(lipgloss.Top, m.tableView(lay.tw, lay.th), div, body)
+	case lay.tw > 0:
+		body = m.tableView(lay.tw, lay.th) + "\n" + foul(iw, onPv) + "\n" + body
 	}
-	top := m.bases() + "\n" + foul(m.w, false)
+	top := m.bases() + "\n" + foul(iw, false)
 	if m.log != nil {
-		top = fit(breadcrumb(m.crumbs...), m.w) + "\n" + foul(m.w, true)
+		top = breadcrumb(m.crumbs...) + "\n" + foul(iw, true)
 	}
-	screen := m.strip() + "\n" + top + "\n" + body + "\n" + foul(m.w, false)
+	rest := top + "\n" + body + "\n" + foul(iw, false)
 	if m.fltErr != "" {
-		screen += "\n" + m.filterErrLine()
+		rest += "\n" + m.filterErrLine()
 	}
-	screen += "\n" + m.dugout()
+	rest += "\n" + m.dugout()
+	lines := strings.Split(rest, "\n")
+	for i, l := range lines {
+		lines[i] = " " + fit(l, iw) + " "
+	}
+	screen := m.strip() + "\n" + strings.Join(lines, "\n")
 	if m.dlg != nil {
 		screen = overlay(screen, m.dlg.view(m.w), m.w, m.h)
 	}
@@ -911,9 +912,20 @@ func (m *model) sign(msg string) string {
 	return lipgloss.Place(m.w, m.h, lipgloss.Center, lipgloss.Center, block)
 }
 
-// tableView is the active tab's table.
+// pad gives each line of s a cell of padding each side.
+func pad(s string) string {
+	return " " + strings.ReplaceAll(s, "\n", " \n ") + " "
+}
+
+// tableView is the active tab's table; an open filter edits its search line
+// in place.
 func (m *model) tableView(w, h int) string {
-	return m.at().rows.view(w, h, m.focus == onTable)
+	v := m.at().rows.view(w, h, m.focus == onTable)
+	if m.flt == nil {
+		return v
+	}
+	_, rest, _ := strings.Cut(v, "\n")
+	return m.filterBar() + "\n" + rest
 }
 
 func (m *model) mainView(w, h int) string {
@@ -936,8 +948,9 @@ func (m *model) mainView(w, h int) string {
 	return section(title, append(head, m.tree.rows(w, inner, m.now(), focused)...), w, h, focused)
 }
 
-// dugout is the bottom line: the context's key hints, the position on a PR
-// row, and ? help, which never drops; hints drop from the right first.
+// dugout is the bottom line: the focused section's key hints, key in bold
+// chalk and label dim, the position on a PR row, and ? help, which never
+// drops; whole hints drop from the right first.
 func (m *model) dugout() string {
 	ctx := inTable
 	switch {
@@ -956,18 +969,31 @@ func (m *model) dugout() string {
 	if pos := m.position(); pos != "" {
 		right = th.fg.Render(pos) + "   " + right
 	}
-	m.help.Styles.ShortKey, m.help.Styles.ShortDesc, m.help.Styles.ShortSeparator = th.fg, th.dim, th.dim
-	m.help.ShortSeparator = " · "
 	bs := keys.bar(ctx)
 	if m.flt != nil {
 		bs = filterHints()
 	} else if m.hostErr != nil { // the strip's warning may be cut short of saying so
 		bs = append([]key.Binding{bind("ctrl+r", "retry", "ctrl+r")}, bs...)
 	}
-	room := m.w - ansi.StringWidth(right) - 2
-	hints := truncate(m.help.ShortHelpView(bs), max(0, room))
-	return hints + strings.Repeat(" ", max(2, m.w-ansi.StringWidth(hints)-ansi.StringWidth(right))) + right
+	bs = bs[:min(len(bs), maxHints)]
+	iw := m.w - 2
+	room := iw - ansi.StringWidth(right) - 2
+	hints := ""
+	for _, b := range bs {
+		h := th.fg.Bold(true).Render(b.Help().Key) + " " + th.dim.Render(b.Help().Desc)
+		if hints != "" {
+			h = hints + th.dim.Render(" · ") + h
+		}
+		if ansi.StringWidth(h) > room {
+			break
+		}
+		hints = h
+	}
+	return hints + strings.Repeat(" ", max(2, iw-ansi.StringWidth(hints)-ansi.StringWidth(right))) + right
 }
+
+// maxHints is as many key hints as the dugout line shows; ? help has the rest.
+const maxHints = 6
 
 // position is "PR 2/3" while the table's cursor is on a PR row, else "".
 func (m *model) position() string {
@@ -993,7 +1019,7 @@ func (m *model) click(mo tea.Mouse) tea.Cmd {
 	switch {
 	case lay.inTable(mo.X, mo.Y):
 		m.leavePreview()
-		m.at().rows.click(mo.Y - lay.ty)
+		m.at().rows.click(mo.Y - lay.top)
 		m.syncMain()
 	case lay.inPreview(mo.X, mo.Y):
 		var cmd tea.Cmd

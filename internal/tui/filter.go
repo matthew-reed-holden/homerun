@@ -19,24 +19,17 @@ func (m *model) openFilter() {
 	m.sizeFilter()
 }
 
-// filterH is the filter bar's height: the query between two border lines.
-const filterH = 3
-
-// sizeFilter fits the bar to the screen: the clay search icon, then the
-// scope homerun adds, dim and outside the input so no key can edit it, then
-// the query. The repo shortens to …/name, then truncates, so the query keeps
-// 20 cells.
+// sizeFilter fits the input to the search line it edits: the clay search
+// icon, then the scope homerun adds, dim and outside the input so no key can
+// edit it, then the query, which keeps 20 cells.
 func (m *model) sizeFilter() {
 	if m.flt == nil {
 		return
 	}
-	inner := m.layout().tw - 5
-	scope := "is:pr repo:" + termsafe.Line(m.repo().Name) + " "
-	if inner-ansi.StringWidth(scope)-3 < 20 {
-		scope = truncate("is:pr repo:…/"+termsafe.Line(repoShort(m.repo().Name)), inner-24) + " "
-	}
+	inner := m.layout().tw - 1 // a space before the foul line
+	scope := m.scope(max(12, inner-3-20)) + " "
 	m.flt.Prompt = th.clay.Render(ic("search")) + " " + th.dim.Render(scope)
-	m.flt.SetWidth(max(1, inner-ansi.StringWidth(scope)-3))
+	m.flt.SetWidth(max(1, inner-2-ansi.StringWidth(scope)-1))
 }
 
 // filterKey is the bar's keys while it is open. Enter makes the typed query
@@ -62,12 +55,10 @@ func (m *model) filterKey(k tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
-// filterBar is the query box across the table it sits on, a space short of
-// the foul line, as the table's rows are.
+// filterBar is the search line while / edits it, the table's width.
 func (m *model) filterBar() string {
 	m.sizeFilter()
-	box := clayBox(m.layout().tw - 1).Render(m.flt.View())
-	return strings.ReplaceAll(box, "\n", " \n") + " "
+	return fit(m.flt.View(), m.layout().tw)
 }
 
 // filterHints is the dugout line's left side while the bar is open.
@@ -76,5 +67,5 @@ func filterHints() []key.Binding {
 }
 
 func (m *model) filterErrLine() string {
-	return truncate(th.out.Render(ic("ci-fail"))+" "+th.dim.Render("GitHub rejected the query: "+termsafe.Line(m.fltErr)+". The tab kept its old query."), m.w)
+	return truncate(th.out.Render(ic("ci-fail"))+" "+th.dim.Render("GitHub rejected the query: "+termsafe.Line(m.fltErr)+". The tab kept its old query."), m.w-2)
 }

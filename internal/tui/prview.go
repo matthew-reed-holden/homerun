@@ -76,7 +76,7 @@ func (m *model) closePR() {
 
 // enterPreview moves focus into the preview; on a PR row it opens the PR.
 func (m *model) enterPreview() tea.Cmd {
-	m.focus = onPreview
+	m.setFocus(onPreview)
 	if s, ok := m.selPR(); ok && m.o.PRs != nil {
 		return m.openPR(m.repo().Name, s.Number)
 	}
@@ -90,7 +90,17 @@ func (m *model) leavePreview() {
 	} else {
 		m.closeLog()
 	}
-	m.focus = onTable
+	m.setFocus(onTable)
+}
+
+// setFocus moves focus to a, rebuilding the rows when the table narrows or
+// widens for it.
+func (m *model) setFocus(a area) {
+	was := m.narrow()
+	m.focus = a
+	if m.narrow() != was {
+		m.tableRows()
+	}
 }
 
 // refetchPR fetches the open PR's detail now, as after a mutation.

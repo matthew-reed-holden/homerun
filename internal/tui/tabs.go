@@ -135,6 +135,7 @@ func (m *model) onSearch(msg searchMsg) tea.Cmd {
 		switch {
 		case msg.err == nil:
 			t.res[msg.repo], t.at[msg.repo], t.err, t.trying = msg.res, m.now(), "", false
+			m.updated = m.now()
 		case t.trying && !errors.As(msg.err, &rl):
 			t.edit, t.trying, m.fltErr = t.prev, false, msg.err.Error()
 			m.tableRows()
@@ -484,38 +485,80 @@ func mark(paths []string) string {
 	return th.lights.Render("⚠2")
 }
 
-// The right-hand columns' widths. Every glyph is one cell, so the columns
-// stay put in every icon mode.
-const (
-	diffW = 9 // "+1.0k −40"
-	ageW  = 4
-	tailW = 2 + 9 + 1 + ageW // two spaces, a 9-cell column, a space and the age
-)
+// column is a table column right of the title: its width, and whether it
+// aligns right. Every glyph is one cell, so columns stay put in every icon
+// mode.
+type column struct {
+	w     int
+	right bool
+}
 
-// prLine lays out a PR row's first line w wide: who and where on the left,
-// then CI, review, diff, behind and age. Narrow screens drop Age, then Rev.
-func (m *model) prLine(w int, left, ci, rev, diff, behind, age string) string {
-	showRev, showAge := m.w >= 90, m.w >= 100
-	ciW := 9
-	if m.err != nil {
-		ciW = 20 // room for "github only"
+// colGap is the space before each column.
+const colGap = "  "
+
+// cells lays vals out w wide: the first takes what cols leave, then each col
+// after colGap. Heads and rows both go through it, so a head always sits
+// over its column.
+func cells(w int, cols []column, vals ...string) string {
+	fixed := 0
+	for _, c := range cols {
+		fixed += len(colGap) + c.w
 	}
-	fixed := 2 + ciW + 1 + diffW + 1 + 4
-	if showRev {
-		fixed += 2
-	}
-	if showAge {
-		fixed += 1 + ageW
-	}
-	s := fit(left, max(1, w-fixed)) + "  " + fit(ci, ciW)
-	if showRev {
-		s += " " + fit(rev, 1)
-	}
-	s += " " + rfit(diff, diffW) + " " + rfit(behind, 4)
-	if showAge {
-		s += " " + rfit(age, ageW)
+	s := fit(vals[0], max(1, w-fixed))
+	for i, c := range cols {
+		v := ""
+		if i+1 < len(vals) {
+			v = vals[i+1]
+		}
+		if c.right {
+			s += colGap + rfit(v, c.w)
+		} else {
+			s += colGap + fit(v, c.w)
+		}
 	}
 	return s
+}
+
+// narrow reports the table stepped aside for the focused preview: it keeps
+// the number, author, title and CI.
+func (m *model) narrow() bool { return m.focus == onPreview && m.w >= 100 && !m.zoom }
+
+// prCols are a PR row's columns: CI, review, behind, diff and age. Narrow
+// screens drop age, then review; a narrow table keeps only CI.
+func (m *model) prCols() []column {
+	ci := column{w: 9}
+	if m.err != nil {
+		ci.w = 20 // room for "github only"
+	}
+	if m.narrow() {
+		return []column{ci}
+	}
+	cs := []column{ci}
+	if m.w >= 90 {
+		cs = append(cs, column{w: 1})
+	}
+	cs = append(cs, column{3, true}, column{9, true}) // behind, "+1.0k −40"
+	if m.w >= 100 {
+		cs = append(cs, column{4, true})
+	}
+	return cs
+}
+
+// prLine lays out a PR row's first line w wide from its column values: who
+// and where, CI, review, behind, diff and age. prCols decides which show.
+func (m *model) prLine(w int, left, ci, rev, behind, diff, age string) string {
+	vals := []string{left, ci}
+	if m.narrow() {
+		return cells(w, m.prCols(), vals...)
+	}
+	if m.w >= 90 {
+		vals = append(vals, rev)
+	}
+	vals = append(vals, behind, diff)
+	if m.w >= 100 {
+		vals = append(vals, age)
+	}
+	return cells(w, m.prCols(), vals...)
 }
 
 func reviewMark(d string) string {
@@ -568,18 +611,23 @@ func (m *model) prRows(t *tab, w int) []entry {
 	var out []entry
 	for _, s := range res.PRs {
 		it := m.itemFor(repo, s.Number)
-		icon, ci := "ci-skip", th.dim.Render(ic("ci-skip")+" not run")
+		ci := th.dim.Render(ic("ci-skip") + " not run")
 		switch {
 		case m.err != nil: // the engine's checks are unknown, not absent
-			icon, ci = "?", ciCell(mergedChecks(nil, s.Checks))+" "+th.dim.Render("github only")
+			ci = ciCell(mergedChecks(nil, s.Checks)) + " " + th.dim.Render("github only")
 		case it != nil:
-			icon, ci = Rollup(it.Checks), ciCell(mergedChecks(it, s.Checks))+mark(m.rowDoubled(it, s.Checks))
-			if awaiting(*it) {
-				icon = "◇"
+			cs := mergedChecks(it, s.Checks)
+			ci = ciCell(cs) + mark(m.rowDoubled(it, s.Checks))
+			if awaiting(*it) { // held for the owner's approval
+				if len(cs) == 0 {
+					ci = th.lights.Render("◇ held")
+				} else {
+					ci += th.lights.Render("◇")
+				}
 			}
 		}
 		left := th.amber.Render(fmt.Sprintf("#%d", s.Number))
-		if s.HeadRef != "" {
+		if s.HeadRef != "" && !m.narrow() {
 			left = dot(left, th.fg.Render(termsafe.Line(s.HeadRef)))
 		}
 		if s.Author != "" {
@@ -591,10 +639,10 @@ func (m *model) prRows(t *tab, w int) []entry {
 		}
 		behind := ""
 		if b, ok := m.behindOf(s.Number); ok && b > 0 {
-			behind = th.amber.Render(fmt.Sprintf("↓%d", b))
+			behind = th.amber.Render(strconv.Itoa(b))
 		}
-		line := m.prLine(w, left, ci, reviewMark(s.ReviewDecision), diffCell(s.Additions, s.Deletions), behind, th.dim.Render(age(s.Updated, m.now())))
-		out = append(out, entry{icon, line, truncate(title, w), fmt.Sprintf("pr:%d", s.Number)})
+		line := m.prLine(w, left, ci, reviewMark(s.ReviewDecision), behind, diffCell(s.Additions, s.Deletions), th.dim.Render(age(s.Updated, m.now())))
+		out = append(out, entry{prState(s), line, truncate(title, w), fmt.Sprintf("pr:%d", s.Number)})
 	}
 	if more := res.Total - len(res.PRs); more > 0 {
 		out = append(out, entry{"…", th.dim.Render(fmt.Sprintf("%d more on GitHub · o opens the search", more)), "", "more"})
@@ -602,9 +650,34 @@ func (m *model) prRows(t *tab, w int) []entry {
 	return out
 }
 
-// tail lays out a row's left part, a 9-cell column and the age, w wide.
-func tail(w int, left, col, age string) string {
-	return fit(left, max(1, w-tailW)) + "  " + fit(col, 9) + " " + rfit(age, ageW)
+// prState is the icon role of a PR's state: merged, closed, draft or open.
+func prState(s pr.Summary) string {
+	switch {
+	case s.State == "MERGED":
+		return "pr-merged"
+	case s.State == "CLOSED":
+		return "pr-closed"
+	case s.IsDraft:
+		return "pr-draft"
+	}
+	return "pr-open"
+}
+
+// branchCols are a branch row's columns: CI and age; narrow, CI only.
+func (m *model) branchCols() []column {
+	if m.narrow() {
+		return []column{{w: 9}}
+	}
+	return []column{{w: 9}, {4, true}}
+}
+
+// runCols are a run row's columns: status, how long it took, and age;
+// narrow, status only.
+func (m *model) runCols() []column {
+	if m.narrow() {
+		return []column{{w: 9}}
+	}
+	return []column{{w: 9}, {7, true}, {4, true}}
 }
 
 // blank is the second line of a row with nothing to say there: it keeps the
@@ -622,7 +695,7 @@ func (m *model) branchRows(r api.Repo, w int) []entry {
 		if it.Title != "" {
 			sub = truncate(th.fg.Render(termsafe.Line(it.Title)), w)
 		}
-		out = append(out, entry{Rollup(it.Checks), tail(w, left, ci, th.dim.Render(age(it.Updated, m.now()))), sub, "item:" + it.Label})
+		out = append(out, entry{Rollup(it.Checks), cells(w, m.branchCols(), left, ci, th.dim.Render(age(it.Updated, m.now()))), sub, "item:" + it.Label})
 	}
 	return out
 }
@@ -639,8 +712,8 @@ func (m *model) trigger(r api.Run) string {
 	return "pull_request"
 }
 
-// runRows are the picked repo's runs, w wide: the target and SHA, status and
-// age over the trigger and how long it took. A finished run says passed or
+// runRows are the picked repo's runs, w wide: the target and SHA, status,
+// how long it took and age over the trigger. A finished run says passed or
 // failed by its checks.
 func (m *model) runRows(w int) []entry {
 	now := m.now()
@@ -666,39 +739,75 @@ func (m *model) runRows(w int) []entry {
 		if r.PR != 0 {
 			target = th.amber.Render(termsafe.Line(r.Label))
 		}
-		line := tail(w, dot(target, th.sha.Render(short(r.SHA))), tint(icon, status), th.dim.Render(ago))
-		sub := tail(w, th.dim.Render(m.trigger(r)), took, "")
-		out = append(out, entry{icon, line, sub, "run:" + r.ID})
+		line := cells(w, m.runCols(), dot(target, th.sha.Render(short(r.SHA))), tint(icon, status), took, th.dim.Render(ago))
+		out = append(out, entry{icon, line, truncate(th.dim.Render(m.trigger(r)), w), "run:" + r.ID})
 	}
 	return out
 }
 
-// tableRows rebuilds every tab's rows, title and column header for the table pane's width.
+// tableRows rebuilds every tab's rows, first line and column head for the
+// table pane's width.
 func (m *model) tableRows() {
 	r := m.repo()
-	w := max(1, m.layout().tw-4) // the gutter, icon and its space, and a space before the foul line
+	tw := m.layout().tw
+	w := max(1, tw-4) // the gutter, icon and its space, and a space before the foul line
+	head := func(lead string, cols []column, vals ...string) string {
+		return th.dim.Render(" " + ic(lead) + " " + cells(w, cols, vals...))
+	}
 	for i := range m.tabs {
 		t := &m.tabs[i]
 		switch t.kind {
 		case tabSearch:
 			t.rows.title = termsafe.Line(t.q())
-			if at := t.at[r.Name]; t.err != "" && !at.IsZero() {
-				t.rows.title += " · results from " + at.Format("15:04")
+			t.rows.lead = m.searchLine(i, tw-1)
+			heads := []string{"Title", ic("checks") + " CI"}
+			if !m.narrow() {
+				if m.w >= 90 {
+					heads = append(heads, ic("rv-approved"))
+				}
+				heads = append(heads, ic("behind"), ic("diff"), ic("age"))
 			}
-			t.rows.head = th.dim.Render("   " + m.prLine(w, "Title", ic("checks"), ic("rv-approved"), ic("diff"), ic("behind"), ic("age")))
+			t.rows.head = head("pr-open", m.prCols(), heads...)
 			t.rows.empty = nil
 			if res, ok := t.res[r.Name]; ok && res.Total == 0 {
 				t.rows.empty = m.emptyLines(i)
 			}
 			t.rows.set(m.prRows(t, w))
 		case tabBranches:
-			t.rows.title, t.rows.head = "branches homerun runs", th.dim.Render("   "+tail(w, "Branch", ic("checks"), ic("age")))
+			t.rows.title, t.rows.head = "branches homerun runs", head("branch", m.branchCols(), "Branch", ic("checks")+" CI", ic("age"))
 			t.rows.set(m.branchRows(r, w))
 		case tabRuns:
-			t.rows.title, t.rows.head = "runs, newest first", th.dim.Render("   "+tail(w, "Run", "Status", ic("age")))
+			t.rows.title, t.rows.head = "runs, newest first", head("run", m.runCols(), "Run", "Status", "Took", ic("age"))
 			t.rows.set(m.runRows(w))
 		}
 	}
+}
+
+// scope is the part of a search homerun adds, w cells at most: the repo
+// shortens to …/name, then truncates.
+func (m *model) scope(w int) string {
+	s := "is:pr repo:" + termsafe.Line(m.repo().Name)
+	if ansi.StringWidth(s) > w {
+		s = truncate("is:pr repo:…/"+termsafe.Line(repoShort(m.repo().Name)), w)
+	}
+	return s
+}
+
+// searchLine is a PR tab's first line, w wide: the dim search icon, the dim
+// scope homerun adds when it fits, then the tab's query in chalk, and when the last search
+// failed, when the results shown are from.
+func (m *model) searchLine(i, w int) string {
+	t := &m.tabs[i]
+	q := th.fg.Render(termsafe.Line(t.q()))
+	if at := t.at[m.repo().Name]; t.err != "" && !at.IsZero() {
+		q += th.dim.Render(" · results from " + at.Format("15:04"))
+	}
+	line := th.dim.Render(ic("search")) + " "
+	room := w - 2 - ansi.StringWidth(q) - 1
+	if ansi.StringWidth("is:pr repo:…/"+termsafe.Line(repoShort(m.repo().Name))) <= room { // else the query alone, as in the narrow table
+		line += th.dim.Render(m.scope(room)) + " "
+	}
+	return truncate(line+q, w)
 }
 
 // emptyLines is what tab i's table says when its search found nothing,
@@ -742,7 +851,11 @@ func (m *model) bases() string {
 		}
 		parts = append(parts, l)
 	}
-	return fit(strings.Join(parts, "  "), m.w)
+	s := strings.Join(parts, "  ")
+	if ansi.StringWidth(s) > m.w-2 { // 80 columns: one space between keeps every count
+		s = strings.Join(parts, " ")
+	}
+	return fit(s, m.w-2)
 }
 
 // lineScore is the strip's numbers for the picked repo: the PR tab's result
@@ -814,17 +927,17 @@ func (m *model) engineWarn() string {
 const minRepo = 8
 
 // strip is the scoreboard: HOMERUN, the picked repo, the line score with the
-// engine light, and the warnings at the right end. When it does not fit, the
-// repo truncates first, then ✔ ✘ drops, then PRs and RUNS; the engine light
-// and the warnings stay, a long warning truncated with ….
+// engine light, and the warnings at the right end, or how long since the
+// last good update when there are none. When it does not fit, the repo
+// truncates first, then ✔ ✘ drops, then PRs and RUNS; the engine light and
+// the warnings stay, a long warning truncated with ….
 func (m *model) strip() string {
-	engine := th.safe.Render(ic("engine")) + " " + th.dim.Render("client")
-	switch {
-	case m.err != nil: // the warning says the rest
-		engine = th.out.Render(ic("engine"))
-	case m.hosting():
-		engine = th.safe.Render(ic("engine")) + " " + th.dim.Render("hosted here")
+	iw := m.w - 2 // the gutters
+	light := th.safe.Render("●")
+	if m.err != nil { // the warning says the rest
+		light = th.out.Render("●")
 	}
+	engine := th.dim.Render("engine ") + light
 	name := termsafe.Line(m.repo().Name)
 	prs, runs, pass, fail := m.lineScore()
 	left := func(repo string, score, pf bool) string {
@@ -843,6 +956,9 @@ func (m *model) strip() string {
 		return strings.Join(append(parts, ls+engine), "  ")
 	}
 	ws := m.warnings()
+	if len(ws) == 0 && !m.updated.IsZero() {
+		ws = []warning{{"updated " + age(m.updated, m.now()) + " ago", th.dim}}
+	}
 	warnW := 0
 	for i, w := range ws {
 		warnW += ansi.StringWidth(w.text)
@@ -856,7 +972,7 @@ func (m *model) strip() string {
 	}
 	l := ""
 	for _, c := range []struct{ score, pf bool }{{true, true}, {true, false}, {false, false}} {
-		room := m.w - (ansi.StringWidth(left(name, c.score, c.pf)) - ansi.StringWidth(name)) - gap - warnW
+		room := iw - (ansi.StringWidth(left(name, c.score, c.pf)) - ansi.StringWidth(name)) - gap - warnW
 		if room >= min(ansi.StringWidth(name), minRepo) {
 			l = left(truncate(name, room), c.score, c.pf)
 			break
@@ -864,7 +980,7 @@ func (m *model) strip() string {
 	}
 	if l == "" {
 		l = left(truncate(name, minRepo), false, false)
-		shrink(ws, m.w-ansi.StringWidth(l)-gap)
+		shrink(ws, iw-ansi.StringWidth(l)-gap)
 	}
 	var right []string
 	for _, w := range ws {
@@ -873,8 +989,8 @@ func (m *model) strip() string {
 		}
 	}
 	r := strings.Join(right, "  ")
-	pad := max(gap, m.w-ansi.StringWidth(l)-ansi.StringWidth(r))
-	return litRow(fit(l+strings.Repeat(" ", pad)+r, m.w), th.p.strip)
+	pad := max(gap, iw-ansi.StringWidth(l)-ansi.StringWidth(r))
+	return litRow(" "+fit(l+strings.Repeat(" ", pad)+r, iw)+" ", th.p.strip)
 }
 
 // shrink truncates the longest warnings, one cell at a time, until all of

@@ -299,11 +299,15 @@ func TestBarStatusAheadOfHints(t *testing.T) {
 	}
 }
 
-func TestBarOverviewHasHelpAndQuit(t *testing.T) {
+// The Overview's dugout keeps ? help; q quit lives in help with the rest.
+func TestBarOverviewHasHelp(t *testing.T) {
 	m, _ := prOpenModel(t, openDetail())
 	m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
-	if b := barText(m); !strings.Contains(b, "? help") || !strings.Contains(b, "q quit") {
+	if b := barText(m); !strings.Contains(b, "? help") || !strings.Contains(b, "h table") {
 		t.Fatalf("bar %q", b)
+	}
+	if s := ansi.Strip(m.helpView().view(160)); !strings.Contains(s, "q       quit") {
+		t.Fatalf("help %q", s)
 	}
 }
 
@@ -373,7 +377,7 @@ func TestBarPROffCapsReason(t *testing.T) {
 		if want := "  config reloaded  "; !strings.HasPrefix(want, strings.TrimSuffix(rest, "…")) && !strings.HasPrefix(rest, want) {
 			t.Fatalf("%d: status not after prOff: %q", w, rest)
 		}
-		if w == 120 && !strings.Contains(rest, "[ ] tabs") {
+		if w == 120 && !strings.Contains(rest, "l/enter preview") {
 			t.Fatalf("120: hints hidden: %q", b)
 		}
 	}

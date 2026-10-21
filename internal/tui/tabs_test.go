@@ -139,16 +139,16 @@ func TestTableColumns(t *testing.T) {
 	}}
 	m := searchModel(t, &pr.Fake{Results: e2eResults(res)})
 	row := rowText(m, 0)
-	indexAll(t, row, ic("ci-fail")+" #1", "  "+ic("ci-fail")+" 1/3 ", " "+ic("rv-approved")+" ", "+0 −0", "  2h", "\n  e2e PR")
-	if strings.Contains(row, "↓") {
+	indexAll(t, row, ic("pr-open")+" #1", "  "+ic("ci-fail")+" 1/3 ", " "+ic("rv-approved")+" ", "+0 −0", "  2h", "\n  e2e PR")
+	if strings.Contains(row, "  3  ") {
 		t.Fatalf("behind shown before it is known: %q", row)
 	}
 	m.behind = map[string]int{"o/e2e#1": 3}
 	m.refresh()
-	indexAll(t, rowText(m, 0), ic("ci-fail")+" 1/3", ic("rv-approved"), "↓3", "2h")
+	indexAll(t, rowText(m, 0), ic("ci-fail")+" 1/3", ic("rv-approved"), "  3  ", "+0 −0", "2h")
 	row = rowText(m, 1)
-	indexAll(t, row, ic("ci-skip")+" #7", ic("ci-skip")+" not run", ic("rv-none"), "2d", "\n   DRAFT  not run here")
-	if h := ansi.Strip(m.at().rows.head); !strings.Contains(h, "Title") || strings.Contains(h, "CI") {
+	indexAll(t, row, ic("pr-draft")+" #7", ic("ci-skip")+" not run", ic("rv-none"), "2d", "\n   DRAFT  not run here")
+	if h := ansi.Strip(m.at().rows.head); !strings.Contains(h, "Title") || !strings.Contains(h, ic("checks")+" CI") {
 		t.Fatalf("head %q", ansi.Strip(m.at().rows.head))
 	}
 	// Narrow screens drop Age, then Rev.
@@ -310,9 +310,9 @@ func TestBranchesAndRunsArePickedRepoOnly(t *testing.T) {
 	if got := rowKeys(m); !slices.Equal(got, []string{"run:r2", "run:r3", "run:r1"}) {
 		t.Fatalf("runs %v", got)
 	}
-	indexAll(t, rowText(m, 0), ic("ci-run")+" #1", "d954af8", "running", "\n", "pull_request", "1m12s…")
-	indexAll(t, rowText(m, 2), ic("ci-pass")+" main", "fd387ab", "passed", "10m", "\n", "push · main", "1m00s")
-	if h := ansi.Strip(m.strip()); !strings.Contains(h, "RUNS 1") || !strings.Contains(h, "client") {
+	indexAll(t, rowText(m, 0), ic("ci-run")+" #1", "d954af8", "running", "1m12s…", "\n", "pull_request")
+	indexAll(t, rowText(m, 2), ic("ci-pass")+" main", "fd387ab", "passed", "1m00s", "10m", "\n", "push · main")
+	if h := ansi.Strip(m.strip()); !strings.Contains(h, "RUNS 1") || !strings.Contains(h, "engine ●") {
 		t.Fatalf("strip %q", h)
 	}
 }
@@ -321,16 +321,18 @@ func TestHeaderEngineStatus(t *testing.T) {
 	runs := []api.Run{{ID: "r2", Repo: "o/e2e", Label: "#1", Status: "running"}, {ID: "r1", Repo: "o/e2e", Label: "main", Status: "done"}}
 	m := hostModel(t, Options{Hosting: hosting(true)}, runs...)
 	h := ansi.Strip(m.strip())
-	if !strings.HasPrefix(h, "HOMERUN  o/e2e  PRs – · RUNS 1 · ") || !strings.HasSuffix(strings.TrimRight(h, " "), ic("engine")+" hosted here") || ansi.StringWidth(h) != 120 {
+	if !strings.HasPrefix(h, " HOMERUN  o/e2e  PRs – · RUNS 1 · ") || !strings.Contains(h, "engine ●") || ansi.StringWidth(h) != 120 {
 		t.Fatalf("hosting: %q", h)
 	}
+	if s := ansi.Strip(m.helpView().view(120)); !strings.Contains(s, "engine: hosted here") {
+		t.Fatalf("hosting help: %q", s)
+	}
 	m = hostModel(t, Options{Hosting: hosting(false)}, runs...)
-	if h := ansi.Strip(m.strip()); !strings.Contains(h, "RUNS 1") || !strings.Contains(h, ic("engine")+" client") {
-		t.Fatalf("client: %q", h)
+	if s := ansi.Strip(m.helpView().view(120)); !strings.Contains(s, "engine: client") {
+		t.Fatalf("client help: %q", s)
 	}
 	m.Update(errMsg{errors.New("connection refused")})
-	if h := m.strip(); strings.Contains(ansi.Strip(h), "client") || !strings.Contains(h, "38;2;229;72;77m"+ic("engine")) ||
-		!strings.Contains(ansi.Strip(h), "stale: daemon unreachable") {
+	if h := m.strip(); !strings.Contains(h, "38;2;229;72;77m●") || !strings.Contains(ansi.Strip(h), "stale: daemon unreachable") {
 		t.Fatalf("unreachable: %q", h)
 	}
 }
@@ -688,7 +690,7 @@ func TestOverviewRebuiltAfterDetailError(t *testing.T) {
 
 func TestPRRowBarHasCancel(t *testing.T) {
 	m := searchModel(t, &pr.Fake{Results: e2eResults(e2eResult())})
-	if b := barText(m); !strings.Contains(b, "x cancel") || !strings.Contains(b, "m merge") {
+	if b := barText(m); !strings.Contains(b, "r rerun") || !strings.Contains(b, "m merge") {
 		t.Fatalf("PR row bar %q", b)
 	}
 }
@@ -759,8 +761,8 @@ func TestEngineUnreachableMarksRollup(t *testing.T) {
 	if len(out) != 40 {
 		t.Fatalf("%d lines", len(out))
 	}
-	indexAll(t, rowText(m, 0), "? ", ic("ci-fail")+" 0/1", "github only")
-	indexAll(t, rowText(m, 1), "? ", "· github only")
+	indexAll(t, rowText(m, 0), ic("pr-open")+" ", ic("ci-fail")+" 0/1", "github only")
+	indexAll(t, rowText(m, 1), ic("pr-open")+" ", "· github only")
 	if got := rowText(m, 1); strings.Contains(got, "not run") {
 		t.Fatalf("a row looks unhandled while the engine is down: %q", got)
 	}

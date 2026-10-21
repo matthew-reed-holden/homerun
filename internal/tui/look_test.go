@@ -35,7 +35,7 @@ func TestStripNarrow(t *testing.T) {
 	if w := ansi.StringWidth(s); w > 80 {
 		t.Fatalf("strip %d cells: %q", w, s)
 	}
-	for _, want := range []string{ic("engine"), "stale", "GitHub rate"} {
+	for _, want := range []string{"engine ●", "stale", "GitHub rate"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("strip lacks %q: %q", want, s)
 		}
@@ -43,7 +43,7 @@ func TestStripNarrow(t *testing.T) {
 	if strings.Contains(s, long) {
 		t.Fatalf("strip kept the full repo: %q", s)
 	}
-	if !strings.Contains(m.strip(), "38;2;229;72;77m"+ic("engine")) {
+	if !strings.Contains(m.strip(), "38;2;229;72;77m●") {
 		t.Fatalf("engine light not red: %q", m.strip())
 	}
 }
@@ -60,7 +60,7 @@ func TestStripNoRepo(t *testing.T) {
 	m := newModel(c, func() time.Time { return now }, Options{})
 	m.Update(stateMsg{&api.State{}})
 	s := ansi.Strip(m.strip())
-	if !strings.HasPrefix(s, "HOMERUN") || !strings.Contains(s, ic("engine")) || strings.Contains(s, "PRs") || strings.Contains(s, "RUNS") {
+	if !strings.HasPrefix(s, " HOMERUN") || !strings.Contains(s, "engine ●") || strings.Contains(s, "PRs") || strings.Contains(s, "RUNS") {
 		t.Fatalf("strip %q", s)
 	}
 }
@@ -159,7 +159,7 @@ func TestDugoutKeepsHelp(t *testing.T) {
 }
 
 // Stacked at 90×30 the preview keeps every line part 1 showed, down to the
-// failing required check; 80×24 keeps its 6-line table.
+// failing required check; 80×24 gives its table 7 lines, two whole rows.
 func TestStackedPreviewKeepsPart1Lines(t *testing.T) {
 	m, _ := newTestModel(t)
 	m.Update(searchMsg{repo: "o/e2e", tab: 0, query: "is:open author:@me", res: goldenResult()})
@@ -171,7 +171,7 @@ func TestStackedPreviewKeepsPart1Lines(t *testing.T) {
 		t.Fatalf("preview body %d lines, part 1 had 15", lay.ph-1)
 	}
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	if lay := m.layout(); lay.th != 6 || lay.ph != 12 {
+	if lay := m.layout(); lay.th != 7 || lay.ph != 11 {
 		t.Fatalf("80×24 layout %+v", lay)
 	}
 }
@@ -207,7 +207,7 @@ func TestTwoLineClick(t *testing.T) {
 	if l.cur != 0 {
 		t.Fatalf("second line of row 0 selected row %d", l.cur)
 	}
-	l.click(l.first() + 2)
+	l.click(l.first() + 3) // below the gap
 	if l.cur != 1 {
 		t.Fatalf("first line of row 1 selected row %d", l.cur)
 	}
@@ -225,7 +225,7 @@ func TestOddHeightNoHalfRow(t *testing.T) {
 	}
 	l.set(rows)
 	l.end()
-	h := l.first() + 7 // seven body lines: three rows and a blank
+	h := l.first() + 9 // nine body lines: three rows, two gaps and a blank
 	lines := strings.Split(ansi.Strip(l.view(40, h, true)), "\n")
 	if len(lines) != h {
 		t.Fatalf("%d lines, want %d", len(lines), h)
@@ -263,7 +263,7 @@ func ciCols(t *testing.T, m *model) []int {
 	l := &m.at().rows
 	var out []int
 	for i, want := range []string{"1/2", "not run"} {
-		s := lines[l.first()+2*i]
+		s := lines[l.first()+3*i]
 		c := cellOf(s, want)
 		if c < 2 {
 			t.Fatalf("row %d lacks %q: %q", i, want, s)
@@ -377,14 +377,14 @@ func TestBreadcrumb(t *testing.T) {
 	if m.log == nil {
 		t.Fatal("no log")
 	}
-	if l := strings.Split(screen(m), "\n")[1]; !strings.HasPrefix(l, "#1 › CI / pass ›") {
+	if l := strings.Split(screen(m), "\n")[1]; !strings.HasPrefix(l, " #1 › CI / pass ›") {
 		t.Fatalf("breadcrumb line %q", l)
 	}
 	if !strings.Contains(strings.Split(m.render(), "\n")[2], claySGR+"m╌") {
 		t.Fatal("line under the breadcrumb not clay")
 	}
 	keysIn(m, "esc")
-	if l := strings.Split(screen(m), "\n")[1]; !strings.HasPrefix(l, "◆ 1 My PRs") {
+	if l := strings.Split(screen(m), "\n")[1]; !strings.HasPrefix(l, " ◆ 1 My PRs") {
 		t.Fatalf("bases not back: %q", l)
 	}
 }
@@ -400,16 +400,15 @@ func TestMarkdownPalette(t *testing.T) {
 	}
 }
 
+// Branches keep the rollup as their lead glyph, in every icon mode.
 func TestLeadGlyphFollowsIcons(t *testing.T) {
 	for _, mode := range []IconMode{IconsNerd, IconsUnicode, IconsASCII} {
 		m, _ := newTestModel(t)
 		useIcons(t, mode)
-		m.tableRows()
-		lay := m.layout()
+		keysIn(m, "4")
 		l := &m.at().rows
-		row := ansi.Strip(strings.Split(m.tableView(lay.tw, lay.th), "\n")[l.first()])
-		if !strings.HasPrefix(row, "▌"+ic("ci-fail")+" ") {
-			t.Fatalf("mode %d: failing PR row %q, want lead %q", mode, row, ic("ci-fail"))
+		if row := tableLines(m)[l.first()]; !strings.HasPrefix(row, "▌"+ic("ci-pass")+" main") {
+			t.Fatalf("mode %d: branch row %q, want lead %q", mode, row, ic("ci-pass"))
 		}
 	}
 }
@@ -427,8 +426,8 @@ func TestFilterShowsScopeDim(t *testing.T) {
 	if !strings.Contains(bar, dimSGR+"m"+"is:pr repo:o/e2e") {
 		t.Fatalf("scope not dim: %q", bar)
 	}
-	if !strings.Contains(bar, claySGR) || !strings.Contains(bar, "┌") {
-		t.Fatalf("bar not in a clay box: %q", bar)
+	if !strings.Contains(bar, claySGR+"m"+ic("search")) || strings.Contains(bar, "┌") || strings.Contains(bar, "\n") {
+		t.Fatalf("bar not the search line with a clay icon: %q", bar)
 	}
 	keysIn(m, "backspace", "backspace")
 	typeFilter(m, "label:bug")
@@ -486,8 +485,8 @@ func TestStatesShowWordmark(t *testing.T) {
 	}
 }
 
-// A long repo shortens in the filter bar, so the box stays three lines and
-// the query keeps room.
+// A long repo shortens in the filter bar, so the bar stays one line and the
+// query keeps room.
 func TestFilterLongRepoFits(t *testing.T) {
 	st := fixture()
 	st.Repos[0].Name = "owner/" + strings.Repeat("r", 60)
@@ -496,7 +495,7 @@ func TestFilterLongRepoFits(t *testing.T) {
 	keysIn(m, "/")
 	typeFilter(m, strings.Repeat(" label:x", 12))
 	bar := strings.Split(ansi.Strip(m.filterBar()), "\n")
-	if len(bar) != 3 || !strings.Contains(bar[1], "is:pr repo:…/rrr") {
+	if len(bar) != 1 || !strings.Contains(bar[0], "is:pr repo:…/rrr") {
 		t.Fatalf("bar %q", bar)
 	}
 	for i, l := range strings.Split(m.render(), "\n") {
@@ -506,30 +505,26 @@ func TestFilterLongRepoFits(t *testing.T) {
 	}
 }
 
-// The filter bar sits on top of the table and pushes it down: the table's
-// title and the selected PR stay in view, wide and stacked.
-func TestFilterBarPushesTable(t *testing.T) {
+// / edits the search line in place: the head and the selected PR stay where
+// they were, wide and stacked.
+func TestFilterEditsSearchLine(t *testing.T) {
 	for _, sz := range [][2]int{{120, 40}, {80, 24}} {
 		m := searchModel(t, &pr.Fake{Results: e2eResults(e2eResult())})
 		m.Update(tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
+		before := strings.Split(ansi.Strip(m.render()), "\n")
 		keysIn(m, "/")
 		lay := m.layout()
 		lines := strings.Split(ansi.Strip(m.render()), "\n")
 		if len(lines) != sz[1] {
 			t.Fatalf("%v: %d lines", sz, len(lines))
 		}
-		if !strings.HasPrefix(lines[lay.top], "┌") || !strings.Contains(lines[lay.top+1], "is:pr repo:o/e2e is:open author:@me") {
-			t.Fatalf("%v: bar not at the table's top:\n%s", sz, strings.Join(lines, "\n"))
+		if !strings.Contains(lines[lay.top], ic("search")+" is:pr repo:o/e2e is:open author:@me") {
+			t.Fatalf("%v: bar not on the search line:\n%s", sz, strings.Join(lines, "\n"))
 		}
-		if l := lines[lay.ty]; !strings.HasPrefix(l, "is:open author:@me") {
-			t.Fatalf("%v: table title overdrawn: %q", sz, l)
-		}
-		var sel bool
-		for _, l := range lines[lay.ty : lay.ty+lay.th] {
-			sel = sel || strings.HasPrefix(l, "▌") && strings.Contains(l, "#1")
-		}
-		if !sel {
-			t.Fatalf("%v: selected PR hidden:\n%s", sz, strings.Join(lines, "\n"))
+		for i := lay.top + 1; i < lay.top+lay.th; i++ {
+			if lines[i] != before[i] {
+				t.Fatalf("%v: line %d moved: %q, was %q", sz, i, lines[i], before[i])
+			}
 		}
 		for i, l := range lines {
 			if w := ansi.StringWidth(l); w > sz[0] {
@@ -552,5 +547,243 @@ func TestMarkdownCodeBlockDay(t *testing.T) {
 	}
 	if !strings.Contains(out, "38;2;19;33;58") {
 		t.Fatalf("code block text not the day fg: %q", out)
+	}
+}
+
+// goldenModel is newTestModel showing goldenResult at w×h: #1 open and
+// failing, #2 awaiting review, #5 a draft.
+func goldenModel(t *testing.T, w, h int) *model {
+	t.Helper()
+	m, _ := newTestModel(t)
+	m.Update(searchMsg{repo: "o/e2e", tab: 0, query: "is:open author:@me", res: goldenResult()})
+	m.behind = map[string]int{"o/e2e#1": 3}
+	m.Update(tea.WindowSizeMsg{Width: w, Height: h})
+	return m
+}
+
+// tableLines is the table section's lines, ANSI stripped.
+func tableLines(m *model) []string {
+	lay := m.layout()
+	return strings.Split(ansi.Strip(m.tableView(lay.tw, lay.th)), "\n")
+}
+
+func TestOuterGutter(t *testing.T) {
+	m := goldenModel(t, 120, 40)
+	lines := strings.Split(ansi.Strip(m.render()), "\n")
+	for i, l := range lines {
+		if !strings.HasPrefix(l, " ") || !strings.HasSuffix(l, " ") || ansi.StringWidth(l) != 120 {
+			t.Fatalf("line %d lacks the gutter: %q", i, l)
+		}
+	}
+	if want := " " + strings.Repeat("╌", 118) + " "; lines[2] != want {
+		t.Fatalf("foul line %q", lines[2])
+	}
+}
+
+func TestRowGap(t *testing.T) {
+	m := goldenModel(t, 120, 40)
+	l := &m.at().rows
+	if n := l.span(0, 2); n != 8 {
+		t.Fatalf("three rows span %d lines, want 8", n)
+	}
+	lines := tableLines(m)[l.first():]
+	for i, want := range []string{"#1", "e2e PR", "", "#2", "typo fix", "", "#5", "GraphQL"} {
+		if want == "" {
+			if strings.TrimSpace(lines[i]) != "" {
+				t.Fatalf("gap line %d %q", i, lines[i])
+			}
+			if strings.HasPrefix(lines[i], "▌") {
+				t.Fatalf("batter's box on the gap: %q", lines[i])
+			}
+			continue
+		}
+		if !strings.Contains(lines[i], want) {
+			t.Fatalf("line %d %q lacks %q", i, lines[i], want)
+		}
+	}
+	l.click(l.first() + 2)
+	if l.cur != 0 {
+		t.Fatalf("click on the gap selected row %d", l.cur)
+	}
+	l.click(l.first() + 3)
+	if l.cur != 1 {
+		t.Fatalf("click on row 1 selected row %d", l.cur)
+	}
+	l.click(l.first() + 5)
+	if l.cur != 1 {
+		t.Fatalf("click on the second gap selected row %d", l.cur)
+	}
+}
+
+// cellsInOrder finds each sub in s after the previous one, and returns the
+// cell where each starts and the cell after each ends.
+func cellsInOrder(t *testing.T, s string, subs ...string) (starts, ends []int) {
+	t.Helper()
+	at := 0
+	for _, sub := range subs {
+		i := strings.Index(s[at:], sub)
+		if i < 0 {
+			t.Fatalf("%q lacks %q after byte %d", s, sub, at)
+		}
+		i += at
+		starts = append(starts, ansi.StringWidth(s[:i]))
+		ends = append(ends, ansi.StringWidth(s[:i+len(sub)]))
+		at = i + len(sub)
+	}
+	return starts, ends
+}
+
+func TestHeadsAlign(t *testing.T) {
+	for _, mode := range []IconMode{IconsNerd, IconsUnicode, IconsASCII} {
+		m := goldenModel(t, 120, 40)
+		useIcons(t, mode)
+		m.tableRows()
+		l := &m.at().rows
+		lines := tableLines(m)
+		head, row := lines[l.first()-1], lines[l.first()]
+		hs, he := cellsInOrder(t, head, "Title", ic("checks")+" CI", ic("rv-approved"), ic("behind"), ic("diff"), ic("age"))
+		rs, re := cellsInOrder(t, row, "#1", ic("ci-fail")+" 1/3", ic("rv-approved"), "3", "−7", "5m")
+		for i, name := range []string{"title", "CI", "review"} { // left-aligned
+			if hs[i] != rs[i] {
+				t.Fatalf("mode %d: %s head at %d, column at %d\n%s\n%s", mode, name, hs[i], rs[i], head, row)
+			}
+		}
+		for i, name := range []string{"behind", "diff", "age"} { // right-aligned
+			if he[3+i] != re[3+i] {
+				t.Fatalf("mode %d: %s head ends at %d, column at %d\n%s\n%s", mode, name, he[3+i], re[3+i], head, row)
+			}
+		}
+		keysIn(m, "4")
+		lines = tableLines(m)
+		if h, r := lines[l.first()-1], lines[l.first()]; cellOf(h, ic("checks")+" CI") != cellOf(r, "1/1")-2 {
+			t.Fatalf("mode %d: branches CI head\n%s\n%s", mode, h, r)
+		}
+		keysIn(m, "5")
+		lines = tableLines(m)
+		h, r := lines[l.first()-1], lines[l.first()]
+		hs, he = cellsInOrder(t, h, "Run", "Status", "Took")
+		rs, re = cellsInOrder(t, r, "#1", "running", "1m12s…")
+		if hs[1] != rs[1] || he[2] != re[2] {
+			t.Fatalf("mode %d: runs heads\n%s\n%s", mode, h, r)
+		}
+	}
+}
+
+func TestSearchLineAlwaysShown(t *testing.T) {
+	for _, w := range []int{120, 80} {
+		m := goldenModel(t, w, 40)
+		first := tableLines(m)[0]
+		for _, want := range []string{ic("search") + " is:pr repo:o/e2e", "is:open author:@me"} {
+			if !strings.Contains(first, want) {
+				t.Fatalf("w=%d: search line %q lacks %q", w, first, want)
+			}
+		}
+	}
+	m := goldenModel(t, 120, 40)
+	keysIn(m, "/")
+	lay := m.layout()
+	if lines := strings.Split(ansi.Strip(m.render()), "\n"); !strings.Contains(lines[lay.top], "is:pr repo:o/e2e is:open author:@me") {
+		t.Fatalf("filter not on the search line: %q", lines[lay.top])
+	}
+}
+
+func TestLeadGlyphIsPRState(t *testing.T) {
+	for _, mode := range []IconMode{IconsNerd, IconsUnicode, IconsASCII} {
+		m := goldenModel(t, 120, 40)
+		useIcons(t, mode)
+		m.tableRows()
+		lay := m.layout()
+		lines := strings.Split(m.tableView(lay.tw, lay.th), "\n")
+		var open, draft string
+		for _, l := range lines {
+			switch s := ansi.Strip(l); {
+			case strings.Contains(s, "#1 "):
+				open = l
+			case strings.Contains(s, "#5 "):
+				draft = l
+			}
+		}
+		if s := ansi.Strip(open); !strings.HasPrefix(s, "▌"+ic("pr-open")+" ") || !strings.Contains(open, "38;2;108;192;112m"+ic("pr-open")) {
+			t.Fatalf("mode %d: open row %q", mode, open)
+		}
+		if s := ansi.Strip(draft); !strings.HasPrefix(s, " "+ic("pr-draft")+" ") || !strings.Contains(draft, dimSGR+"m"+ic("pr-draft")) {
+			t.Fatalf("mode %d: draft row %q", mode, draft)
+		}
+	}
+}
+
+func TestStackedTwoRows(t *testing.T) {
+	m := goldenModel(t, 80, 24)
+	whole := func(lines []string) int {
+		n := 0
+		for i := 0; i+1 < len(lines); i++ {
+			for _, p := range [][2]string{{"#1 ", "e2e PR"}, {"#2 ", "typo fix"}, {"#5 ", "GraphQL"}} {
+				if strings.Contains(lines[i], p[0]) && strings.Contains(lines[i+1], p[1]) {
+					n++
+				}
+			}
+		}
+		return n
+	}
+	if n := whole(tableLines(m)); n < 2 {
+		t.Fatalf("%d whole rows at 80×24:\n%s", n, strings.Join(tableLines(m), "\n"))
+	}
+	keysIn(m, "G")
+	lines := tableLines(m)
+	var sel []string
+	for _, l := range lines {
+		if strings.HasPrefix(l, "▌") {
+			sel = append(sel, l)
+		}
+	}
+	if len(sel) != 2 || !strings.Contains(sel[0], "#5") || !strings.Contains(sel[1], "GraphQL") {
+		t.Fatalf("cursor row not whole after G:\n%s", strings.Join(lines, "\n"))
+	}
+}
+
+func TestDugoutFocusedHints(t *testing.T) {
+	m := goldenModel(t, 120, 40)
+	d := ansi.Strip(m.dugout())
+	if !strings.HasSuffix(strings.TrimRight(d, " "), "PR 1/3   ? help") {
+		t.Fatalf("dugout %q", d)
+	}
+	hints := strings.TrimSpace(d[:strings.Index(d, "PR 1/3")])
+	if n := len(strings.Split(hints, " · ")); n > 6 {
+		t.Fatalf("%d hints: %q", n, hints)
+	}
+	if !strings.Contains(m.dugout(), "\x1b[1;38;2;232;236;242m") {
+		t.Fatalf("keys not bold chalk: %q", m.dugout())
+	}
+}
+
+func TestStripEngineAndUpdated(t *testing.T) {
+	m := goldenModel(t, 120, 40)
+	s := ansi.Strip(m.strip())
+	if !strings.Contains(s, "engine ●") || strings.Contains(s, "client") {
+		t.Fatalf("strip %q", s)
+	}
+	if !strings.HasSuffix(strings.TrimRight(s, " "), "updated 0s ago") {
+		t.Fatalf("strip right end %q", s)
+	}
+	if !strings.Contains(m.strip(), "38;2;108;192;112m●") {
+		t.Fatalf("engine light not green: %q", m.strip())
+	}
+	if h := ansi.Strip(m.helpView().view(100)); !strings.Contains(h, "engine: client") {
+		t.Fatalf("help lacks the engine mode: %q", h)
+	}
+}
+
+func TestPreviewFocusNarrowsTable(t *testing.T) {
+	m := goldenModel(t, 120, 40)
+	wide := m.layout().tw
+	m.focus = onPreview
+	m.tableRows()
+	lay := m.layout()
+	if lay.tw >= wide {
+		t.Fatalf("table %d wide with the preview focused, %d before", lay.tw, wide)
+	}
+	row := tableLines(m)[m.at().rows.first()]
+	if !strings.Contains(row, "#1") || !strings.Contains(row, "@matt") || !strings.Contains(row, "1/3") || strings.Contains(row, "5m") || strings.Contains(row, "feat") {
+		t.Fatalf("narrow row %q", row)
 	}
 }

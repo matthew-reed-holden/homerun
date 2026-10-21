@@ -19,6 +19,7 @@ type Summary struct {
 	Number                                         int
 	Repo                                           string // owner/name; set by Search
 	Title, Author, Body, HeadRef, BaseRef, HeadSHA string
+	State                                          string // OPEN, CLOSED or MERGED; "" when not known
 	IsDraft                                        bool
 	Mergeable, MergeState, ReviewDecision          string // GitHub enums as returned
 	Additions, Deletions, ChangedFiles, Comments   int
