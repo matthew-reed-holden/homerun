@@ -108,7 +108,7 @@ func (m *model) pickerView() string {
 		var plain, styled string
 		if r.add {
 			plain = "+ add " + termsafe.Line(r.name) + " (this folder)"
-			styled = dim.Render(plain)
+			styled = th.dim.Render(plain)
 		} else {
 			e := byName[r.name]
 			plain, styled = e.icon+" "+ansi.Strip(e.text), paint(e.icon)+" "+e.text
@@ -119,9 +119,9 @@ func (m *model) pickerView() string {
 		lines = append(lines, styled)
 	}
 	if len(p.rows) == 0 {
-		lines = append(lines, dim.Render("no matching repo"))
+		lines = append(lines, th.dim.Render("no matching repo"))
 	}
-	lines = append(lines, "", dim.Render("enter pick · esc cancel"))
+	lines = append(lines, "", th.dim.Render("enter pick · esc cancel"))
 	d := dialog{title: "Pick a repo", body: strings.Join(lines, "\n")}
 	return d.view(m.w)
 }
@@ -138,7 +138,7 @@ func (m *model) repoEntry(r api.Repo) entry {
 	}
 	for _, tb := range m.tabs {
 		if res, ok := tb.res[r.Name]; ok && tb.q() == "is:open" {
-			t += dim.Render(fmt.Sprintf(" %d PRs", res.Total))
+			t += th.dim.Render(fmt.Sprintf(" %d PRs", res.Total))
 			break
 		}
 	}

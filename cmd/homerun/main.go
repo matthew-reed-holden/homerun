@@ -172,7 +172,9 @@ func cmdTUI() error {
 	go func() { <-hup; close(quit) }()
 	prs, cfg, warns, prsErr := userPRs(cfgPath)
 	var tabs []tui.Tab
+	var cfgIcons string
 	if cfg != nil {
+		cfgIcons = cfg.Icons
 		for _, t := range cfg.Tabs {
 			tabs = append(tabs, tui.Tab{Name: t.Name, Query: t.Query})
 		}
@@ -180,7 +182,7 @@ func cmdTUI() error {
 	err = tui.Run(api.NewClient(api.SocketPath()), tui.Options{Host: e.tryHost, Hosting: e.hosting, HostErr: hostErr,
 		Launch:  git.OriginRepo(context.Background(), cwd),
 		AddRepo: func(ctx context.Context, n string) error { return addRepo(ctx, cfgPath, n) },
-		Quit:    quit, PRs: prs, PRsErr: prsErr, Warns: warns, Log: logPath, Tabs: tabs})
+		Quit:    quit, PRs: prs, PRsErr: prsErr, Warns: warns, Log: logPath, Tabs: tabs, Icons: cfgIcons})
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	return errors.Join(err, e.shutdown())
 }

@@ -115,5 +115,5 @@ func (m *model) restoreDraft(ref, body string) {
 
 func (m *model) commentView() string {
 	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("3")).Padding(0, 1).Width(commentW(m.w))
-	return box.Render(bold.Render("Comment on #"+strconv.Itoa(m.pr.number)) + "\n\n" + m.draft.View() + "\n\n" + dim.Render("ctrl+s send · esc close"))
+	return box.Render(th.bold.Render("Comment on #"+strconv.Itoa(m.pr.number)) + "\n\n" + m.draft.View() + "\n\n" + th.dim.Render("ctrl+s send · esc close"))
 }

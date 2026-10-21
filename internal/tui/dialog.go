@@ -37,7 +37,7 @@ func (d *dialog) key(k tea.KeyPressMsg) tea.Cmd {
 func (d *dialog) view(w int) string {
 	bw := min(max(20, w-4), max(44, lipgloss.Width(d.body)+4))
 	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("3")).Padding(0, 1).Width(bw)
-	return box.Render(bold.Render(d.title) + "\n\n" + d.body)
+	return box.Render(th.bold.Render(d.title) + "\n\n" + d.body)
 }
 
 // overlay draws fg centred on bg; bg is a full w×h screen.

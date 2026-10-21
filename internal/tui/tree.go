@@ -206,7 +206,7 @@ func (t *tree) rows(w, inner int, now time.Time, focused bool) []string {
 			name += " " + paintSource(source(c, c.App == ""))
 		}
 		if n.step < 0 && t.req[c.Name] {
-			name += " " + dim.Render("required")
+			name += " " + th.dim.Render("required")
 		}
 		why := ""
 		if n.step < 0 && c.Status == "completed" && c.Conclusion == "failure" {
@@ -217,7 +217,7 @@ func (t *tree) rows(w, inner int, now time.Time, focused bool) []string {
 			// The reason takes the room the name leaves free in the row.
 			room := w - 2 - timeW - ansi.StringWidth(indent+icon+" "+name) - 1
 			if room > 3 {
-				line = fit(indent+paint(icon)+" "+name+" "+dim.Render(truncate("— "+why, room)), w-2-timeW) + rfit(tm, timeW)
+				line = fit(indent+paint(icon)+" "+name+" "+th.dim.Render(truncate("— "+why, room)), w-2-timeW) + rfit(tm, timeW)
 			}
 		}
 		if i == t.cur && focused {
@@ -225,11 +225,11 @@ func (t *tree) rows(w, inner int, now time.Time, focused bool) []string {
 		}
 		lines = append(lines, line)
 		if l := lastLine(c, n); l != "" && len(lines) < inner {
-			lines = append(lines, dim.Render(truncate("  "+l, w-2)))
+			lines = append(lines, th.dim.Render(truncate("  "+l, w-2)))
 		}
 	}
 	if len(ns) == 0 {
-		lines = []string{dim.Render("no checks yet")}
+		lines = []string{th.dim.Render("no checks yet")}
 	}
 	return lines
 }

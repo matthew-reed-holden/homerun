@@ -14,15 +14,8 @@ import (
 )
 
 var (
-	green   = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	red     = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	yellow  = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	dim     = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	blue    = lipgloss.NewStyle().Foreground(lipgloss.Color("4"))
-	magenta = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
-	bold    = lipgloss.NewStyle().Bold(true)
-	sel     = lipgloss.NewStyle().Reverse(true)
-	chipOn  = lipgloss.NewStyle().Reverse(true).Bold(true) // the active preview tab
+	sel    = lipgloss.NewStyle().Reverse(true)
+	chipOn = lipgloss.NewStyle().Reverse(true).Bold(true) // the active preview tab
 )
 
 func Icon(status, conclusion string) string {
@@ -62,13 +55,13 @@ func paint(icon string) string { return tint(icon, icon) }
 func tint(icon, s string) string {
 	switch icon {
 	case "✔":
-		return green.Render(s)
+		return th.safe.Render(s)
 	case "✘":
-		return red.Render(s)
+		return th.out.Render(s)
 	case "⟳", "◇":
-		return yellow.Render(s)
+		return th.lights.Render(s)
 	}
-	return dim.Render(s)
+	return th.dim.Render(s)
 }
 
 func dur(d time.Duration) string {

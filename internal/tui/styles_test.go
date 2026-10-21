@@ -52,7 +52,7 @@ func TestDurationsAndAges(t *testing.T) {
 }
 
 func TestFitIsExactWidth(t *testing.T) {
-	for _, s := range []string{"", "abc", "✔ ✘ ⟳ long text that overflows", red.Render("coloured text")} {
+	for _, s := range []string{"", "abc", "✔ ✘ ⟳ long text that overflows", th.out.Render("coloured text")} {
 		if w := ansi.StringWidth(fit(s, 10)); w != 10 {
 			t.Errorf("fit(%q) width %d", s, w)
 		}

@@ -12,7 +12,7 @@ import (
 // openFilter opens the query bar on the active PR tab, filled with its query.
 func (m *model) openFilter() {
 	in := textinput.New()
-	in.Prompt = yellow.Render("/") + " "
+	in.Prompt = th.lights.Render("/") + " "
 	in.SetValue(m.at().q())
 	in.Focus()
 	m.flt = &in
@@ -42,9 +42,9 @@ func (m *model) filterKey(k tea.KeyPressMsg) tea.Cmd {
 }
 
 func (m *model) filterBar() string {
-	return truncate(m.flt.View()+"  "+dim.Render("enter apply · esc keep old · ctrl+u clear"), m.w)
+	return truncate(m.flt.View()+"  "+th.dim.Render("enter apply · esc keep old · ctrl+u clear"), m.w)
 }
 
 func (m *model) filterErrLine() string {
-	return truncate(red.Render("✘")+" "+dim.Render("GitHub rejected the query: "+termsafe.Line(m.fltErr)+". The tab kept its old query."), m.w)
+	return truncate(th.out.Render("✘")+" "+th.dim.Render("GitHub rejected the query: "+termsafe.Line(m.fltErr)+". The tab kept its old query."), m.w)
 }

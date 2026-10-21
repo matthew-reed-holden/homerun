@@ -296,13 +296,13 @@ func (m *model) checksHead(inner int) []string {
 	_, it := m.prItem()
 	var out []string
 	if it == nil {
-		out = append(out, dim.Render(truncate("· not run by homerun: its branch has no workflow homerun handles, or the PR was opened before homerun watched it.", inner)))
+		out = append(out, th.dim.Render(truncate("· not run by homerun: its branch has no workflow homerun handles, or the PR was opened before homerun watched it.", inner)))
 	}
 	out = append(out, actionsLines(m.rowDoubled(it, gh), m.repo(), inner)...)
 	if len(out) == 0 {
 		return nil
 	}
-	return append(out, dim.Render(strings.Repeat("─", max(0, inner))))
+	return append(out, th.dim.Render(strings.Repeat("─", max(0, inner))))
 }
 
 // syncPage sizes the viewport and rebuilds the page when the width or detail changed.
@@ -322,17 +322,17 @@ func (m *model) prPage(w int) []string {
 	p := m.pr
 	var out []string
 	if p.d != nil && p.d.State == "MERGED" {
-		out = append(out, magenta.Render(truncate(mergedLine(p.d), w)), dim.Render("It leaves this tab on the next refresh."), "")
+		out = append(out, th.clay.Render(truncate(mergedLine(p.d), w)), th.dim.Render("It leaves this tab on the next refresh."), "")
 	}
 	if p.err != nil {
-		out = append(out, strings.Split(red.Width(max(1, w)).Render(termsafe.Line(p.err.Error())), "\n")...)
+		out = append(out, strings.Split(th.out.Width(max(1, w)).Render(termsafe.Line(p.err.Error())), "\n")...)
 	}
 	behind, known := m.behind[m.prRef()]
 	if p.d == nil {
 		if s, ok := m.summary(p.repo, p.number); ok {
 			out = append(out, summaryLines(s, behind, known, w)...)
 		} else if p.err == nil {
-			out = append(out, dim.Render("loading…"))
+			out = append(out, th.dim.Render("loading…"))
 		}
 		return out
 	}
@@ -340,28 +340,28 @@ func (m *model) prPage(w int) []string {
 	head := d.Summary
 	head.Body = ""
 	out = append(out, summaryLines(head, behind, known, w)...)
-	out = append(out, stateWord(d), dim.Render(strings.Repeat("─", w)), "")
+	out = append(out, stateWord(d), th.dim.Render(strings.Repeat("─", w)), "")
 	if strings.TrimSpace(d.Body) == "" {
-		out = append(out, dim.Render("No description provided."))
+		out = append(out, th.dim.Render("No description provided."))
 	} else {
 		out = append(out, wrapLines(renderMarkdown(d.Body, w), w)...)
 	}
-	out = append(out, "", bold.Render("Timeline"))
+	out = append(out, "", th.bold.Render("Timeline"))
 	for _, e := range d.Timeline {
 		out = append(out, m.eventLines(e, w)...)
 	}
-	out = append(out, "", bold.Render("Checks"))
+	out = append(out, "", th.bold.Render("Checks"))
 	if len(d.Checks) == 0 {
-		out = append(out, dim.Render("none"))
+		out = append(out, th.dim.Render("none"))
 	}
 	for _, c := range d.Checks {
 		l := paint(Icon(c.Status, c.Conclusion)) + " " + termsafe.Line(c.Name)
 		if c.Required {
-			l += " " + dim.Render("required")
+			l += " " + th.dim.Render("required")
 		}
 		out = append(out, wrapLines(l, w)...)
 	}
-	out = append(out, "", bold.Render("Merge"))
+	out = append(out, "", th.bold.Render("Merge"))
 	for _, l := range mergeLines(d) {
 		out = append(out, wrapLines(paintMerge(l), w)...)
 	}
@@ -383,14 +383,14 @@ func mergedLine(d *pr.Detail) string {
 func stateWord(d *pr.Detail) string {
 	switch d.State {
 	case "MERGED":
-		return bold.Render("Merged")
+		return th.bold.Render("Merged")
 	case "CLOSED":
-		return red.Render("Closed")
+		return th.out.Render("Closed")
 	}
 	if d.IsDraft {
-		return green.Render("Open") + dim.Render(" · draft")
+		return th.safe.Render("Open") + th.dim.Render(" · draft")
 	}
-	return green.Render("Open")
+	return th.safe.Render("Open")
 }
 
 // eventLines is one timeline entry: a headline, then any text indented 2.
@@ -404,7 +404,7 @@ func (m *model) eventLines(e pr.Event, w int) []string {
 	body := ""
 	switch e.Kind {
 	case "commit":
-		head = dim.Render("●") + " " + short(termsafe.Line(e.SHA)) + " " + termsafe.Line(e.Text) + " · " + who + when
+		head = th.dim.Render("●") + " " + short(termsafe.Line(e.SHA)) + " " + termsafe.Line(e.Text) + " · " + who + when
 	case "comment":
 		head, body = "💬 "+who+when, e.Text
 	case "review":
@@ -413,7 +413,7 @@ func (m *model) eventLines(e pr.Event, w int) []string {
 	case "merged":
 		head = "◆ " + who + " merged" + when
 	case "closed":
-		head = red.Render("✘") + " " + who + " closed" + when
+		head = th.out.Render("✘") + " " + who + " closed" + when
 	case "reopened":
 		head = "○ " + who + " reopened" + when
 	case "force_pushed":
@@ -433,11 +433,11 @@ func (m *model) eventLines(e pr.Event, w int) []string {
 func reviewEvent(state string) (icon, verb string) {
 	switch state {
 	case "APPROVED":
-		return green.Render("✔"), "approved"
+		return th.safe.Render("✔"), "approved"
 	case "CHANGES_REQUESTED":
-		return red.Render("✘"), "requested changes"
+		return th.out.Render("✘"), "requested changes"
 	case "DISMISSED":
-		return dim.Render("○"), "review dismissed"
+		return th.dim.Render("○"), "review dismissed"
 	}
 	return "💬", "reviewed"
 }

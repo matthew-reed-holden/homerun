@@ -91,15 +91,15 @@ func mergeLines(d *pr.Detail) []string {
 func paintMerge(l string) string {
 	switch {
 	case strings.HasPrefix(l, "✔"):
-		return green.Render(l)
+		return th.safe.Render(l)
 	case strings.HasPrefix(l, "⚠"):
-		return yellow.Render(l)
+		return th.lights.Render(l)
 	case strings.HasPrefix(l, "✘"), l == "Closed":
-		return red.Render(l)
+		return th.out.Render(l)
 	case strings.HasPrefix(l, "◌"):
-		return dim.Render(l)
+		return th.dim.Render(l)
 	}
-	return bold.Render(l)
+	return th.bold.Render(l)
 }
 
 var methodLabels = map[string]string{"MERGE": "Create a merge commit", "SQUASH": "Squash and merge", "REBASE": "Rebase and merge"}

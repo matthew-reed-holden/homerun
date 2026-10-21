@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -31,5 +32,27 @@ func TestTabsValidated(t *testing.T) {
 	writeFile(t, p, "max_parallel: 2\n", 0o600)
 	if u, _, err := LoadUser(p); err != nil || u.Tabs != nil {
 		t.Fatalf("%+v %v", u, err)
+	}
+}
+
+func TestIconsWarning(t *testing.T) {
+	for icons, want := range map[string]bool{"emoji": true, "ascii": false} {
+		p := filepath.Join(t.TempDir(), "config.yml")
+		if err := os.WriteFile(p, []byte("icons: "+icons+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, warns, err := LoadUser(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := false
+		for _, w := range warns {
+			if strings.Contains(w, `icons: "emoji" is not nerd, unicode or ascii; using nerd`) {
+				got = true
+			}
+		}
+		if got != want || (!want && len(warns) != 0) {
+			t.Errorf("icons %s: warns %q", icons, warns)
+		}
 	}
 }

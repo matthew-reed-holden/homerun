@@ -92,13 +92,13 @@ func (l *list) view(w, h int, focused bool) string {
 // frame draws a rounded box of exactly w×h cells with the title set into the
 // top border; the focused box is bright, the others dim.
 func frame(title string, lines []string, w, h int, focused bool) string {
-	border := dim
+	border := th.dim
 	if focused {
-		border = green
+		border = th.safe
 	}
 	t := truncate(title, max(0, w-4))
 	if focused {
-		t = bold.Render(t)
+		t = th.bold.Render(t)
 	}
 	out := []string{border.Render("╭─") + t + border.Render(strings.Repeat("─", max(0, w-3-ansi.StringWidth(t)))+"╮")}
 	for i := range max(0, h-2) {

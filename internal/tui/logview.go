@@ -162,7 +162,7 @@ func (l *logView) view(title string, w, h int, focused bool) string {
 		case i == l.match:
 			s = sel.Render(s)
 		case failLine(l.lines[i]):
-			s = red.Render(s)
+			s = th.out.Render(s)
 		}
 		lines = append(lines, s)
 	}
@@ -183,7 +183,7 @@ func (l *logView) view(title string, w, h int, focused bool) string {
 	if l.typing {
 		lines = append(lines, truncate(l.input.View(), w-2))
 	} else {
-		lines = append(lines, dim.Render(truncate(status, w-2)))
+		lines = append(lines, th.dim.Render(truncate(status, w-2)))
 	}
 	return frame(title, lines, w, h, focused)
 }

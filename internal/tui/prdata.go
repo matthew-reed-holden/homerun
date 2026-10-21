@@ -107,7 +107,7 @@ func (m *model) previewHead(inner int) []string {
 	default:
 		return nil
 	}
-	return append(out, dim.Render(strings.Repeat("─", max(0, inner))))
+	return append(out, th.dim.Render(strings.Repeat("─", max(0, inner))))
 }
 
 // summaryLines is the PR's headline, merge state, checks, reviews and the start
@@ -121,17 +121,17 @@ func summaryLines(s pr.Summary, behind int, known bool, w int) []string {
 	var merge []string
 	switch {
 	case known && behind == 1:
-		merge = append(merge, yellow.Render("⚠ 1 commit behind "+base))
+		merge = append(merge, th.lights.Render("⚠ 1 commit behind "+base))
 	case known && behind > 1:
-		merge = append(merge, yellow.Render(fmt.Sprintf("⚠ %d commits behind %s", behind, base)))
+		merge = append(merge, th.lights.Render(fmt.Sprintf("⚠ %d commits behind %s", behind, base)))
 	case !known && s.MergeState == "BEHIND":
-		merge = append(merge, yellow.Render("⚠ behind "+base))
+		merge = append(merge, th.lights.Render("⚠ behind "+base))
 	}
 	switch s.Mergeable {
 	case "CONFLICTING":
-		merge = append(merge, red.Render("✘ conflicts"))
+		merge = append(merge, th.out.Render("✘ conflicts"))
 	case "MERGEABLE":
-		merge = append(merge, green.Render("✔ no conflicts"))
+		merge = append(merge, th.safe.Render("✔ no conflicts"))
 	}
 	if len(merge) > 0 {
 		out = append(out, line(merge...))
@@ -179,13 +179,13 @@ func checksPart(s pr.Summary) []string {
 		if req > 0 {
 			p += fmt.Sprintf(" (%d required)", req)
 		}
-		parts = append(parts, red.Render("✘ "+p))
+		parts = append(parts, th.out.Render("✘ "+p))
 	}
 	if pass > 0 {
-		parts = append(parts, green.Render(fmt.Sprintf("✔ %d passed", pass)))
+		parts = append(parts, th.safe.Render(fmt.Sprintf("✔ %d passed", pass)))
 	}
 	if wait > 0 {
-		parts = append(parts, yellow.Render(fmt.Sprintf("◌ %d pending", wait)))
+		parts = append(parts, th.lights.Render(fmt.Sprintf("◌ %d pending", wait)))
 	}
 	parts[0] = "Checks " + parts[0]
 	return parts

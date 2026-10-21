@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/charmbracelet/colorprofile"
 	"slices"
 	"strings"
 	"time"
@@ -66,6 +67,7 @@ type Options struct {
 	Warns   []string        // config warnings, listed in help
 	Log     string          // where the engine logs while the TUI runs
 	Tabs    []Tab           // PR searches; nil or empty: DefaultTabs
+	Icons   string          // icons: nerd (default), unicode or ascii
 }
 
 // Tab is one saved PR search.
@@ -105,6 +107,7 @@ type model struct {
 	statusAt time.Time
 	w, h     int
 	help     help.Model
+	profile  colorprofile.Profile // from tea.ColorProfileMsg; zero is truecolor
 
 	behind   map[string]int           // "repo#n" -> commits behind base
 	prRepo   string                   // the repo the searches last ran for
@@ -127,6 +130,7 @@ type model struct {
 
 func newModel(c *api.Client, now func() time.Time, o Options) *model {
 	m := &model{c: c, now: now, o: o, hostErr: o.HostErr, prDelay: prPoll, w: 120, h: 40, help: help.New(), tabs: newTabs(o.Tabs), draft: newDraft()}
+	icons, _ = ParseIcons(o.Icons)
 	m.sizeDraft()
 	for m.off(m.tab) { // without a token, open on Branches
 		m.tab++
@@ -173,7 +177,9 @@ func (m *model) waitQuit() tea.Cmd {
 	}
 }
 
-func (m *model) Init() tea.Cmd { return tea.Batch(m.fetch(), tick(), m.waitQuit(), m.prStart()) }
+func (m *model) Init() tea.Cmd {
+	return tea.Batch(m.fetch(), tick(), m.waitQuit(), m.prStart(), tea.RequestBackgroundColor)
+}
 
 // fetchTimeout bounds a state request, so a wedged daemon cannot pile them up
 // behind the 2s tick.
@@ -348,6 +354,10 @@ func (m *model) syncMain() {
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		setTheme(msg.IsDark())
+	case tea.ColorProfileMsg:
+		m.profile = msg.Profile
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
 		m.sizeDraft()
@@ -768,6 +778,9 @@ func (m *model) View() tea.View {
 	v := tea.NewView(m.render())
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
+	if m.profile != colorprofile.NoTTY && m.profile != colorprofile.Ascii {
+		v.BackgroundColor = th.p.bg
+	}
 	return v
 }
 
@@ -830,7 +843,7 @@ func (m *model) mainView(w, h int) string {
 	focused := m.focus == onPreview
 	switch {
 	case errText != "":
-		return frame(title, strings.Split(red.Width(w-2).Render(errText), "\n"), w, h, focused)
+		return frame(title, strings.Split(th.out.Width(w-2).Render(errText), "\n"), w, h, focused)
 	case m.log != nil:
 		return m.log.view(title+" · log", w, h, focused)
 	}
@@ -848,7 +861,7 @@ func (m *model) banner() string {
 	if m.hostErr != nil {
 		warn += " · could not start: " + termsafe.Line(m.hostErr.Error()) + " · ctrl+r retries"
 	}
-	return truncate(red.Render(warn), m.w)
+	return truncate(th.out.Render(warn), m.w)
 }
 
 func (m *model) bar() string {

@@ -389,11 +389,11 @@ func source(c api.Check, fromDaemon bool) string {
 func paintSource(s string) string {
 	switch s {
 	case "homerun":
-		return magenta.Render(s)
+		return th.clay.Render(s)
 	case "actions":
-		return blue.Render(s)
+		return th.sha.Render(s)
 	}
-	return dim.Render(s)
+	return th.dim.Render(s)
 }
 
 // sourceCounts is "3 homerun · 2 actions · 1 codecov": homerun and actions
@@ -466,10 +466,10 @@ func baseNames(paths []string) string {
 func actionsLines(paths []string, r api.Repo, w int) []string {
 	var out []string
 	if len(paths) > 0 {
-		out = append(out, yellow.Render(truncate("⚠ "+baseNames(paths)+" also runs on GitHub Actions", w)))
+		out = append(out, th.lights.Render(truncate("⚠ "+baseNames(paths)+" also runs on GitHub Actions", w)))
 	}
 	if len(r.Unhandled) > 0 {
-		out = append(out, dim.Render(truncate("left to GitHub Actions: "+baseNames(r.Unhandled), w)))
+		out = append(out, th.dim.Render(truncate("left to GitHub Actions: "+baseNames(r.Unhandled), w)))
 	}
 	return out
 }
@@ -477,7 +477,7 @@ func actionsLines(paths []string, r api.Repo, w int) []string {
 // ciCell is a rollup and passing/total count, "·" with no checks.
 func ciCell(cs []api.Check) string {
 	if len(cs) == 0 {
-		return dim.Render("·")
+		return th.dim.Render("·")
 	}
 	icon := Rollup(cs)
 	return tint(icon, fmt.Sprintf("%s %d/%d", icon, passing(cs), len(cs)))
@@ -487,7 +487,7 @@ func mark(paths []string) string {
 	if len(paths) == 0 {
 		return ""
 	}
-	return yellow.Render("⚠2")
+	return th.lights.Render("⚠2")
 }
 
 // prLine lays out a PR row w wide; narrow screens drop Age, then Rev.
@@ -518,11 +518,11 @@ func (m *model) prLine(w int, num, title, ci, rev, behind, age string) string {
 func reviewMark(d string) string {
 	switch d {
 	case "APPROVED":
-		return green.Render("✔")
+		return th.safe.Render("✔")
 	case "CHANGES_REQUESTED":
-		return red.Render("✘")
+		return th.out.Render("✘")
 	case "REVIEW_REQUIRED":
-		return yellow.Render("○")
+		return th.lights.Render("○")
 	}
 	return ""
 }
@@ -535,10 +535,10 @@ func (m *model) prRows(t *tab, w int) []entry {
 	var out []entry
 	for _, s := range res.PRs {
 		it := m.itemFor(repo, s.Number)
-		icon, ci := "·", dim.Render("· not run")
+		icon, ci := "·", th.dim.Render("· not run")
 		switch {
 		case m.err != nil: // the engine's checks are unknown, not absent
-			icon, ci = "?", ciCell(mergedChecks(nil, s.Checks))+" "+dim.Render("github only")
+			icon, ci = "?", ciCell(mergedChecks(nil, s.Checks))+" "+th.dim.Render("github only")
 		case it != nil:
 			icon, ci = Rollup(it.Checks), ciCell(mergedChecks(it, s.Checks))+mark(m.rowDoubled(it, s.Checks))
 			if awaiting(*it) {
@@ -547,16 +547,16 @@ func (m *model) prRows(t *tab, w int) []entry {
 		}
 		title := termsafe.Line(s.Title)
 		if s.IsDraft {
-			title = dim.Render("◌ draft") + " " + title
+			title = th.dim.Render("◌ draft") + " " + title
 		}
 		behind := ""
 		if b, ok := m.behindOf(s.Number); ok && b > 0 {
-			behind = yellow.Render(fmt.Sprintf("↓%d", b))
+			behind = th.lights.Render(fmt.Sprintf("↓%d", b))
 		}
 		out = append(out, entry{icon, m.prLine(w, strconv.Itoa(s.Number), title, ci, reviewMark(s.ReviewDecision), behind, age(s.Updated, m.now())), fmt.Sprintf("pr:%d", s.Number)})
 	}
 	if more := res.Total - len(res.PRs); more > 0 {
-		out = append(out, entry{"…", dim.Render(fmt.Sprintf("%d more on GitHub · o opens the search", more)), "more"})
+		out = append(out, entry{"…", th.dim.Render(fmt.Sprintf("%d more on GitHub · o opens the search", more)), "more"})
 	}
 	return out
 }
@@ -617,17 +617,17 @@ func (m *model) tableRows() {
 			if at := t.at[r.Name]; t.err != "" && !at.IsZero() {
 				t.rows.title += " · results from " + at.Format("15:04")
 			}
-			t.rows.head = dim.Render("  " + m.prLine(w, "#", "Title", "CI", "Rev", "↓", "Age"))
+			t.rows.head = th.dim.Render("  " + m.prLine(w, "#", "Title", "CI", "Rev", "↓", "Age"))
 			t.rows.empty = nil
 			if res, ok := t.res[r.Name]; ok && res.Total == 0 {
 				t.rows.empty = m.emptyLines(i)
 			}
 			t.rows.set(m.prRows(t, w))
 		case tabBranches:
-			t.rows.title, t.rows.head = "branches homerun runs", dim.Render("  "+branchLine(w, "Branch", "SHA", "Checks", "Age"))
+			t.rows.title, t.rows.head = "branches homerun runs", th.dim.Render("  "+branchLine(w, "Branch", "SHA", "Checks", "Age"))
 			t.rows.set(m.branchRows(r, w))
 		case tabRuns:
-			t.rows.title, t.rows.head = "runs, newest first", dim.Render("  "+runLine(w, "Target", "SHA", "Status", "Took", "Age"))
+			t.rows.title, t.rows.head = "runs, newest first", th.dim.Render("  "+runLine(w, "Target", "SHA", "Status", "Took", "Age"))
 			t.rows.set(m.runRows(w))
 		}
 	}
@@ -643,7 +643,7 @@ func (m *model) emptyLines(i int) []string {
 			break
 		}
 	}
-	return []string{"", "  No open PRs match this search.", "  " + dim.Render(hint)}
+	return []string{"", "  No open PRs match this search.", "  " + th.dim.Render(hint)}
 }
 
 // tabCount is the number a tab's label carries: a search's total, else its rows.
@@ -674,7 +674,7 @@ func (m *model) tabRow() string {
 		}
 		parts = append(parts, st.Render(l))
 	}
-	return fit(strings.Join(parts, dim.Render(" · ")), m.w)
+	return fit(strings.Join(parts, th.dim.Render(" · ")), m.w)
 }
 
 // header is homerun, the picked repo, and the engine with its active runs.
@@ -683,7 +683,7 @@ func (m *model) header() string {
 	if name == "" {
 		name = "no repo"
 	}
-	left := bold.Render("homerun") + "  " + dim.Render("repo") + " " + name + " ▾"
+	left := th.bold.Render("homerun") + "  " + th.dim.Render("repo") + " " + name + " ▾"
 	n := 0
 	for _, r := range m.repoRuns() {
 		if live(r.Status) {
@@ -697,7 +697,7 @@ func (m *model) header() string {
 	case m.hosting():
 		right = fmt.Sprintf("engine: hosted here · %d runs", n)
 	}
-	right = dim.Render(right)
+	right = th.dim.Render(right)
 	gap := m.w - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 2 {
 		return fit(left+"  "+right, m.w)
