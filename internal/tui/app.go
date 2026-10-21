@@ -52,6 +52,7 @@ type (
 		err error
 	}
 	quitSignalMsg struct{}
+	bgWaitMsg     struct{} // the background query went unanswered
 )
 
 // Options connect the dashboard to an engine it may host itself.
@@ -109,7 +110,8 @@ type model struct {
 	statusAt time.Time
 	w, h     int
 	help     help.Model
-	profile  colorprofile.Profile // from tea.ColorProfileMsg; zero is truecolor
+	profile  colorprofile.Profile // from tea.ColorProfileMsg; zero is Unknown, which gets no fill
+	bgKnown  bool                 // the terminal answered the background query, or the wait for it ran out
 
 	behind   map[string]int           // "repo#n" -> commits behind base
 	prRepo   string                   // the repo the searches last ran for
@@ -180,7 +182,13 @@ func (m *model) waitQuit() tea.Cmd {
 }
 
 func (m *model) Init() tea.Cmd {
-	return tea.Batch(m.fetch(), tick(), m.waitQuit(), m.prStart(), tea.RequestBackgroundColor)
+	return tea.Batch(m.fetch(), tick(), m.waitQuit(), m.prStart(), tea.RequestBackgroundColor, bgWait())
+}
+
+// bgWait ends the wait for the background answer: some terminals never send
+// one, and they get the night game.
+func bgWait() tea.Cmd {
+	return tea.Tick(300*time.Millisecond, func(time.Time) tea.Msg { return bgWaitMsg{} })
 }
 
 // fetchTimeout bounds a state request, so a wedged daemon cannot pile them up
@@ -253,6 +261,15 @@ func (m *model) pickRepo(name string) tea.Cmd {
 	}
 	m.refresh()
 	return m.prSync()
+}
+
+// repaint rebuilds what holds rendered colours after the theme changed: the
+// rows and the PR page.
+func (m *model) repaint() {
+	m.tableRows()
+	if m.pr != nil {
+		m.pr.pageW = 0
+	}
 }
 
 // refresh rebuilds the rows for the current state and width, and the preview.
@@ -358,6 +375,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.BackgroundColorMsg:
 		setTheme(msg.IsDark())
+		m.bgKnown = true
+		m.repaint()
+	case bgWaitMsg:
+		m.bgKnown = true
 	case tea.ColorProfileMsg:
 		m.profile = msg.Profile
 	case tea.WindowSizeMsg:
@@ -795,7 +816,12 @@ func (m *model) View() tea.View {
 	v := tea.NewView(m.render())
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
-	if m.profile != colorprofile.NoTTY && m.profile != colorprofile.Ascii {
+	// No fill until the terminal's own background is known: filling first
+	// makes it answer the query with homerun's night bg, so a light terminal
+	// would never get the day game.
+	switch {
+	case !m.bgKnown, m.profile == colorprofile.Unknown, m.profile == colorprofile.NoTTY, m.profile == colorprofile.Ascii:
+	default:
 		v.BackgroundColor = th.p.bg
 	}
 	return v
