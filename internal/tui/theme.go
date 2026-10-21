@@ -2,7 +2,10 @@ package tui
 
 import (
 	"image/color"
+	"slices"
+	"strings"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
@@ -71,17 +74,6 @@ func parseTheme(s string) (ThemeChoice, bool) {
 	return themeAuto, false
 }
 
-// next is the choice after c in the T cycle.
-func (c ThemeChoice) next() ThemeChoice {
-	switch c {
-	case themeAuto:
-		return themeNight
-	case themeNight:
-		return themeDay
-	}
-	return themeAuto
-}
-
 // setTheme switches between the night and day game.
 func setTheme(dark bool) {
 	if dark {
@@ -89,4 +81,121 @@ func setTheme(dark bool) {
 	} else {
 		th = newTheme(themes["day"])
 	}
+}
+
+// themePicker is the T popup: auto, then the games by name. Moving the
+// cursor previews a game on the whole screen; enter keeps it, esc puts the
+// choice back. While it is open it receives every key.
+type themePicker struct {
+	names []string
+	cur   int
+	was   ThemeChoice
+}
+
+// themeNames are the choices the picker lists: auto, then the registry sorted.
+func themeNames() []string {
+	names := make([]string, 0, len(themes)+1)
+	for n := range themes {
+		names = append(names, n)
+	}
+	slices.Sort(names)
+	return append([]string{string(themeAuto)}, names...)
+}
+
+func (m *model) openThemePicker() {
+	names := themeNames()
+	m.tp = &themePicker{names: names, cur: max(0, slices.Index(names, string(m.themeChoice))), was: m.themeChoice}
+}
+
+// previewTheme shows the cursor's game.
+func (m *model) previewTheme() {
+	m.themeChoice = ThemeChoice(m.tp.names[m.tp.cur])
+	m.applyTheme()
+	m.repaint()
+}
+
+func (m *model) themePickerKey(k tea.KeyPressMsg) tea.Cmd {
+	p := m.tp
+	switch k.String() {
+	case "esc", "T":
+		m.tp = nil
+		m.themeChoice = p.was
+		m.applyTheme()
+		m.repaint()
+	case "enter":
+		m.tp = nil
+		choice := p.names[p.cur]
+		m.themeChoice = ThemeChoice(choice)
+		m.applyTheme()
+		m.repaint()
+		m.say("theme: " + choice + " · add theme: " + choice + " to config to keep it")
+	case "down", "j", "ctrl+n":
+		p.cur = clampInt(p.cur+1, 0, len(p.names)-1)
+		m.previewTheme()
+	case "up", "k", "ctrl+p":
+		p.cur = clampInt(p.cur-1, 0, len(p.names)-1)
+		m.previewTheme()
+	}
+	return nil
+}
+
+// themeNote says what a choice is.
+func themeNote(name string) string {
+	switch ThemeChoice(name) {
+	case themeAuto:
+		return "follows the terminal"
+	case themeNight:
+		return "the night game"
+	case themeDay:
+		return "the day game"
+	}
+	return name
+}
+
+// swatch is six ● in a palette's strip, clay, amber, safe, out and lights,
+// each coloured from that palette, not the current one.
+func swatch(p palette) string {
+	var b strings.Builder
+	for _, c := range []color.Color{p.strip, p.clay, p.amber, p.safe, p.out, p.lights} {
+		b.WriteString(lipgloss.NewStyle().Foreground(c).Render("●"))
+	}
+	return b.String()
+}
+
+// paletteFor is the palette a choice shows: auto's is the terminal's.
+func (m *model) paletteFor(name string) palette {
+	if p, ok := themes[name]; ok {
+		return p
+	}
+	if m.termDark {
+		return themes["night"]
+	}
+	return themes["day"]
+}
+
+// themePickerView is the picker in the repo picker's clothes: each row the
+// name (bold on the cursor row, a clay ● after the one in effect before the
+// picker opened), its swatch and a dim note; the cursor row is the batter's box.
+func (m *model) themePickerView() string {
+	p := m.tp
+	var lines []string
+	for i, n := range p.names {
+		name := th.fg.Render(fit(n, 8))
+		if i == p.cur {
+			name = th.fg.Bold(true).Render(fit(n, 8))
+		}
+		mark := " "
+		if n == string(p.was) {
+			mark = th.clay.Render("●")
+		}
+		row := name + " " + mark + "  " + swatch(m.paletteFor(n)) + "   " + th.dim.Render(themeNote(n))
+		if i == p.cur {
+			lines = append(lines, th.clay.Render("▌")+litRow(" "+row+" ", th.p.lit))
+		} else {
+			lines = append(lines, "  "+row+" ")
+		}
+	}
+	lines = append(lines, "", th.dim.Render("j/k move · enter apply · esc revert"))
+	d := dialog{icon: "config", title: "Theme", body: strings.Join(lines, "\n")}
+	return d.view(m.w)
 }

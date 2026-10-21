@@ -114,24 +114,62 @@ func TestThemeChangeRepaints(t *testing.T) {
 	}
 }
 
-func TestThemeCycle(t *testing.T) {
+// T opens the theme picker; moving previews the game at once, enter keeps
+// it and says so, esc (or T again) puts the choice back; the picker takes
+// every other key and the mouse.
+func TestThemePicker(t *testing.T) {
 	defer setTheme(true)
-	m := newModel(nil, time.Now, Options{})
-	m.Update(tea.BackgroundColorMsg{Color: lipgloss.Color("#000000")})
-	for i, want := range []palette{night, day, night} {
-		m.key(press("T"))
-		if th.p != want {
-			t.Fatalf("press %d: palette = %v, want %v", i+1, th.p, want)
+	m, _ := newTestModel(t)
+	m.Update(tea.ColorProfileMsg{Profile: colorprofile.TrueColor})
+	m.bgKnown = true
+	keysIn(m, "T")
+	if m.tp == nil || m.tp.cur != 0 || m.themeChoice != themeAuto {
+		t.Fatalf("T: picker %v choice %q", m.tp != nil, m.themeChoice)
+	}
+	out := ansi.Strip(m.render())
+	for _, want := range []string{ic("config") + " Theme", "auto", "day", "night", "follows the terminal", "the day game", "the night game", "j/k move · enter apply · esc revert"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("picker lacks %q:\n%s", want, out)
 		}
 	}
-	if m.themeChoice != themeAuto {
-		t.Fatalf("after three presses choice = %q, want auto", m.themeChoice)
+	keysIn(m, "j") // day: the whole screen previews it
+	if m.themeChoice != themeDay || th.p != day || m.View().BackgroundColor != day.bg {
+		t.Fatalf("move: choice %q day %v", m.themeChoice, th.p == day)
 	}
-	if !strings.Contains(m.status, "theme: auto") {
-		t.Fatalf("status = %q", m.status)
+	for _, k := range []string{"q", "4", "/", "R", "?"} { // swallowed
+		if cmd := keysIn(m, k); cmd != nil || m.tp == nil || m.tab != 0 || m.flt != nil || m.pk != nil || m.dlg != nil {
+			t.Fatalf("%s leaked past the picker", k)
+		}
+	}
+	m.click(tea.Mouse{X: 5, Y: 9, Button: tea.MouseLeft})
+	m.wheel(tea.Mouse{X: 5, Y: 9, Button: tea.MouseWheelDown})
+	if m.at().rows.cur != 0 || m.focus != onTable {
+		t.Fatal("the mouse acted under the picker")
+	}
+	keysIn(m, "esc")
+	if m.tp != nil || m.themeChoice != themeAuto || th.p != night {
+		t.Fatalf("esc: picker %v choice %q day %v", m.tp != nil, m.themeChoice, th.p == day)
+	}
+	keysIn(m, "T", "j", "j", "enter") // night, explicitly
+	if m.tp != nil || m.themeChoice != themeNight || th.p != night || !strings.Contains(m.status, "theme: night · add theme: night to config to keep it") {
+		t.Fatalf("enter: picker %v choice %q status %q", m.tp != nil, m.themeChoice, m.status)
+	}
+	keysIn(m, "T")
+	if m.tp == nil || m.tp.cur != 2 {
+		t.Fatalf("reopened on the choice in effect: %+v", m.tp)
+	}
+	keysIn(m, "k", "T") // T again closes and puts night back
+	if m.tp != nil || m.themeChoice != themeNight || th.p != night {
+		t.Fatalf("T closes: picker %v choice %q", m.tp != nil, m.themeChoice)
+	}
+	// Each swatch cell is one cell wide, coloured from its own palette.
+	if w := ansi.StringWidth(swatch(day)); w != 6 {
+		t.Fatalf("swatch %d cells", w)
+	}
+	if !strings.Contains(swatch(day), "38;2;196;101;43") || !strings.Contains(swatch(night), "38;2;224;135;74") {
+		t.Fatalf("swatch not in its own palette: %q %q", swatch(day), swatch(night))
 	}
 }
-
 func TestExplicitThemeIgnoresTerminal(t *testing.T) {
 	defer setTheme(true)
 	m := newModel(nil, time.Now, Options{Theme: "night"})
@@ -146,8 +184,7 @@ func TestThemeRepaintsAll(t *testing.T) {
 	m, _ := newTestModel(t)
 	m.Update(tea.ColorProfileMsg{Profile: colorprofile.TrueColor})
 	m.Update(tea.BackgroundColorMsg{Color: lipgloss.Color("#000000")})
-	m.key(press("T")) // night
-	m.key(press("T")) // day
+	keysIn(m, "T", "j", "enter") // the picker's second row is day
 	out := m.render()
 	if !strings.Contains(out, "38;2;19;33;58") {
 		t.Errorf("no day ink in the render")

@@ -104,6 +104,7 @@ type model struct {
 	zoom        bool
 	dlg         *dialog
 	pk          *picker
+	tp          *themePicker     // the T popup; it takes every key
 	flt         *textinput.Model // the query bar, open on a PR tab; it takes every key
 	fltErr      string           // GitHub's rejection of an edited query, until the next key
 	status      string
@@ -530,7 +531,7 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 func (m *model) press(k tea.KeyPressMsg) tea.Cmd {
 	m.fltErr = ""
 	if k.String() == "ctrl+c" && m.dlg == nil { // the picker and filter inputs would swallow it
-		m.pk, m.flt = nil, nil
+		m.pk, m.flt, m.tp = nil, nil, nil
 	}
 	if m.dlg != nil {
 		d := m.dlg
@@ -539,6 +540,9 @@ func (m *model) press(k tea.KeyPressMsg) tea.Cmd {
 		}
 		m.dlg = nil
 		return d.key(k)
+	}
+	if m.tp != nil {
+		return m.themePickerKey(k)
 	}
 	if m.pk != nil {
 		return m.pickerKey(k)
@@ -563,10 +567,7 @@ func (m *model) press(k tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(k, keys.Help):
 		m.dlg = m.helpView()
 	case key.Matches(k, keys.Theme):
-		m.themeChoice = m.themeChoice.next()
-		m.applyTheme()
-		m.repaint()
-		m.say("theme: " + string(m.themeChoice))
+		m.openThemePicker()
 	case key.Matches(k, keys.Tab) && m.inPR() && m.log == nil:
 		if i := int(k.String()[0] - '1'); i < len(prTabs) {
 			m.pr.section = i
@@ -928,6 +929,9 @@ func (m *model) render() string {
 	if m.pk != nil {
 		screen = overlay(screen, m.pickerView(), m.w, m.h)
 	}
+	if m.tp != nil {
+		screen = overlay(screen, m.themePickerView(), m.w, m.h)
+	}
 	if m.commenting() {
 		screen = overlay(screen, m.commentView(), m.w, m.h)
 	}
@@ -1062,7 +1066,7 @@ func (m *model) position() string {
 
 // click and wheel map a mouse position onto the layout.
 func (m *model) click(mo tea.Mouse) tea.Cmd {
-	if m.dlg != nil || m.pk != nil || m.flt != nil || m.commenting() || mo.Button != tea.MouseLeft {
+	if m.dlg != nil || m.pk != nil || m.tp != nil || m.flt != nil || m.commenting() || mo.Button != tea.MouseLeft {
 		return nil
 	}
 	lay := m.layout()
@@ -1095,7 +1099,7 @@ func (m *model) click(mo tea.Mouse) tea.Cmd {
 }
 
 func (m *model) wheel(mo tea.Mouse) tea.Cmd {
-	if m.dlg != nil || m.pk != nil || m.flt != nil || m.commenting() {
+	if m.dlg != nil || m.pk != nil || m.tp != nil || m.flt != nil || m.commenting() {
 		return nil
 	}
 	d := 1
