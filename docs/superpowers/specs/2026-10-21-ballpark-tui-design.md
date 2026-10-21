@@ -38,6 +38,9 @@ states, and from the Charm libraries used to their strengths.
   down.
 - Every existing capability still reachable: runs, logs, rerun, cancel, merge,
   update, comment, fork-run confirmation, repo add.
+- homerun's local runs and GitHub Actions runs are always told apart, runs
+  can be started by hand on any branch, commit or PR, and homerun helps turn
+  off Actions for the workflows it already runs.
 
 ## Non-goals
 
@@ -241,6 +244,85 @@ See the reference for every screen. The rules:
 - The merge, update and comment dialogs are huh forms (my call) so input
   looks the same everywhere.
 
+## homerun runs and GitHub Actions
+
+homerun runs workflows locally and reports them as GitHub checks. GitHub
+Actions may run some of the same workflows in the cloud. The UI keeps the two
+apart, lets the user start homerun runs by hand, and helps turn off Actions
+for exactly the workflows homerun already runs (the user's call: keep Actions
+for the workflows homerun cannot run locally).
+
+**Every check names its source.** The label comes from the GitHub App that
+created the check (`checkSuite.app.slug`), never from the check's name:
+
+- `homerun` (magenta): homerun's own App;
+- `actions` (blue): GitHub Actions, `github-actions`;
+- any other app by its slug, dim (`codecov`, `vercel`); commit statuses
+  (no app) show `status`.
+
+The label shows in the Checks tab, as a count line in the preview summary of
+a PR row (`3 homerun · 2 actions · 1 codecov`), and on Branches and Runs
+previews.
+
+**Doubled workflows.** A workflow is *doubled* when homerun handles it (the
+engine's handled set, i.e. not in `api.Repo.Unhandled`) and GitHub Actions
+also has it active. Detection uses the user token:
+`GET /repos/{o}/{r}/actions/workflows` (path and `state`), compared by path
+with the workflows homerun handles. When the token cannot read it (403),
+homerun falls back to seeing `actions` checks on a PR or branch whose
+workflow path (`checkSuite.workflowRun.workflow.resourcePath`) homerun also
+runs.
+
+- A doubled workflow marks PR and branch rows with `⚠2` after the CI cell
+  ("also running on GitHub Actions") and the preview's Checks tab with one
+  line naming the doubled workflows.
+- The header shows nothing extra; Doctor carries the recommendation.
+
+**Workflows left to Actions.** `api.Repo.Unhandled` (workflows homerun cannot
+run locally) shows in the Branches and PR Checks previews as one dim line:
+`left to GitHub Actions: deploy.yml, release.yml`. Their `actions` checks are
+expected, not doubled.
+
+**Starting runs by hand.** `r` opens a **run dialog** instead of rerunning at
+once:
+
+- target: the PR head, a branch tip, or a commit (from the Commits tab, or
+  the Runs tab's selected run);
+- workflows: all homerun handles (default) or a picked subset, each with its
+  trigger events shown; unhandled workflows are listed dim and cannot be
+  picked;
+- for a run with failures: **failed jobs only** (default when the target has
+  failed checks) or everything;
+- fork PRs keep today's confirmation as the dialog's last step.
+
+`n` on the Branches tab runs a branch homerun does not watch: a fuzzy pick
+over the repo's remote branches, then the run dialog. The engine's
+`StartRequest` gains `SHA string`, `Workflows []string` (paths; empty means
+all handled) and `FailedOnly bool`; the engine validates them (a SHA must be
+reachable from the target ref, a workflow must be handled).
+
+**Doctor.** Per repo, one row:
+
+- `✔ GitHub Actions: only workflows homerun cannot run (deploy.yml)` when
+  nothing is doubled;
+- `! GitHub Actions also runs ci.yml, lint.yml, which homerun runs locally ·
+  enter turns them off on Actions` when doubled. `enter` asks to confirm, then
+  disables each doubled workflow with the user token
+  (`PUT /repos/{o}/{r}/actions/workflows/{id}/disable`); a 403 says the token
+  lacks permission and `o` opens the repo's Actions settings instead.
+  Re-enabling is done on GitHub.
+- `· GitHub Actions state unknown (token cannot read it)` when neither the
+  API nor checks tell.
+
+Doubled workflows light Doctor's `!` badge. This check is per repo and calls
+GitHub, so it runs with the per-repo tier (when the tab opens), not at launch;
+the `⚠2` row marks come from the PR and branch data already fetched.
+
+**Releases.** Source labels, the `⚠2` marks and the "left to GitHub Actions"
+line ship with part 1 (Shell). The run dialog, `n` and the `StartRequest`
+fields ship with part 2 (Drill-down), next to the Commits tab. The Doctor row
+ships with part 3.
+
 ## Keys
 
 The reference's key table is the source. Changes from today:
@@ -248,6 +330,8 @@ The reference's key table is the source. Changes from today:
 - `[`/`]` and `1`–`9` switch tabs; panel numbers go away.
 - `x` cancels a run (was `c`), so `c` always means comment.
 - `R` repo picker, `,` Config, `!` Doctor, `S` scoreboard, `/` filter.
+- `r` opens the run dialog (was: rerun at once); `n` on Branches runs an
+  unwatched branch.
 - Inside the preview: `[`/`]` preview tabs, `enter` drill in, `h`/`esc` out
   one level.
 - Diff and review keys stay as the PR workflow spec defines them (releases 3–4).

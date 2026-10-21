@@ -390,7 +390,7 @@ section { scroll-margin-top: 16px; }
     <tr><td>Everywhere</td><td><kbd>j</kbd>/<kbd>k</kbd> move · <kbd>g</kbd>/<kbd>G</kbd> top/bottom · <kbd>?</kbd> help · <kbd>q</kbd> quit · <kbd>R</kbd> repo picker · <kbd>,</kbd> Config · <kbd>!</kbd> Doctor · <kbd>S</kbd> scoreboard</td></tr>
     <tr><td>Config</td><td><kbd>tab</kbd>/<kbd>shift+tab</kbd> field · <kbd>enter</kbd> edit · <kbd>ctrl+s</kbd> save · <kbd>e</kbd> open in <code>$EDITOR</code> · <kbd>esc</kbd> discard changes</td></tr>
     <tr><td>Doctor</td><td><kbd>ctrl+r</kbd> run again · <kbd>enter</kbd> fix or open the named page · <kbd>o</kbd> open install page</td></tr>
-    <tr><td>Dashboard</td><td><kbd>[</kbd>/<kbd>]</kbd> or <kbd>1</kbd>–<kbd>9</kbd> tabs · <kbd>/</kbd> filter · <kbd>l</kbd>/<kbd>enter</kbd> into the preview · <kbd>r</kbd> rerun · <kbd>m</kbd> merge · <kbd>u</kbd> update · <kbd>o</kbd> open · <kbd>y</kbd> copy SHA · <kbd>ctrl+r</kbd> refresh</td></tr>
+    <tr><td>Dashboard</td><td><kbd>[</kbd>/<kbd>]</kbd> or <kbd>1</kbd>–<kbd>9</kbd> tabs · <kbd>/</kbd> filter · <kbd>l</kbd>/<kbd>enter</kbd> into the preview · <kbd>r</kbd> run dialog · <kbd>n</kbd> run an unwatched branch (Branches) · <kbd>m</kbd> merge · <kbd>u</kbd> update · <kbd>o</kbd> open · <kbd>y</kbd> copy SHA · <kbd>ctrl+r</kbd> refresh</td></tr>
     <tr><td>Preview</td><td><kbd>[</kbd>/<kbd>]</kbd> tabs · <kbd>enter</kbd> drill in · <kbd>h</kbd>/<kbd>esc</kbd> out one level · <kbd>c</kbd> comment · <kbd>m</kbd>/<kbd>u</kbd> merge/update</td></tr>
     <tr><td>Checks</td><td><kbd>enter</kbd> job tree · <kbd>r</kbd> rerun · <kbd>x</kbd> cancel · <kbd>o</kbd> open on GitHub · <kbd>space</kbd> fold</td></tr>
     <tr><td>Log</td><td><kbd>/</kbd> search · <kbd>n</kbd>/<kbd>N</kbd> next/previous match or failure · <kbd>f</kbd> follow · <kbd>esc</kbd> back</td></tr>
@@ -413,7 +413,7 @@ section { scroll-margin-top: 16px; }
 <div class="cols">
 <div class="pane f" style="flex:1.05"><span class="ttl">is:open author:@me</span>   #  Title                               CI       Rev  ↓   Age
 <span class="sel"> <span class="r">✘</span> 41  daemon: cut retry backoff on quit  <span class="r">✘ 3/5</span>    <span class="g">✔</span>   <span class="y">↓3</span>  2h</span>
- <span class="y">⟳</span> 39  tui: repos cursor only browses      <span class="y">⟳ 2/5</span>    <span class="d">○</span>        1d
+ <span class="y">⟳</span> 39  tui: repos cursor only browses      <span class="y">⟳ 2/5</span><span class="y">⚠2</span>  <span class="d">○</span>        1d
  <span class="g">✔</span> 37  docs: TUI reference                 <span class="g">✔ 5/5</span>    <span class="g">✔</span>        3d
  <span class="d">·</span> 35  <span class="d">◌ draft</span> pr: GraphQL page cache     <span class="d">· not run</span> <span class="d">○</span>        5d
 
@@ -585,6 +585,8 @@ cuts the backoff short on close…
  <span class="g">✔</span> GitHub token                       4,812 of 5,000 requests left this hour
  <span class="g">✔</span> App installed on matthew-reed-holden/homerun
 <span class="sel"> <span class="r">✘</span> App installed on lordhill-digital/homerun-demo   GitHub answered 404 · o install it</span>
+ <span class="y">!</span> GitHub Actions also runs ci.yml, lint.yml   <span class="d">homerun runs them locally · enter turns them off on Actions</span>
+ <span class="g">✔</span> GitHub Actions on homerun-demo     <span class="d">only workflows homerun cannot run (deploy.yml)</span>
  <span class="d">·</span> engine                             hosted by this TUI · 2 runs · log ~/.local/state/homerun/homerun.log
 </div>
 <div class="bar"><span class="k">ctrl+r</span> check again · <span class="k">enter</span> fix · <span class="k">o</span> open install page · <span class="k">y</span> copy log path</div>
@@ -662,11 +664,12 @@ begins, and routes claim creates through d.retry.
 <span class="sel"><span class="r">✘</span> CI / e2e          <span class="m">homerun</span>  <span class="y">required</span>   1m12s</span>
 <span class="g">✔</span> CI / unit         <span class="m">homerun</span>  <span class="y">required</span>     34s
 <span class="g">✔</span> CI / lint         <span class="m">homerun</span>                8s
-<span class="r">✘</span> codecov/patch     <span class="d">github</span>
-<span class="y">⟳</span> pages build       <span class="d">github</span>
+<span class="r">✘</span> codecov/patch     <span class="d">codecov</span>
+<span class="y">⟳</span> pages build       <span class="b">actions</span>
+<span class="d">left to GitHub Actions: pages.yml</span>
 </div>
 </div>
-<div class="bar"><span class="k">enter</span> details · <span class="k">r</span> rerun · <span class="k">x</span> cancel · <span class="k">o</span> open on GitHub</div>
+<div class="bar"><span class="k">enter</span> details · <span class="k">r</span> run… · <span class="k">x</span> cancel · <span class="k">o</span> open on GitHub</div>
     </div></div>
     <div class="term"><div class="screen">
 <div class="pane f"><span class="ttl">#41 › CI / e2e</span><span class="g">✔</span> Set up job                                                                                    1s
@@ -681,7 +684,8 @@ begins, and routes claim creates through d.retry.
 <div class="bar"><span class="k">enter</span> full log · <span class="k">space</span> fold · <span class="k">r</span> rerun · <span class="k">esc</span> back to checks</div>
     </div></div>
     <ul>
-      <li>One list for homerun's checks and GitHub's, on the head commit, required ones marked.</li>
+      <li>One list for every check on the head commit, required ones marked. Each names its source from the GitHub App that made it: <span style="color:var(--pill-r4-fg)">homerun</span> for local runs, <span style="color:var(--pill-new-fg)">actions</span> for GitHub Actions, any other app by name (codecov), <code>status</code> for commit statuses.</li>
+      <li>Workflows homerun cannot run locally are listed once as “left to GitHub Actions”. A workflow both homerun and Actions run gets a line “⚠ ci.yml also runs on GitHub Actions” and the row a <code>⚠2</code> mark.</li>
       <li><kbd>enter</kbd> on a homerun check opens its job → step tree full width, the failed step unfolded with its last lines.</li>
       <li><kbd>enter</kbd> on a GitHub check shows its title and summary; <kbd>o</kbd> opens it on GitHub.</li>
     </ul>
@@ -840,6 +844,15 @@ Untrusted code runs on this machine
 (sandboxed, no secrets).
 
 <span class="d">[y] run · any other key cancels</span></div></div></div>
+    <div class="term" style="grid-column:1/-1"><div class="screen s80"><div class="dlg"><span class="B">Run homerun on #41?</span>
+
+<span class="d">target</span>      <span class="sel"> ● PR head 9f8e7d6 </span>  ○ a commit…
+<span class="d">jobs</span>        <span class="sel"> ● failed jobs only (1) </span>  ○ everything
+<span class="d">workflows</span>   <span class="g">[x]</span> ci.yml        <span class="d">push, pull_request</span>
+            <span class="g">[x]</span> lint.yml      <span class="d">pull_request</span>
+            <span class="d">[ ] pages.yml     left to GitHub Actions</span>
+
+<span class="d">tab next · space toggle · [y] run · esc cancel</span></div></div></div>
     <div class="term"><div class="screen s60"><div class="dlg"><span class="B">Cancel run 7f3a (#41)?</span>
 
 <span class="d">[y] cancel run · any other key keeps it</span></div></div></div>
@@ -924,7 +937,7 @@ log: ~/.local/state/homerun/homerun.log
 <div class="pane f" style="flex:1"><span class="ttl">#35</span><span class="tab">Overview</span> <span class="tab on">Checks 1/1</span> <span class="tab">Reviews</span> <span class="tab">Files 6</span> <span class="tab">Commits 4</span>
 <span class="d">· not run by homerun. Its branch has no workflow homerun</span>
 <span class="d">  handles, or the PR was opened before homerun watched it.</span>
-<span class="g">✔</span> pages build       <span class="d">github</span>
+<span class="g">✔</span> pages build       <span class="b">actions</span>
 </div>
 <div class="pane f" style="flex:1"><span class="ttl">#41</span><span class="tab on">Overview</span> <span class="tab">Checks</span> <span class="tab">Reviews</span> <span class="tab">Files</span> <span class="tab">Commits</span>
 <span class="m B">✔ Merged</span> into main by @matt · 6118d02
