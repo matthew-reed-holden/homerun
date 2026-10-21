@@ -152,27 +152,9 @@ func (l *logView) find(dir int) bool {
 	return false
 }
 
-func (l *logView) view(title string, w, h int, focused bool) string {
-	l.h = max(1, h-2) // the title and the status line
-	l.top = clampInt(l.top, 0, len(l.lines)-l.h)
-	var lines []string
-	for i := l.top; i < len(l.lines) && i < l.top+l.h; i++ {
-		// A gutter like the rows': the current match is a clay ▌ on the lit
-		// field, so it still shows where colour is stripped.
-		s := fit(l.lines[i], w-2)
-		switch {
-		case i == l.match:
-			s = litRow(th.clay.Render("▌")+s, th.p.lit)
-		case failLine(l.lines[i]):
-			s = " " + th.out.Render(s)
-		default:
-			s = " " + s
-		}
-		lines = append(lines, s)
-	}
-	for len(lines) < l.h {
-		lines = append(lines, "")
-	}
+// status is following, paused or how the stream ended, and the query in
+// force; it shows at the breadcrumb's right end.
+func (l *logView) status() string {
 	status := "paused"
 	if l.follow {
 		status = "following"
@@ -180,14 +162,56 @@ func (l *logView) view(title string, w, h int, focused bool) string {
 	if l.ended != "" {
 		status = l.ended
 	}
-	status = fmt.Sprintf("%s · line %d/%d", status, min(l.top+1, len(l.lines)), len(l.lines))
 	if l.query != "" {
 		status += " · /" + termsafe.Line(l.query)
 	}
+	return status
+}
+
+// position is "line 12/340", for the dugout.
+func (l *logView) position() string {
+	return fmt.Sprintf("line %d/%d", min(l.top+1, len(l.lines)), len(l.lines))
+}
+
+// view is the log's lines, each behind a dim four-cell line number; a
+// failing line is red with FAIL in bold; the search box takes the last row
+// while it is typed in.
+func (l *logView) view(title string, w, h int, focused bool) string {
+	l.h = max(1, h-1) // the title
+	if l.typing {
+		l.h = max(1, h-2)
+	}
+	l.top = clampInt(l.top, 0, len(l.lines)-l.h)
+	var lines []string
+	for i := l.top; i < len(l.lines) && i < l.top+l.h; i++ {
+		// A gutter like the rows': the current match is a clay ▌ on the lit
+		// field, so it still shows where colour is stripped.
+		num := th.dim.Render(rfit(fmt.Sprint(i+1), 4)) + " "
+		s := fit(l.lines[i], w-2-5)
+		switch {
+		case i == l.match:
+			s = litRow(th.clay.Render("▌")+num+s, th.p.lit)
+		case failLine(l.lines[i]):
+			s = " " + num + boldFail(s)
+		default:
+			s = " " + num + s
+		}
+		lines = append(lines, s)
+	}
+	for len(lines) < l.h {
+		lines = append(lines, "")
+	}
 	if l.typing {
 		lines = append(lines, " "+truncate(l.input.View(), w-2))
-	} else {
-		lines = append(lines, " "+th.dim.Render(truncate(status, w-2)))
 	}
 	return section(title, lines, w, h, focused)
+}
+
+// boldFail is a failing line in red, its FAIL tokens bold.
+func boldFail(s string) string {
+	parts := strings.Split(s, "FAIL")
+	for i, p := range parts {
+		parts[i] = th.out.Render(p)
+	}
+	return strings.Join(parts, th.out.Bold(true).Render("FAIL"))
 }

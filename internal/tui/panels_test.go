@@ -132,13 +132,13 @@ func TestRepoAndRunRows(t *testing.T) {
 			Checks: []api.Check{{Status: "completed", Conclusion: "failure"}}},
 	}
 	m := searchModelState(t, &pr.Fake{Results: e2eResults(e2eResult())}, st)
-	if e := m.repoEntry(st.Repos[2]); e.icon != "ci-fail" || e.text != "o/a" {
+	if e := m.repoEntry(st.Repos[2]); e.icon != "ci-fail" || strings.TrimSpace(ansi.Strip(e.text)) != "o/a" {
 		t.Fatalf("repo %+v", e)
 	}
-	if e := m.repoEntry(st.Repos[3]); e.icon != "ci-fail" || e.text != "o/b (error)" {
+	if e := m.repoEntry(st.Repos[3]); e.icon != "ci-fail" || squash(ansi.Strip(e.text)) != "o/b (error)" {
 		t.Fatalf("repo %+v", e)
 	}
-	if e := ansi.Strip(m.repoEntry(st.Repos[0]).text); e != "o/e2e ● 2 PRs" {
+	if e := squash(ansi.Strip(m.repoEntry(st.Repos[0]).text)); e != "o/e2e ● 2 PRs" {
 		t.Fatalf("picked repo %q", e)
 	}
 	keysIn(m, "5")

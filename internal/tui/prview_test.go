@@ -232,12 +232,12 @@ func TestDetailErrorShowsInPage(t *testing.T) {
 func TestPRKeysByContext(t *testing.T) {
 	m, _ := prOpenModel(t, detailFixture())
 	bar := barText(m)
-	for _, want := range []string{"[ ] tabs", "m merge", "u update", "c comment", "o open", "h table", "? help"} {
+	for _, want := range []string{"[ ] tabs", "m merge", "u update", "c comment", "o open", "h back to list", "? help"} {
 		if !strings.Contains(bar, want) {
 			t.Fatalf("Overview bar %q lacks %q", bar, want)
 		}
 	}
-	if strings.Contains(bar, "rerun") || strings.Contains(bar, "cancel") {
+	if strings.Contains(bar, "r run") || strings.Contains(bar, "cancel") {
 		t.Fatalf("Overview bar %q", bar)
 	}
 	if cmd := keysIn(m, "r"); cmd != nil || m.dlg != nil {
@@ -261,7 +261,7 @@ func TestPRKeysByContext(t *testing.T) {
 		t.Fatal("] to Checks")
 	}
 	bar = barText(m)
-	for _, want := range []string{"enter log", "space fold", "r rerun", "x cancel", "o open", "h table"} {
+	for _, want := range []string{"enter log", "space fold", "r run", "x cancel", "o open", "h back to list"} {
 		if !strings.Contains(bar, want) {
 			t.Fatalf("Checks bar %q lacks %q", bar, want)
 		}
@@ -467,7 +467,7 @@ func TestChecksSection(t *testing.T) {
 
 func TestChecksSectionKeys(t *testing.T) {
 	m, fd := checksModel(t)
-	if bar := barText(m); !strings.Contains(bar, "fold") || !strings.Contains(bar, "rerun") || !strings.Contains(bar, "cancel") {
+	if bar := barText(m); !strings.Contains(bar, "fold") || !strings.Contains(bar, "r run") || !strings.Contains(bar, "cancel") {
 		t.Fatalf("bar %q", bar)
 	}
 	var opened []string
@@ -887,7 +887,7 @@ func TestHoverRespectsRateLimit(t *testing.T) {
 	if len(f.DetailCalls) != 1 {
 		t.Fatalf("a rest during the backoff fetched: %v", f.DetailCalls)
 	}
-	if b := barText(m); !strings.Contains(b, "GitHub rate limit, retrying at") {
+	if b := barText(m); !strings.Contains(b, ic("warn")+" GitHub rate limit · retrying at") {
 		t.Fatalf("the rate warning went with the cursor: %q", b)
 	}
 	later := now.Add(10 * time.Minute)

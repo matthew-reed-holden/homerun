@@ -6,6 +6,7 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/matthew-reed-holden/homerun/internal/api"
 	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 )
@@ -126,19 +127,26 @@ func (m *model) pickerView() string {
 	return d.view(m.w)
 }
 
-// repoEntry is a picker row: the repo's rollup, ● when picked, and its open
-// PR count when a tab searching "is:open" has a result for it.
+// repoEntry is a picker row in columns: the repo's rollup, its name padded
+// to the widest, ● when picked, and its open PR count right-aligned when a
+// tab searching "is:open" has a result for it.
 func (m *model) repoEntry(r api.Repo) entry {
-	t := termsafe.Line(r.Name)
+	wide := 0
+	for _, o := range m.state.Repos {
+		wide = max(wide, ansi.StringWidth(termsafe.Line(o.Name)))
+	}
+	t := fit(termsafe.Line(r.Name), wide) + " "
 	if r.Name == m.repo().Name {
-		t += " " + th.clay.Render("●")
+		t += th.clay.Render("●")
+	} else {
+		t += " "
 	}
 	if r.Error != "" {
 		return entry{icon: "ci-fail", text: t + " (error)", key: r.Name}
 	}
 	for _, tb := range m.tabs {
 		if res, ok := tb.res[r.Name]; ok && tb.q() == "is:open" {
-			t += th.dim.Render(fmt.Sprintf(" %d PRs", res.Total))
+			t += " " + th.dim.Render(rfit(fmt.Sprintf("%d PRs", res.Total), 7))
 			break
 		}
 	}

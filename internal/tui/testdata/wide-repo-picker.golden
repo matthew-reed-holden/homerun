@@ -18,7 +18,7 @@
                                       │                                          │                                      
                                       │                                         │                                      
                                       │                                          │                                      
-                                      │  ▌ o/e2e ● 2 PRs                        │                                      
+                                      │  ▌ o/e2e     ●   2 PRs                  │                                      
                                       │    o/backend                            │                                      
                                       │                                          │                                      
                                       │  enter pick · esc cancel                 │                                      
@@ -37,4 +37,4 @@
                                                                  ╎                                                      
                                                                  ╎                                                      
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  l/enter preview · / filter · r rerun · m merge · u update branch · o open                             PR 1/2   ? help 
+  l preview · / filter · r run · m merge · u update · o open                                            PR 1/2   ? help 

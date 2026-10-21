@@ -245,7 +245,7 @@ func TestRateLimitedTabKeepsResults(t *testing.T) {
 	if !strings.Contains(out, "e2e PR") || !strings.Contains(out, "is:open author:@me · results from 14:02") {
 		t.Fatalf("results dropped:\n%s", out)
 	}
-	if b := barText(m); !strings.HasPrefix(b, "GitHub rate limit, retrying at 14:05") {
+	if b := barText(m); !strings.HasPrefix(b, ic("warn")+" GitHub rate limit · retrying at 14:05") {
 		t.Fatalf("bar %q", b)
 	}
 	if !slices.Equal(*ticks, []time.Duration{60 * time.Second, 120 * time.Second}) {
@@ -698,7 +698,7 @@ func TestOverviewRebuiltAfterDetailError(t *testing.T) {
 
 func TestPRRowBarHasCancel(t *testing.T) {
 	m := searchModel(t, &pr.Fake{Results: e2eResults(e2eResult())})
-	if b := barText(m); !strings.Contains(b, "r rerun") || !strings.Contains(b, "m merge") {
+	if b := barText(m); !strings.Contains(b, "r run") || !strings.Contains(b, "m merge") {
 		t.Fatalf("PR row bar %q", b)
 	}
 }

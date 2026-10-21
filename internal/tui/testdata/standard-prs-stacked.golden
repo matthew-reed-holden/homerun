@@ -27,4 +27,4 @@
    Checks  1 failing (1 required)                                                        
                                                                                           
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  l/enter preview · / filter · r rerun · m merge · u update branch        PR 1/3   ? help 
+  l preview · / filter · r run · m merge · u update · o open              PR 1/3   ? help 

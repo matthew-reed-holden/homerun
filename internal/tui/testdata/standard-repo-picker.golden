@@ -10,7 +10,7 @@
  ▌  e2e PR        │                                          │                  
                   │                                         │                  
    #2 · typo · @b│                                          │  ◇ held          
-    typo fix      │  ▌ o/e2e ● 2 PRs                        │                  
+    typo fix      │  ▌ o/e2e     ●   2 PRs                  │                  
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌│    o/backend                            │╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
    #1 e2e PR      │                                          │                  
     OPEN   main ← │  enter pick · esc cancel                 │                  
@@ -21,4 +21,4 @@
                                                                                 
    ACTIVITY                                                                     
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  l/enter preview · / filter · r rerun · m merge                PR 1/2   ? help 
+  l preview · / filter · r run · m merge · u update · o open    PR 1/2   ? help 

@@ -60,7 +60,7 @@ func (m *model) rateLine() string {
 	if at.IsZero() {
 		return ""
 	}
-	return "GitHub rate limit, retrying at " + at.Format("15:04")
+	return ic("warn") + " GitHub rate limit · retrying at " + at.Format("15:04")
 }
 
 func (m *model) behindOf(n int) (int, bool) {

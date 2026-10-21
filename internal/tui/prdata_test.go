@@ -67,7 +67,7 @@ func TestSearchPollInterval(t *testing.T) {
 	tick()
 	f.Low = true
 	tick()
-	if !strings.Contains(barText(m), "GitHub rate limit, retrying at 12:02") {
+	if !strings.Contains(barText(m), ic("warn")+" GitHub rate limit · retrying at 12:02") {
 		t.Fatalf("bar: %q", barText(m))
 	}
 	tick()
@@ -100,7 +100,7 @@ func TestSearchPollRateLimitError(t *testing.T) {
 	ticks := recordTicks(t)
 	_, c := m.Update(searchTickMsg{})
 	runBatch(m, c)
-	if (*ticks)[0] != 120*time.Second || !strings.Contains(barText(m), "GitHub rate limit, retrying at 12:02") {
+	if (*ticks)[0] != 120*time.Second || !strings.Contains(barText(m), ic("warn")+" GitHub rate limit · retrying at 12:02") {
 		t.Fatalf("ticks %v bar %q", *ticks, barText(m))
 	}
 }
@@ -299,7 +299,7 @@ func TestBarStatusAheadOfHints(t *testing.T) {
 func TestBarOverviewHasHelp(t *testing.T) {
 	m, _ := prOpenModel(t, openDetail())
 	m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
-	if b := barText(m); !strings.Contains(b, "? help") || !strings.Contains(b, "h table") {
+	if b := barText(m); !strings.Contains(b, "? help") || !strings.Contains(b, "h back to list") {
 		t.Fatalf("bar %q", b)
 	}
 	if s := ansi.Strip(m.helpView().view(160)); !strings.Contains(s, "q quit") {
@@ -315,7 +315,7 @@ func TestBarRateLimitStands(t *testing.T) {
 	_, c := m.Update(searchTickMsg{})
 	runBatch(m, c)
 	m.status = ""
-	const rl = "GitHub rate limit, retrying at 12:02"
+	rl := ic("warn") + " GitHub rate limit · retrying at 12:02"
 	if b := barText(m); !strings.HasPrefix(b, rl+"  ") {
 		t.Fatalf("list raised: bar %q", b)
 	}
@@ -337,7 +337,7 @@ func TestBarRateLimitStands(t *testing.T) {
 	_, c = m.Update(detailTickMsg{m.prGen})
 	run(m, c)
 	m.status = ""
-	if b := barText(m); !strings.HasPrefix(b, "GitHub rate limit, retrying at 12:01  ") {
+	if b := barText(m); !strings.HasPrefix(b, ic("warn")+" GitHub rate limit · retrying at 12:01  ") {
 		t.Fatalf("detail raised: bar %q", b)
 	}
 	f.Low = false
@@ -373,7 +373,7 @@ func TestBarPROffCapsReason(t *testing.T) {
 		if want := "  config reloaded  "; !strings.HasPrefix(want, strings.TrimSuffix(rest, "…")) && !strings.HasPrefix(rest, want) {
 			t.Fatalf("%d: status not after prOff: %q", w, rest)
 		}
-		if w == 120 && !strings.Contains(rest, "l/enter preview") {
+		if w == 120 && !strings.Contains(rest, "l preview") {
 			t.Fatalf("120: hints hidden: %q", b)
 		}
 	}

@@ -910,8 +910,9 @@ func (m *model) render() string {
 		body = m.tableView(lay.tw, lay.th) + "\n" + foul(iw, onPv) + "\n" + body
 	}
 	top := m.bases() + "\n" + foul(iw, false)
-	if m.log != nil {
-		top = breadcrumb(m.crumbs...) + "\n" + foul(iw, true)
+	if m.log != nil { // the log's state sits dim at the crumb's right end
+		st := th.dim.Render(m.log.status())
+		top = fit(breadcrumb(m.crumbs...), iw-ansi.StringWidth(st)-2) + "  " + st + "\n" + foul(iw, true)
 	}
 	rest := top + "\n" + body + "\n" + foul(iw, false) + "\n" + m.dugout()
 	lines := strings.Split(rest, "\n")
@@ -1038,6 +1039,9 @@ const maxHints = 6
 // PR, how far the Overview has scrolled (when it scrolls), or "check 2/5"
 // on Checks.
 func (m *model) position() string {
+	if m.log != nil {
+		return m.log.position()
+	}
 	if m.inPR() {
 		switch m.pr.section {
 		case 0:
