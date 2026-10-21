@@ -38,6 +38,9 @@ type Check struct {
 	Steps      []Step    `json:"steps,omitempty"`
 	LogPrefix  string    `json:"log_prefix,omitempty"`
 	LastLine   string    `json:"last_line,omitempty"`
+	// App is the TUI's own: the GitHub App of a check merged in from GitHub
+	// ("status" for a commit status); "" for homerun's.
+	App string `json:"-"`
 }
 
 type Item struct {

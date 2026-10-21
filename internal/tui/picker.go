@@ -1,11 +1,13 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/matthew-reed-holden/homerun/internal/api"
 	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 )
 
@@ -96,8 +98,8 @@ func (m *model) pickerKey(k tea.KeyPressMsg) tea.Cmd {
 func (m *model) pickerView() string {
 	p := m.pk
 	byName := map[string]entry{}
-	for _, e := range repoEntries(m.state, m.repo().Name) {
-		byName[e.key] = e
+	for _, r := range m.state.Repos {
+		byName[r.Name] = m.repoEntry(r)
 	}
 	lines := []string{p.in.View(), ""}
 	off := clampInt(p.cur-pickRows+1, 0, max(0, len(p.rows)-pickRows))
@@ -122,4 +124,27 @@ func (m *model) pickerView() string {
 	lines = append(lines, "", dim.Render("enter pick · esc cancel"))
 	d := dialog{title: "Pick a repo", body: strings.Join(lines, "\n")}
 	return d.view(m.w)
+}
+
+// repoEntry is a picker row: the repo's rollup, ● when picked, and its open
+// PR count when a tab searching "is:open" has a result for it.
+func (m *model) repoEntry(r api.Repo) entry {
+	t := termsafe.Line(r.Name)
+	if r.Name == m.repo().Name {
+		t += " ●"
+	}
+	if r.Error != "" {
+		return entry{"✘", t + " (error)", r.Name}
+	}
+	for _, tb := range m.tabs {
+		if res, ok := tb.res[r.Name]; ok && tb.q() == "is:open" {
+			t += dim.Render(fmt.Sprintf(" %d PRs", res.Total))
+			break
+		}
+	}
+	var all []api.Check
+	for _, it := range r.Items {
+		all = append(all, it.Checks...)
+	}
+	return entry{Rollup(all), t, r.Name}
 }

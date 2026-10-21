@@ -84,7 +84,7 @@ func step(m *model, cmd tea.Cmd) {
 		for _, c := range msg {
 			step(m, c)
 		}
-	case detailMsg, listMsg, mutatedMsg, rowDetailMsg:
+	case detailMsg, searchMsg, flowsMsg, mutatedMsg, rowDetailMsg:
 		_, c := m.Update(msg)
 		step(m, c)
 	}
@@ -146,7 +146,7 @@ func TestMergeFromDescriptionPane(t *testing.T) {
 	if m.dlg == nil || m.dlg.title != "Merge #1 into main?" {
 		t.Fatalf("no dialog from the page: %q", m.status)
 	}
-	keysIn(m, "esc", "esc", "j", "l") // Checks main pane: m is not bound there
+	keysIn(m, "esc", "esc", "j", "l") // Checks preview: m is not bound there
 	if keysIn(m, "m"); m.dlg != nil {
 		t.Fatal("m in the Checks pane")
 	}
@@ -228,7 +228,6 @@ func TestMergeFromDashboardRow(t *testing.T) {
 	recordDetailTicks(t)
 	f := &pr.Fake{Details: map[string]*pr.Detail{"o/e2e#1": openDetail()}}
 	m := prModel(t, f)
-	keysIn(m, "j")
 	cmd := keysIn(m, "m")
 	if m.status != "loading #1…" || m.dlg != nil || cmd == nil {
 		t.Fatalf("status %q", m.status)
@@ -264,20 +263,12 @@ func TestMergeFromDashboardRow(t *testing.T) {
 	}
 
 	// Branch rows have nothing to merge.
-	keysIn(m, "g")
+	keysIn(m, "4")
 	if cmd := keysIn(m, "m"); cmd != nil || m.status != "nothing to merge here" {
 		t.Fatalf("branch m: %q", m.status)
 	}
 	if cmd := keysIn(m, "u"); cmd != nil || m.status != "nothing to update here" {
 		t.Fatalf("branch u: %q", m.status)
-	}
-}
-
-func TestMergeKeysOffWithoutPRs(t *testing.T) {
-	m, _ := newTestModel(t)
-	keysIn(m, "j")
-	if cmd := keysIn(m, "m", "u"); cmd != nil || m.dlg != nil || m.status != "" {
-		t.Fatalf("status %q", m.status)
 	}
 }
 

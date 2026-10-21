@@ -9,7 +9,7 @@ import (
 	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 )
 
-// tree is the main pane's job/step outline for one item or run.
+// tree is the preview's job/step outline for one item or run.
 type tree struct {
 	checks []api.Check
 	open   map[string]bool // fold choices the user made, by check name
@@ -201,6 +201,9 @@ func (t *tree) rows(w, inner int, now time.Time, focused bool) []string {
 			first, _, _ := strings.Cut(s.Name, "\n")
 			indent, icon, name = "  ", Icon(s.Status, s.Conclusion), termsafe.Line(first)
 			tm = timing(s.Status, s.Started, s.Completed, now)
+		}
+		if n.step < 0 {
+			name += " " + paintSource(source(c, c.App == ""))
 		}
 		if n.step < 0 && t.req[c.Name] {
 			name += " " + dim.Render("required")

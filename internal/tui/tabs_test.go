@@ -1,0 +1,496 @@
+package tui
+
+import (
+	"errors"
+	"fmt"
+	"net/url"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/matthew-reed-holden/homerun/internal/api"
+	"github.com/matthew-reed-holden/homerun/internal/pr"
+)
+
+// e2eResult is what every default tab finds on o/e2e: the fixture's PRs.
+func e2eResult() pr.SearchResult {
+	return pr.SearchResult{Total: 2, PRs: []pr.Summary{
+		{Number: 1, Title: "e2e PR", Author: "matt", HeadRef: "feat", BaseRef: "main", HeadSHA: "d954af80000", Updated: now.Add(-5 * time.Minute)},
+		{Number: 2, Title: "typo fix", Author: "bob", HeadRef: "typo", BaseRef: "main", HeadSHA: "abc1234567", Updated: now.Add(-3 * time.Hour)},
+	}}
+}
+
+// e2eResults answers every default tab's search on o/e2e with res.
+func e2eResults(res pr.SearchResult) map[string]pr.SearchResult {
+	out := map[string]pr.SearchResult{}
+	for _, t := range DefaultTabs {
+		out["o/e2e|"+t.Query] = res
+	}
+	return out
+}
+
+// searchModel is a 120×40 model with PR tabs on f, fed the fixture state and
+// the searches it starts. Ticks are recorded, never waited for.
+func searchModel(t *testing.T, f *pr.Fake) *model {
+	t.Helper()
+	return searchModelState(t, f, fixture())
+}
+
+func searchModelState(t *testing.T, f *pr.Fake, st api.State) *model {
+	t.Helper()
+	m, _ := searchModelDaemon(t, f, st)
+	return m
+}
+
+func searchModelDaemon(t *testing.T, f *pr.Fake, st api.State) (*model, *fakeDaemon) {
+	t.Helper()
+	recordTicks(t)
+	fd, c := newFake(t, st)
+	m := newModel(c, func() time.Time { return now }, Options{PRs: f})
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	_, cmd := m.Update(stateMsg{&st})
+	runBatch(m, cmd)
+	return m, fd
+}
+
+// rowText is row i of the active tab as drawn, unstyled.
+func rowText(m *model, i int) string {
+	r := m.at().rows.rows[i]
+	return ansi.Strip(r.icon + " " + r.text)
+}
+
+func rowKeys(m *model) []string {
+	var out []string
+	for _, r := range m.at().rows.rows {
+		out = append(out, r.key)
+	}
+	return out
+}
+
+func TestTabsFromOptions(t *testing.T) {
+	_, c := newFake(t, api.State{})
+	m := newModel(c, func() time.Time { return now }, Options{PRs: &pr.Fake{}})
+	if got := strings.TrimRight(ansi.Strip(m.tabRow()), " "); got != "1 My PRs · 2 Review requested · 3 All open · 4 Branches · 5 Runs" {
+		t.Fatalf("default tabs %q", got)
+	}
+	m = newModel(c, func() time.Time { return now }, Options{PRs: &pr.Fake{}, Tabs: []Tab{{"Mine", "is:open"}}})
+	if got := strings.TrimRight(ansi.Strip(m.tabRow()), " "); got != "1 Mine · 2 Branches · 3 Runs" {
+		t.Fatalf("config tabs %q", got)
+	}
+	m = searchModel(t, &pr.Fake{Results: e2eResults(e2eResult())})
+	if got := strings.TrimRight(ansi.Strip(m.tabRow()), " "); got != "1 My PRs 2 · 2 Review requested 2 · 3 All open 2 · 4 Branches 1 · 5 Runs 3" {
+		t.Fatalf("counts %q", got)
+	}
+}
+
+func TestSearchPerTabForPickedRepo(t *testing.T) {
+	f := &pr.Fake{}
+	m := searchModel(t, f)
+	want := []pr.SearchCall{{Repo: "o/e2e", Query: "is:open author:@me"}, {Repo: "o/e2e", Query: "is:open review-requested:@me"}, {Repo: "o/e2e", Query: "is:open"}}
+	if !slices.Equal(f.Searches, want) {
+		t.Fatalf("after the first state: %+v", f.Searches)
+	}
+	runBatch(m, keysIn(m, "R", "down", "enter")) // o/backend
+	for i := range want {
+		want[i].Repo = "o/backend"
+	}
+	if !slices.Equal(f.Searches[3:], want) {
+		t.Fatalf("after picking o/backend: %+v", f.Searches)
+	}
+	runBatch(m, keysIn(m, "3")) // has a result for o/backend: no search
+	if len(f.Searches) != 6 {
+		t.Fatalf("tab change searched again: %+v", f.Searches)
+	}
+}
+
+func TestLateSearchKeyedByRepo(t *testing.T) {
+	f := &pr.Fake{}
+	m := searchModel(t, f)
+	keysIn(m, "R", "down", "enter") // o/backend; its searches never land
+	before := screen(m)
+	m.Update(searchMsg{repo: "o/e2e", tab: 0, query: "is:open author:@me", res: e2eResult()})
+	if _, ok := m.tabs[0].res["o/backend"]; ok {
+		t.Fatal("stored under the picked repo")
+	}
+	if screen(m) != before {
+		t.Fatalf("o/backend's table changed:\n%s", screen(m))
+	}
+	keysIn(m, "R", "enter") // o/e2e
+	if out := screen(m); !strings.Contains(out, "e2e PR") || !strings.Contains(out, "typo fix") {
+		t.Fatalf("o/e2e's rows not shown at once:\n%s", out)
+	}
+}
+
+func TestTableColumns(t *testing.T) {
+	res := pr.SearchResult{Total: 2, PRs: []pr.Summary{
+		{Number: 1, Title: "e2e PR", ReviewDecision: "APPROVED", Updated: now.Add(-2 * time.Hour),
+			Checks: []pr.Check{{Name: "ci/gh", Status: "completed", Conclusion: "failure"}}},
+		{Number: 7, Title: "not run here", IsDraft: true, ReviewDecision: "REVIEW_REQUIRED", Updated: now.Add(-50 * time.Hour)},
+	}}
+	m := searchModel(t, &pr.Fake{Results: e2eResults(res)})
+	row := rowText(m, 0)
+	indexAll(t, row, "✘    1  e2e PR", "  ✘ 1/3 ", " ✔ ", "  2h")
+	if strings.Contains(row, "↓") {
+		t.Fatalf("behind shown before it is known: %q", row)
+	}
+	m.behind = map[string]int{"o/e2e#1": 3}
+	m.refresh()
+	indexAll(t, rowText(m, 0), "✘ 1/3", "✔", "↓3", "2h")
+	row = rowText(m, 1)
+	indexAll(t, row, "·    7  ◌ draft not run here", "· not run", "○", "2d")
+	if !strings.Contains(ansi.Strip(m.at().rows.head), "#  Title") {
+		t.Fatalf("head %q", ansi.Strip(m.at().rows.head))
+	}
+	// Narrow screens drop Age, then Rev.
+	m.Update(tea.WindowSizeMsg{Width: 95, Height: 40})
+	if r := rowText(m, 1); !strings.Contains(r, "○") || strings.Contains(r, "2d") {
+		t.Fatalf("95 wide: %q", r)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 85, Height: 40})
+	if r := rowText(m, 1); strings.Contains(r, "○") {
+		t.Fatalf("85 wide: %q", r)
+	}
+}
+
+// col is the display column where sub starts in s.
+func col(t *testing.T, s, sub string) int {
+	t.Helper()
+	i := strings.Index(s, sub)
+	if i < 0 {
+		t.Fatalf("%q not in %q", sub, s)
+	}
+	return ansi.StringWidth(s[:i])
+}
+
+func TestTableSanitisesAndAligns(t *testing.T) {
+	res := pr.SearchResult{Total: 3, PRs: []pr.Summary{
+		{Number: 9, Title: "\x1b[2Jevil" + strings.Repeat("x", 200), Author: "a\x1b]52;c;aGk=\x07"},
+		{Number: 1, Title: "e2e PR"},
+		{Number: 10, Title: "short"},
+	}}
+	m := searchModel(t, &pr.Fake{Results: e2eResults(res)})
+	for _, w := range []int{80, 120} {
+		m.Update(tea.WindowSizeMsg{Width: w, Height: 24})
+		out := m.render()
+		for i := 0; i < len(out); i++ {
+			if out[i] == 0x1b && !sgrAt(out[i:]) {
+				t.Fatalf("%d: non-SGR escape at %d: %q", w, i, out[i:min(len(out), i+12)])
+			}
+		}
+		lines := strings.Split(out, "\n")
+		lines[len(lines)-1] = fit(lines[len(lines)-1], w)
+		dims(t, strings.Join(lines, "\n"), w, 24)
+		ci := col(t, ansi.Strip(m.at().rows.head), "CI")
+		for i, sub := range []string{"· not run", "✘ 1/2", "· not run"} {
+			if c := col(t, rowText(m, i), sub); c != ci {
+				t.Fatalf("%d: row %d CI at %d, head at %d: %q", w, i, c, ci, rowText(m, i))
+			}
+		}
+	}
+}
+
+func TestSearchCeilingRow(t *testing.T) {
+	res := pr.SearchResult{Total: 73}
+	for n := range 50 {
+		res.PRs = append(res.PRs, pr.Summary{Number: 100 + n, Title: fmt.Sprintf("pr %d", n)})
+	}
+	m := searchModel(t, &pr.Fake{Results: e2eResults(res)})
+	if !strings.Contains(ansi.Strip(m.tabRow()), "1 My PRs 73 ·") {
+		t.Fatalf("tab row %q", ansi.Strip(m.tabRow()))
+	}
+	rows := m.at().rows.rows
+	if len(rows) != 51 || rowText(m, 50) != "… 23 more on GitHub · o opens the search" {
+		t.Fatalf("%d rows, last %q", len(rows), rowText(m, len(rows)-1))
+	}
+	var opened []string
+	old := openURL
+	openURL = func(u string) error { opened = append(opened, u); return nil }
+	t.Cleanup(func() { openURL = old })
+	m.Update(keysIn(m, "G", "o")())
+	want := "https://github.com/pulls?q=" + url.QueryEscape("is:pr repo:o/e2e is:open author:@me")
+	if !slices.Equal(opened, []string{want}) {
+		t.Fatalf("opened %v", opened)
+	}
+}
+
+func TestRateLimitedTabKeepsResults(t *testing.T) {
+	f := &pr.Fake{Results: e2eResults(e2eResult())}
+	m := searchModel(t, f)
+	ticks := recordTicks(t)
+	at := time.Date(2026, 10, 14, 14, 2, 0, 0, time.UTC)
+	m.now = func() time.Time { return at }
+	tick := func() {
+		_, c := m.Update(searchTickMsg{})
+		runBatch(m, c)
+	}
+	tick()
+	at = at.Add(time.Minute)
+	f.SearchErr = &pr.RateLimitError{}
+	tick()
+	out := screen(m)
+	if !strings.Contains(out, "e2e PR") || !strings.Contains(out, "is:open author:@me · results from 14:02") {
+		t.Fatalf("results dropped:\n%s", out)
+	}
+	if b := barText(m); !strings.HasPrefix(b, "GitHub rate limit, retrying at 14:05") {
+		t.Fatalf("bar %q", b)
+	}
+	if !slices.Equal(*ticks, []time.Duration{60 * time.Second, 120 * time.Second}) {
+		t.Fatalf("ticks %v", *ticks)
+	}
+	if m.status != "" {
+		t.Fatalf("a rate limit said as an error: %q", m.status)
+	}
+}
+
+func noTokenModel(t *testing.T) *model {
+	t.Helper()
+	st := fixture()
+	_, c := newFake(t, st)
+	m := newModel(c, func() time.Time { return now }, Options{PRsErr: errors.New("gh: not logged in")})
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	if _, cmd := m.Update(stateMsg{&st}); cmd != nil {
+		t.Fatalf("no token must not search: %v", cmd)
+	}
+	return m
+}
+
+func TestNoTokenStartsOnBranches(t *testing.T) {
+	m := noTokenModel(t)
+	if m.at().kind != tabBranches {
+		t.Fatalf("started on %q", m.at().name)
+	}
+	// Lip Gloss strikes each character on its own.
+	row := m.tabRow()
+	for _, part := range []string{"\x1b[9mM\x1b[m\x1b[9my", "\x1b[9mR\x1b[m\x1b[9me\x1b[m\x1b[9mv", "\x1b[9mA\x1b[m\x1b[9ml"} {
+		if !strings.Contains(row, part) {
+			t.Fatalf("PR tab not struck through: %q", row)
+		}
+	}
+	if !strings.Contains(row, "4 Branches") || !strings.Contains(row, "5 Runs") {
+		t.Fatalf("Branches or Runs struck through: %q", row)
+	}
+	for _, c := range []struct {
+		key  string
+		want tabKind
+	}{{"]", tabRuns}, {"]", tabBranches}, {"[", tabRuns}, {"1", tabRuns}} {
+		keysIn(m, c.key)
+		if m.at().kind != c.want {
+			t.Fatalf("%s: on %q", c.key, m.at().name)
+		}
+	}
+	const msg = "PR tabs off: gh: not logged in. Run gh auth login or set user_token."
+	for _, w := range []int{120, 80} {
+		m.Update(tea.WindowSizeMsg{Width: w, Height: 24})
+		if b := barText(m); !strings.HasPrefix(b, msg) {
+			t.Fatalf("%d: bar %q", w, b)
+		}
+	}
+}
+
+func TestBranchesAndRunsArePickedRepoOnly(t *testing.T) {
+	st := fixture()
+	st.Repos[1].Items = []api.Item{{Label: "dev", Ref: "dev", SHA: "1234567890"}}
+	st.Runs = append(st.Runs, api.Run{ID: "r5", Repo: "o/backend", Label: "dev", Status: "running"})
+	m := searchModelState(t, &pr.Fake{}, st)
+	keysIn(m, "4")
+	if got := rowKeys(m); !slices.Equal(got, []string{"item:main"}) {
+		t.Fatalf("branches %v", got)
+	}
+	keysIn(m, "5")
+	if got := rowKeys(m); !slices.Equal(got, []string{"run:r2", "run:r3", "run:r1"}) {
+		t.Fatalf("runs %v", got)
+	}
+	indexAll(t, rowText(m, 0), "⟳ #1", "d954af8", "running", "1m12s…")
+	indexAll(t, rowText(m, 2), "✔ main", "fd387ab", "passed", "1m00s", "10m")
+	if h := ansi.Strip(m.header()); !strings.HasSuffix(h, "engine: client · 1 runs") {
+		t.Fatalf("header %q", h)
+	}
+}
+
+func TestHeaderEngineStatus(t *testing.T) {
+	runs := []api.Run{{ID: "r2", Repo: "o/e2e", Label: "#1", Status: "running"}, {ID: "r1", Repo: "o/e2e", Label: "main", Status: "done"}}
+	m := hostModel(t, Options{Hosting: hosting(true)}, runs...)
+	h := ansi.Strip(m.header())
+	if !strings.HasPrefix(h, "homerun  repo o/e2e ▾") || !strings.HasSuffix(h, "engine: hosted here · 1 runs") || ansi.StringWidth(h) != 120 {
+		t.Fatalf("hosting: %q", h)
+	}
+	m = hostModel(t, Options{Hosting: hosting(false)}, runs...)
+	if h := ansi.Strip(m.header()); !strings.HasSuffix(h, "engine: client · 1 runs") {
+		t.Fatalf("client: %q", h)
+	}
+	m.Update(errMsg{errors.New("connection refused")})
+	if h := ansi.Strip(m.header()); !strings.HasSuffix(h, "engine: unreachable") {
+		t.Fatalf("unreachable: %q", h)
+	}
+}
+
+func TestCheckSources(t *testing.T) {
+	for _, c := range []struct {
+		c      api.Check
+		daemon bool
+		want   string
+	}{
+		{api.Check{Name: "homerun / CI / x"}, true, "homerun"},
+		{api.Check{App: "github-actions"}, false, "actions"},
+		{api.Check{App: "codecov"}, false, "codecov"},
+		{api.Check{}, false, "status"},
+	} {
+		if got := source(c.c, c.daemon); got != c.want {
+			t.Errorf("%+v: %q, want %q", c.c, got, c.want)
+		}
+	}
+	res := e2eResult()
+	res.PRs[0].Checks = []pr.Check{
+		{Name: "homerun / CI / lint", Status: "completed", Conclusion: "success", App: "homerun"},
+		{Name: "build", Status: "completed", Conclusion: "success", App: "github-actions"},
+		{Name: "test", Status: "completed", Conclusion: "success", App: "github-actions"},
+		{Name: "codecov/patch", Status: "completed", Conclusion: "success", App: "codecov"},
+	}
+	m := searchModel(t, &pr.Fake{Results: e2eResults(res)})
+	out := screen(m)
+	for _, want := range []string{"3 homerun · 2 actions · 1 codecov", "CI / pass homerun", "build actions", "codecov/patch codecov"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("lacks %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestDoubledWorkflows(t *testing.T) {
+	flows := []pr.Workflow{
+		{Path: ".github/workflows/ci.yml", State: "active"},
+		{Path: ".github/workflows/pages.yml", State: "active"},
+		{Path: ".github/workflows/old.yml", State: "disabled_manually"},
+	}
+	r := api.Repo{Name: "o/e2e", Unhandled: []string{".github/workflows/pages.yml"}, Items: fixture().Repos[0].Items}
+	if paths, known := doubled(r, flows, nil); !known || !slices.Equal(paths, []string{".github/workflows/ci.yml"}) {
+		t.Fatalf("flows: %v %v", paths, known)
+	}
+	if paths, known := doubled(r, nil, nil); known || len(paths) != 0 {
+		t.Fatalf("nothing known: %v %v", paths, known)
+	}
+
+	st := fixture()
+	st.Repos[0].Unhandled = r.Unhandled
+	m := searchModelState(t, &pr.Fake{Results: e2eResults(e2eResult()), Flows: map[string][]pr.Workflow{"o/e2e": flows}}, st)
+	if row := rowText(m, 0); !strings.Contains(row, "✘ 1/2⚠2") {
+		t.Fatalf("PR row %q", row)
+	}
+	if row := rowText(m, 1); strings.Contains(row, "⚠2") { // #2 has never run here
+		t.Fatalf("not-run row marked: %q", row)
+	}
+	keysIn(m, "4")
+	if row := rowText(m, 0); !strings.Contains(row, "✔ 1/1⚠2") {
+		t.Fatalf("branch row %q", row)
+	}
+	out := screen(m)
+	for _, want := range []string{"⚠ ci.yml also runs on GitHub Actions", "left to GitHub Actions: pages.yml"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("branch preview lacks %q:\n%s", want, out)
+		}
+	}
+
+	// Without access to the workflows, an actions check homerun also runs.
+	res := e2eResult()
+	res.PRs[0].Checks = []pr.Check{{Name: "build", Status: "completed", Conclusion: "success", App: "github-actions", Workflow: ".github/workflows/ci.yml"}}
+	m = searchModel(t, &pr.Fake{Results: e2eResults(res), FlowsErr: pr.ErrNoAccess})
+	if row := rowText(m, 0); !strings.Contains(row, "⚠2") {
+		t.Fatalf("fallback PR row %q", row)
+	}
+	m = searchModel(t, &pr.Fake{Results: e2eResults(e2eResult()), FlowsErr: pr.ErrNoAccess})
+	if row := rowText(m, 0); strings.Contains(row, "⚠2") {
+		t.Fatalf("marked with nothing known: %q", row)
+	}
+}
+
+func TestTabKeys(t *testing.T) {
+	m := searchModel(t, &pr.Fake{})
+	for _, c := range []struct {
+		key  string
+		want int
+	}{{"]", 1}, {"[", 0}, {"[", 4}, {"]", 0}, {"2", 1}, {"9", 1}, {"5", 4}} {
+		keysIn(m, c.key)
+		if m.tab != c.want {
+			t.Fatalf("%s: tab %d, want %d", c.key, m.tab, c.want)
+		}
+	}
+}
+
+func TestCancelIsX(t *testing.T) {
+	st := fixture()
+	st.Repos[0].Items[1].Checks[1].Status, st.Repos[0].Items[1].Checks[1].RunID = "in_progress", "r7"
+	m := searchModelState(t, &pr.Fake{Results: e2eResults(e2eResult())}, st)
+	if keysIn(m, "c"); m.dlg != nil || m.status != "" {
+		t.Fatalf("c on a row: dlg %v status %q", m.dlg, m.status)
+	}
+	keysIn(m, "x") // #1 has a running local check
+	if m.dlg == nil || !strings.Contains(screen(m), "Cancel run r7") {
+		t.Fatalf("no cancel dialog for r7; status %q", m.status)
+	}
+	keysIn(m, "esc")
+	st = fixture()
+	m.Update(stateMsg{&st})
+	keysIn(m, "x") // #1's checks are finished, but run r2 for its SHA is running
+	if m.dlg == nil || !strings.Contains(screen(m), "Cancel run r2") {
+		t.Fatalf("no cancel dialog for r2; status %q", m.status)
+	}
+	keysIn(m, "esc", "4", "x") // main has nothing live
+	if m.dlg != nil || !strings.Contains(m.status, "nothing to cancel") {
+		t.Fatalf("dialog %v status %q", m.dlg, m.status)
+	}
+}
+
+func TestRowMutateOffGoroutineAndGuards(t *testing.T) {
+	recordDetailTicks(t)
+	f := &pr.Fake{Results: e2eResults(e2eResult()), Details: map[string]*pr.Detail{"o/e2e#1": openDetail()}}
+	m := searchModel(t, f)
+	cmd := keysIn(m, "m")
+	if cmd == nil || len(f.DetailCalls) != 0 || m.status != "loading #1…" {
+		t.Fatalf("cmd %v calls %v status %q", cmd, f.DetailCalls, m.status)
+	}
+	msg := cmd()
+	if len(f.DetailCalls) != 1 {
+		t.Fatalf("calls %v", f.DetailCalls)
+	}
+	keysIn(m, "j") // the selection moved
+	if m.Update(msg); m.dlg != nil {
+		t.Fatal("opened for a row no longer selected")
+	}
+	keysIn(m, "k")
+	m.dlg = helpDialog() // a dialog opened
+	if m.Update(msg); m.dlg.title != "Keys" {
+		t.Fatalf("replaced the open dialog: %q", m.dlg.title)
+	}
+	m.dlg = nil
+	keysIn(m, "l") // focus entered the preview
+	if m.Update(msg); m.dlg != nil {
+		t.Fatal("opened while in the preview")
+	}
+	keysIn(m, "h")
+	if m.Update(msg); m.dlg == nil || m.dlg.title != "Merge #1 into main?" {
+		t.Fatalf("dlg %v status %q", m.dlg, m.status)
+	}
+}
+
+func TestRowMutateWithoutToken(t *testing.T) {
+	m := noTokenModel(t)
+	for _, k := range []string{"m", "u"} {
+		m.status = ""
+		if cmd := keysIn(m, k); cmd != nil || m.dlg != nil || m.status != "PR tabs off: no GitHub token" {
+			t.Fatalf("%s: status %q", k, m.status)
+		}
+	}
+}
+
+func TestUpdateBehindUnknown(t *testing.T) {
+	d := openDetail()
+	d.Behind = -1
+	f := &pr.Fake{Results: e2eResults(e2eResult()), Details: map[string]*pr.Detail{"o/e2e#1": d}}
+	m := searchModel(t, f)
+	step(m, keysIn(m, "u"))
+	if m.dlg != nil || m.status != "commits behind unknown; try again" {
+		t.Fatalf("dlg %v status %q", m.dlg, m.status)
+	}
+}

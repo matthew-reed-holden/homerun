@@ -56,7 +56,7 @@ func run(m *model, cmd tea.Cmd) {
 		for _, c := range msg {
 			run(m, c)
 		}
-	case detailMsg, listMsg:
+	case detailMsg, searchMsg, flowsMsg:
 		_, c := m.Update(msg)
 		run(m, c)
 	}
@@ -67,7 +67,6 @@ func prOpenModel(t *testing.T, d *pr.Detail) (*model, *pr.Fake) {
 	recordDetailTicks(t)
 	f := &pr.Fake{Details: map[string]*pr.Detail{"o/e2e#1": d}}
 	m := prModel(t, f)
-	keysIn(m, "j")
 	run(m, keysIn(m, "enter"))
 	return m, f
 }
@@ -81,14 +80,14 @@ func TestEnterOpensPR(t *testing.T) {
 	}
 	out := screen(m)
 	lines := strings.Split(out, "\n")
-	if !strings.HasPrefix(lines[0], "╭─#1 e2e PR─") {
+	if !strings.HasPrefix(lines[2], "╭─#1 e2e PR─") {
 		t.Fatalf("sections title:\n%s", out)
 	}
-	if !strings.Contains(lines[1], "Description") || !strings.Contains(lines[2], "✘ Checks 2/4") {
+	if !strings.Contains(lines[3], "Description") || !strings.Contains(lines[4], "✘ Checks 2/4") {
 		t.Fatalf("section rows:\n%s", out)
 	}
-	if strings.Contains(out, "Branches & PRs") || strings.Contains(out, "Runs") {
-		t.Fatalf("dashboard panels still shown:\n%s", out)
+	if strings.Contains(out, "#  Title") {
+		t.Fatalf("table still shown:\n%s", out)
 	}
 	if !strings.Contains(out, "Timeline") || !strings.Contains(out, "Merged") {
 		t.Fatalf("no Description page:\n%s", out)
@@ -97,29 +96,11 @@ func TestEnterOpensPR(t *testing.T) {
 		t.Fatalf("behind %d %v", b, ok)
 	}
 	keysIn(m, "esc")
-	if m.pr != nil || m.focus != paneItems || m.items.cur != 1 {
-		t.Fatalf("esc: pr %v focus %d cur %d", m.pr, m.focus, m.items.cur)
+	if m.pr != nil || m.focus != onTable || m.rowKey() != "pr:1" {
+		t.Fatalf("esc: pr %v focus %d row %q", m.pr, m.focus, m.rowKey())
 	}
-	if !strings.Contains(screen(m), "Branches & PRs") {
-		t.Fatal("dashboard not back")
-	}
-}
-
-func TestRepoCursorBrowsesEnterPicks(t *testing.T) {
-	f := &pr.Fake{}
-	m := prModel(t, f)
-	keysIn(m, "1", "j") // hover o/backend
-	if m.repo().Name != "o/e2e" || !strings.Contains(ansi.Strip(m.render()), "e2e PR") {
-		t.Fatalf("hover rescoped: %q", m.repo().Name)
-	}
-	runBatch(m, keysIn(m, "enter"))
-	out := ansi.Strip(m.render())
-	if m.repo().Name != "o/backend" || m.focus != paneItems || !strings.Contains(out, "Branches & PRs · backend") || !strings.Contains(out, "o/backend ●") {
-		t.Fatalf("enter did not pick: repo %q focus %d\n%s", m.repo().Name, m.focus, out)
-	}
-	m.Update(tea.MouseClickMsg{X: 3, Y: 1, Button: tea.MouseLeft}) // o/e2e row
-	if m.repo().Name != "o/e2e" {
-		t.Fatalf("click did not pick: %q", m.repo().Name)
+	if !strings.Contains(screen(m), "#  Title") {
+		t.Fatal("table not back")
 	}
 }
 
@@ -127,20 +108,19 @@ func TestEnterOnBranchRowUnchanged(t *testing.T) {
 	recordDetailTicks(t)
 	f := &pr.Fake{}
 	m := prModel(t, f)
-	keysIn(m, "enter") // main
-	if m.pr != nil || m.focus != paneMain || len(f.DetailCalls) != 0 {
+	keysIn(m, "4", "enter") // main
+	if m.pr != nil || m.focus != onPreview || len(f.DetailCalls) != 0 {
 		t.Fatalf("pr %v focus %d calls %v", m.pr, m.focus, f.DetailCalls)
 	}
 }
 
 func TestEnterWithoutPRsKeepsInto(t *testing.T) {
-	m, _ := newTestModel(t)
-	m.o.PRsErr = errors.New("gh: not logged in")
-	keysIn(m, "j", "enter")
-	if m.pr != nil || m.focus != paneMain {
+	m := noTokenModel(t)
+	keysIn(m, "enter")
+	if m.pr != nil || m.focus != onPreview {
 		t.Fatalf("pr %v focus %d", m.pr, m.focus)
 	}
-	if !strings.Contains(ansi.Strip(m.bar()), "PR pages off: gh: not logged in. Run gh auth login or set user_token.") {
+	if !strings.Contains(ansi.Strip(m.bar()), "PR tabs off: gh: not logged in. Run gh auth login or set user_token.") {
 		t.Fatalf("bar %q", ansi.Strip(m.bar()))
 	}
 }
@@ -236,7 +216,6 @@ func TestOpenSchedules30sTick(t *testing.T) {
 	ticks := recordDetailTicks(t)
 	f := &pr.Fake{Details: map[string]*pr.Detail{"o/e2e#1": detailFixture()}}
 	m := prModel(t, f)
-	keysIn(m, "j")
 	run(m, keysIn(m, "enter"))
 	if !slices.Equal(*ticks, []time.Duration{30 * time.Second}) {
 		t.Fatalf("ticks %v", *ticks)
@@ -247,8 +226,7 @@ func TestDetailErrorShowsInPage(t *testing.T) {
 	recordDetailTicks(t)
 	f := &pr.Fake{Err: errors.New("boom")}
 	m := prModel(t, f)
-	m.Update(listMsg{repo: "o/e2e", sums: map[int]pr.Summary{1: sumFixture()}})
-	keysIn(m, "j")
+	m.Update(searchMsg{repo: "o/e2e", tab: 0, query: "is:open author:@me", res: pr.SearchResult{Total: 1, PRs: []pr.Summary{sumFixture()}}})
 	run(m, keysIn(m, "enter"))
 	out := screen(m)
 	if !strings.Contains(out, "boom") || !strings.Contains(out, "Make the daemon optional") {
@@ -307,7 +285,7 @@ func TestPRKeysByContext(t *testing.T) {
 		t.Fatal("enter in Checks opens the log")
 	}
 	keysIn(m, "esc")
-	if m.log != nil || m.focus != paneMain {
+	if m.log != nil || m.focus != onPreview {
 		t.Fatal("esc closes the log first")
 	}
 	keysIn(m, "esc")
@@ -358,17 +336,10 @@ func TestDescriptionLayoutHoldsWithHugeBody(t *testing.T) {
 // prDaemonModel is prModel with the fake daemon, for actions that reach it.
 func prDaemonModel(t *testing.T) (*model, *fakeDaemon) {
 	t.Helper()
-	recordTicks(t)
 	recordDetailTicks(t)
-	st := fixture()
-	st.Repos[0].Items[0], st.Repos[0].Items[1] = st.Repos[0].Items[1], st.Repos[0].Items[0] // #1 first
-	fd, c := newFake(t, st)
-	f := &pr.Fake{Details: map[string]*pr.Detail{"o/e2e#1": detailFixture()}}
-	m := newModel(c, func() time.Time { return now }, Options{PRs: f})
-	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	m.Update(stateMsg{&st})
-	keysIn(m, "2")
-	run(m, keysIn(m, "enter")) // #1, the first item
+	f := &pr.Fake{Results: e2eResults(e2eResult()), Details: map[string]*pr.Detail{"o/e2e#1": detailFixture()}}
+	m, fd := searchModelDaemon(t, f, fixture())
+	run(m, keysIn(m, "enter")) // #1, the first row
 	if m.pr == nil || m.pr.number != 1 {
 		t.Fatal("not opened")
 	}
@@ -377,10 +348,8 @@ func prDaemonModel(t *testing.T) (*model, *fakeDaemon) {
 
 func TestPRActionsTargetTheOpenPR(t *testing.T) {
 	m, fd := prDaemonModel(t)
-	st := fixture() // main first again
-	m.Update(stateMsg{&st})
-	m.items.cur = 0 // the dashboard selection is now main
-	keysIn(m, "j")  // Checks row
+	m.tabs[0].rows.cur = 1 // the table selection is now #2
+	keysIn(m, "j")         // Checks row
 	cmd := keysIn(m, "r")
 	if cmd == nil {
 		t.Fatalf("no rerun: %q", m.status)
@@ -410,7 +379,7 @@ func TestPRActionsWithoutItemRefuse(t *testing.T) {
 	if cmd := keysIn(m, "r"); cmd != nil || !strings.Contains(m.status, "nothing to run here") {
 		t.Fatalf("cmd %v status %q", cmd, m.status)
 	}
-	if keysIn(m, "c"); m.dlg != nil || !strings.Contains(m.status, "nothing to cancel here") {
+	if keysIn(m, "x"); m.dlg != nil || !strings.Contains(m.status, "nothing to cancel here") {
 		t.Fatalf("cancel: %q", m.status)
 	}
 	var opened []string
@@ -464,23 +433,17 @@ func sgrAt(s string) bool {
 // daemon-named check, one GitHub-only required check and one GitHub-only plain check.
 func checksModel(t *testing.T) (*model, *fakeDaemon) {
 	t.Helper()
-	recordTicks(t)
 	recordDetailTicks(t)
 	st := fixture()
-	st.Repos[0].Items[0], st.Repos[0].Items[1] = st.Repos[0].Items[1], st.Repos[0].Items[0]
-	st.Repos[0].Items[0].Checks = append(st.Repos[0].Items[0].Checks,
+	st.Repos[0].Items[1].Checks = append(st.Repos[0].Items[1].Checks,
 		api.Check{Name: "homerun / CI / slow", Status: "in_progress", RunID: "r9", LogPrefix: "CI / slow"})
-	fd, c := newFake(t, st)
 	d := detailFixture()
 	d.Checks = []pr.Check{
 		{Name: "homerun / CI / pass", Status: "completed", Conclusion: "success", Required: true},
 		{Name: "ci/gh", Status: "completed", Conclusion: "failure", URL: "https://github.com/o/e2e/runs/9", Required: true},
 		{Name: "docs", Status: "in_progress"},
 	}
-	m := newModel(c, func() time.Time { return now }, Options{PRs: &pr.Fake{Details: map[string]*pr.Detail{"o/e2e#1": d}}})
-	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	m.Update(stateMsg{&st})
-	keysIn(m, "2")
+	m, fd := searchModelDaemon(t, &pr.Fake{Results: e2eResults(e2eResult()), Details: map[string]*pr.Detail{"o/e2e#1": d}}, st)
 	run(m, keysIn(m, "enter"))
 	keysIn(m, "j", "l")
 	return m, fd
@@ -489,7 +452,7 @@ func checksModel(t *testing.T) (*model, *fakeDaemon) {
 func TestChecksSection(t *testing.T) {
 	m, _ := checksModel(t)
 	out := screen(m)
-	for _, want := range []string{"pass required", "ci/gh required", "✘ ci/gh", "docs", "Checks 1/5"} {
+	for _, want := range []string{"pass homerun required", "ci/gh status required", "✘ ci/gh", "docs status", "Checks 1/5"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("lacks %q:\n%s", want, out)
 		}
@@ -545,15 +508,15 @@ func TestChecksSectionKeys(t *testing.T) {
 	for m.tree.checks[m.tree.nodes()[m.tree.cur].check].Name != "homerun / CI / slow" {
 		keysIn(m, "k")
 	}
-	if keysIn(m, "c"); m.dlg == nil {
-		t.Fatal("c on a running check opens the cancel dialog")
+	if keysIn(m, "x"); m.dlg == nil {
+		t.Fatal("x on a running check opens the cancel dialog")
 	}
 }
 
 func TestDescriptionCIsNotCancel(t *testing.T) {
 	m, _ := checksModel(t)
 	keysIn(m, "esc", "k", "l")
-	if m.pr.section != 0 || m.focus != paneMain {
+	if m.pr.section != 0 || m.focus != onPreview {
 		t.Fatal("not in Description")
 	}
 	if keysIn(m, "c"); m.dlg != nil || m.status != "" {
@@ -570,7 +533,7 @@ func typeIn(m *model, s string) {
 func TestCommentSends(t *testing.T) {
 	m, f := prOpenModel(t, openDetail())
 	keysIn(m, "l")
-	if m.pr.section != 0 || m.focus != paneMain {
+	if m.pr.section != 0 || m.focus != onPreview {
 		t.Fatal("not in Description")
 	}
 	keysIn(m, "c")

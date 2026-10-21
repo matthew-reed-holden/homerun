@@ -56,7 +56,6 @@ type Detail struct {
 }
 
 type API interface {
-	List(ctx context.Context, repo string, numbers []int) (map[int]Summary, error)
 	// Search lists PRs matching "is:pr repo:<repo> <query>", the first 50 as GitHub orders them.
 	Search(ctx context.Context, repo, query string) (SearchResult, error)
 	// Workflows lists the repo's workflows; ErrNoAccess when the token may not read them.

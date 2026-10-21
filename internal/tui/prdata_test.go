@@ -10,22 +10,21 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/matthew-reed-holden/homerun/internal/api"
 	"github.com/matthew-reed-holden/homerun/internal/pr"
 )
 
+// prModel is searchModel with the fixture's PRs as every tab's result
+// unless f has results of its own.
 func prModel(t *testing.T, f *pr.Fake) *model {
 	t.Helper()
-	recordTicks(t)
-	st := fixture()
-	_, c := newFake(t, st)
-	m := newModel(c, func() time.Time { return now }, Options{PRs: f})
-	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	_, cmd := m.Update(stateMsg{&st})
-	runBatch(m, cmd)
-	return m
+	if f.Results == nil {
+		f.Results = e2eResults(e2eResult())
+	}
+	return searchModel(t, f)
 }
 
-// runBatch runs the commands a batch returns, feeding list results back.
+// runBatch runs the commands a batch returns, feeding search and workflow results back.
 func runBatch(m *model, cmd tea.Cmd) {
 	if cmd == nil {
 		return
@@ -35,46 +34,26 @@ func runBatch(m *model, cmd tea.Cmd) {
 		for _, c := range msg {
 			runBatch(m, c)
 		}
-	case listMsg:
+	case searchMsg, flowsMsg:
 		_, c := m.Update(msg)
 		runBatch(m, c)
 	}
 }
 
-// recordTicks swaps listTick for one that notes its interval and returns at once.
+// recordTicks swaps searchTick for one that notes its interval and returns at once.
 func recordTicks(t *testing.T) *[]time.Duration {
 	t.Helper()
 	var got []time.Duration
-	old := listTick
-	listTick = func(d time.Duration) tea.Cmd {
+	old := searchTick
+	searchTick = func(d time.Duration) tea.Cmd {
 		got = append(got, d)
-		return func() tea.Msg { return listTickMsg{} }
+		return func() tea.Msg { return searchTickMsg{} }
 	}
-	t.Cleanup(func() { listTick = old })
+	t.Cleanup(func() { searchTick = old })
 	return &got
 }
 
-func TestListPolledForSelectedRepoOnly(t *testing.T) {
-	f := &pr.Fake{}
-	m := prModel(t, f)
-	if len(f.Lists) != 1 || f.Lists[0].Repo != "o/e2e" || !slices.Equal(f.Lists[0].Numbers, []int{1, 2}) {
-		t.Fatalf("after first state: %+v", f.Lists)
-	}
-	runBatch(m, keysIn(m, "1", "j"))
-	if len(f.Lists) != 1 {
-		t.Fatalf("o/backend has no PRs, but List ran: %+v", f.Lists)
-	}
-	runBatch(m, keysIn(m, "enter")) // picks o/backend
-	if len(f.Lists) != 1 {
-		t.Fatalf("o/backend has no PRs, but List ran: %+v", f.Lists)
-	}
-	runBatch(m, keysIn(m, "1", "k", "enter"))
-	if len(f.Lists) != 2 || f.Lists[1].Repo != "o/e2e" {
-		t.Fatalf("back on o/e2e: %+v", f.Lists)
-	}
-}
-
-func TestListPollInterval(t *testing.T) {
+func TestSearchPollInterval(t *testing.T) {
 	f := &pr.Fake{}
 	m := prModel(t, f)
 	ticks := recordTicks(t)
@@ -82,7 +61,7 @@ func TestListPollInterval(t *testing.T) {
 		t.Fatalf("initial %v", m.prDelay)
 	}
 	tick := func() {
-		_, c := m.Update(listTickMsg{})
+		_, c := m.Update(searchTickMsg{})
 		runBatch(m, c)
 	}
 	tick()
@@ -108,141 +87,44 @@ func TestListPollInterval(t *testing.T) {
 func TestSelectionFetchLeavesIntervalAlone(t *testing.T) {
 	f := &pr.Fake{Low: true}
 	m := prModel(t, f)
-	runBatch(m, keysIn(m, "1", "j", "enter"))
-	runBatch(m, keysIn(m, "1", "k", "enter"))
+	runBatch(m, keysIn(m, "R", "down", "enter"))
+	runBatch(m, keysIn(m, "R", "enter"))
 	if m.prDelay != 60*time.Second {
 		t.Fatalf("selection fetch moved the interval: %v", m.prDelay)
 	}
 }
 
-func TestListPollRateLimitError(t *testing.T) {
+func TestSearchPollRateLimitError(t *testing.T) {
 	f := &pr.Fake{Err: &pr.RateLimitError{}}
 	m := prModel(t, f)
 	ticks := recordTicks(t)
-	_, c := m.Update(listTickMsg{})
+	_, c := m.Update(searchTickMsg{})
 	runBatch(m, c)
 	if (*ticks)[0] != 120*time.Second || !strings.Contains(ansi.Strip(m.bar()), "GitHub rate limit, retrying at 12:02") {
 		t.Fatalf("ticks %v bar %q", *ticks, ansi.Strip(m.bar()))
 	}
 }
 
-func TestListTickWithNothingToFetchStillReschedules(t *testing.T) {
+func TestSearchTickWithNothingToFetchStillReschedules(t *testing.T) {
 	f := &pr.Fake{}
 	m := prModel(t, f)
 	ticks := recordTicks(t)
-	runBatch(m, keysIn(m, "1", "j", "enter")) // o/backend: no PRs
-	_, c := m.Update(listTickMsg{})
+	m.Update(stateMsg{&api.State{}}) // no repo to search
+	_, c := m.Update(searchTickMsg{})
 	runBatch(m, c)
-	if len(*ticks) != 1 || len(f.Lists) != 1 {
-		t.Fatalf("ticks %v lists %+v", *ticks, f.Lists)
+	if len(*ticks) != 1 || len(f.Searches) != 3 {
+		t.Fatalf("ticks %v searches %+v", *ticks, f.Searches)
 	}
 }
 
-func TestListTickFetchesAndReschedules(t *testing.T) {
+func TestSearchTickFetchesAndReschedules(t *testing.T) {
 	f := &pr.Fake{}
 	m := prModel(t, f)
 	ticks := recordTicks(t)
-	_, cmd := m.Update(listTickMsg{})
+	_, cmd := m.Update(searchTickMsg{})
 	runBatch(m, cmd)
-	if len(f.Lists) != 2 || len(*ticks) != 1 {
-		t.Fatalf("lists %+v ticks %v", f.Lists, *ticks)
-	}
-}
-
-func TestBadges(t *testing.T) {
-	cases := []struct {
-		name   string
-		s      pr.Summary
-		behind int
-		want   string
-	}{
-		{"none", pr.Summary{}, 0, ""},
-		{"behind count", pr.Summary{}, 3, "↓3"},
-		{"behind state", pr.Summary{MergeState: "BEHIND"}, 0, "↓"},
-		{"conflict", pr.Summary{Mergeable: "CONFLICTING"}, 0, "⚔"},
-		{"approved", pr.Summary{ReviewDecision: "APPROVED"}, 0, "✔"},
-		{"changes", pr.Summary{ReviewDecision: "CHANGES_REQUESTED"}, 0, "✘"},
-		{"review required", pr.Summary{ReviewDecision: "REVIEW_REQUIRED"}, 0, "○"},
-		{"required failing", pr.Summary{Checks: []pr.Check{{Required: true, Status: "completed", Conclusion: "failure"}}}, 0, "!"},
-		{"required passing", pr.Summary{Checks: []pr.Check{{Required: true, Status: "completed", Conclusion: "skipped"}, {Required: true, Status: "completed", Conclusion: "neutral"}}}, 0, ""},
-		{"optional failing", pr.Summary{Checks: []pr.Check{{Status: "completed", Conclusion: "failure"}}}, 0, ""},
-		{"required running", pr.Summary{Checks: []pr.Check{{Required: true, Status: "in_progress"}}}, 0, ""},
-		{"draft", pr.Summary{IsDraft: true}, 0, "draft"},
-		{"all", pr.Summary{Mergeable: "CONFLICTING", ReviewDecision: "APPROVED", IsDraft: true,
-			Checks: []pr.Check{{Required: true, Status: "completed", Conclusion: "failure"}}}, 3, "↓3 ⚔ ✔ ! draft"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			behind := func(int) (int, bool) { return c.behind, c.behind > 0 }
-			r := fixture().Repos[0]
-			es := itemEntries(r, now, map[int]pr.Summary{1: c.s}, behind)
-			text := ansi.Strip(es[1].text)
-			base := ansi.Strip(itemEntries(r, now, nil, nil)[1].text)
-			if c.want == "" {
-				if text != base {
-					t.Fatalf("got %q, want plain %q", text, base)
-				}
-				return
-			}
-			label, rest, _ := strings.Cut(base, " ")
-			if want := label + " " + c.want + " " + rest; text != want {
-				t.Fatalf("got %q, want %q", text, want)
-			}
-		})
-	}
-}
-
-func TestNoTokenDashboardUnchanged(t *testing.T) {
-	st := fixture()
-	_, c := newFake(t, st)
-	m := newModel(c, func() time.Time { return now }, Options{PRsErr: errors.New("gh: not logged in")})
-	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	_, cmd := m.Update(stateMsg{&st})
-	if cmd != nil {
-		t.Fatalf("no token must not poll: %v", cmd)
-	}
-	keysIn(m, "j")
-	lines := strings.Split(ansi.Strip(m.render()), "\n")
-	const msg = "PR pages off: gh: not logged in. Run gh auth login or set user_token."
-	if bar := ansi.Strip(m.bar()); !strings.Contains(bar, msg) {
-		t.Fatalf("bar at 120: %q", bar)
-	}
-	if bar := strings.Split(ansi.Strip(m.render()), "\n"); !strings.HasPrefix(bar[len(bar)-1], msg) {
-		t.Fatalf("not leading: %q", bar[len(bar)-1])
-	}
-	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	if bar := ansi.Strip(m.bar()); !strings.HasPrefix(bar, msg) {
-		t.Fatalf("bar at 80: %q", bar)
-	}
-	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	want, err := readGolden("wide-items")
-	if err != nil {
-		t.Fatal(err)
-	}
-	wl := strings.Split(want, "\n")
-	if got, w := strings.Join(lines[:len(lines)-1], "\n"), strings.Join(wl[:len(wl)-1], "\n"); got != w {
-		t.Fatalf("body differs from wide-items\n--- got\n%s", got)
-	}
-}
-
-func TestLateListResultKeyedByRepo(t *testing.T) {
-	f := &pr.Fake{}
-	m := prModel(t, f)
-	keysIn(m, "1", "j", "enter") // o/backend
-	before := ansi.Strip(m.render())
-	m.Update(listMsg{repo: "o/e2e", sums: map[int]pr.Summary{1: {Number: 1, IsDraft: true}}})
-	if _, ok := m.summary("o/e2e", 1); !ok {
-		t.Fatal("not stored under o/e2e")
-	}
-	if _, ok := m.summary("o/backend", 1); ok {
-		t.Fatal("stored under the selected repo")
-	}
-	if ansi.Strip(m.render()) != before {
-		t.Fatal("o/backend rows changed")
-	}
-	keysIn(m, "1", "k", "enter")
-	if !strings.Contains(ansi.Strip(m.render()), "#1 draft e2e PR @matt 5m") {
-		t.Fatalf("badges not shown at once:\n%s", ansi.Strip(m.render()))
+	if len(f.Searches) != 6 || len(*ticks) != 1 {
+		t.Fatalf("searches %+v ticks %v", f.Searches, *ticks)
 	}
 }
 
@@ -293,21 +175,14 @@ func TestSummaryLines(t *testing.T) {
 }
 
 func summaryModel(t *testing.T) *model {
-	m := prModel(t, &pr.Fake{})
-	m.Update(listMsg{repo: "o/e2e", sums: map[int]pr.Summary{1: sumFixture()}})
-	keysIn(m, "j")
-	return m
+	return prModel(t, &pr.Fake{Results: e2eResults(pr.SearchResult{Total: 1, PRs: []pr.Summary{sumFixture()}})})
 }
 
-func TestSummaryFallsBackWithoutListData(t *testing.T) {
-	m := prModel(t, &pr.Fake{})
-	keysIn(m, "j")
-	out := ansi.Strip(m.render())
-	if strings.Contains(out, "Checks ✘") || strings.Contains(out, "Reviews:") {
-		t.Fatalf("summary without data:\n%s", out)
-	}
-	if len(m.summaryBlock(80)) != 0 {
-		t.Fatal("block without data")
+func TestBranchPreviewHasNoSummary(t *testing.T) {
+	m := summaryModel(t)
+	keysIn(m, "4")
+	if out := screen(m); strings.Contains(out, "Checks ✘") || strings.Contains(out, "Reviews:") || len(m.previewHead(80)) != 0 {
+		t.Fatalf("summary on a branch row:\n%s", out)
 	}
 }
 
@@ -317,8 +192,8 @@ func TestSummaryKeepsTreeFocus(t *testing.T) {
 		t.Fatalf("no summary:\n%s", out)
 	}
 	keysIn(m, "l")
-	if m.focus != paneMain {
-		t.Fatal("l did not focus main")
+	if m.focus != onPreview {
+		t.Fatal("l did not focus the preview")
 	}
 	keysIn(m, "j")
 	if m.tree.cur != 1 {
@@ -332,64 +207,39 @@ func TestSummaryKeepsTreeFocus(t *testing.T) {
 
 func TestSummaryClickOffsetsTree(t *testing.T) {
 	m := summaryModel(t)
-	h := len(m.summaryBlock(m.layout().mainW - 2))
-	m.click(tea.Mouse{X: 60, Y: h + 3, Button: tea.MouseLeft}) // second tree row
+	lay := m.layout()
+	h := len(m.previewHead(lay.pw - 2))
+	m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + h + 3, Button: tea.MouseLeft}) // second tree row
 	if m.tree.cur != 1 {
 		t.Fatalf("cur %d", m.tree.cur)
 	}
 }
 
-// Badges sit before the title, so the 32-column panel never cuts them off.
-func TestBadgesSurviveLongTitle(t *testing.T) {
-	m := prModel(t, &pr.Fake{})
-	st := fixture()
-	st.Repos[0].Items[1].Title = "Make the release workflow publish checksums for every artifact"
-	m.Update(stateMsg{&st})
-	m.Update(listMsg{repo: "o/e2e", sums: map[int]pr.Summary{1: {Number: 1, Mergeable: "CONFLICTING", ReviewDecision: "APPROVED", IsDraft: true,
-		Checks: []pr.Check{{Required: true, Status: "completed", Conclusion: "failure"}}}}})
-	m.behind = map[string]int{"o/e2e#1": 3}
-	m.items.set(m.itemRows())
-	keysIn(m, "k") // the PR row unselected, so it renders as is
-	for _, l := range strings.Split(screen(m), "\n") {
-		if strings.Contains(l, "#1 ") && strings.Contains(l, "Make the") {
-			if !strings.Contains(l, "#1 ↓3 ⚔ ✔ ! draft Make the") {
-				t.Fatalf("badges cut: %q", l)
-			}
-			return
-		}
-	}
-	t.Fatalf("no PR row:\n%s", screen(m))
-}
-
-// A failed list leaves the repo's rows with no badges and no summary, and says
-// the error once, not on every tick.
-func TestListErrorClearsBadges(t *testing.T) {
-	f := &pr.Fake{PRs: map[string]map[int]pr.Summary{"o/e2e": {1: {Number: 1, Title: "e2e PR", ReviewDecision: "APPROVED", IsDraft: true}}}}
+// A failed search keeps the tab's last good rows and summary, and says the
+// error once, not on every tick.
+func TestSearchErrorKeepsResultsSaysOnce(t *testing.T) {
+	f := &pr.Fake{}
 	m := prModel(t, f)
-	keysIn(m, "j")
-	if !strings.Contains(screen(m), "#1 ✔ draft") || len(m.summaryBlock(80)) == 0 {
-		t.Fatalf("no badges after a good list:\n%s", screen(m))
-	}
 	f.Err = errors.New("github: 401 Bad credentials")
-	_, c := m.Update(listTickMsg{})
+	_, c := m.Update(searchTickMsg{})
 	runBatch(m, c)
-	if s := screen(m); strings.Contains(s, "✔ draft") || len(m.summaryBlock(80)) != 0 {
-		t.Fatalf("stale badges kept:\n%s", s)
+	if s := screen(m); !strings.Contains(s, "e2e PR") || len(m.previewHead(80)) == 0 {
+		t.Fatalf("rows dropped:\n%s", s)
 	}
 	if !strings.Contains(m.status, "401 Bad credentials") {
 		t.Fatalf("status %q", m.status)
 	}
 	m.status = ""
-	_, c = m.Update(listTickMsg{})
+	_, c = m.Update(searchTickMsg{})
 	runBatch(m, c)
 	if m.status != "" {
 		t.Fatalf("same error said again: %q", m.status)
 	}
 	f.Err = nil
-	_, c = m.Update(listTickMsg{})
+	_, c = m.Update(searchTickMsg{})
 	runBatch(m, c)
 	f.Err = errors.New("github: 401 Bad credentials")
-	_, c = m.Update(listTickMsg{})
+	_, c = m.Update(searchTickMsg{})
 	runBatch(m, c)
 	if !strings.Contains(m.status, "401") {
 		t.Fatalf("error after a recovery not said: %q", m.status)
@@ -436,9 +286,8 @@ func TestBarDescriptionHasHelpAndQuit(t *testing.T) {
 func TestBarRateLimitStands(t *testing.T) {
 	f := &pr.Fake{}
 	m := prModel(t, f)
-	keysIn(m, "j")
 	f.Low = true
-	_, c := m.Update(listTickMsg{})
+	_, c := m.Update(searchTickMsg{})
 	runBatch(m, c)
 	m.status = ""
 	const rl = "GitHub rate limit, retrying at 12:02"
@@ -451,7 +300,7 @@ func TestBarRateLimitStands(t *testing.T) {
 		t.Fatalf("80 cols: bar %q", b)
 	}
 	f.Low = false
-	_, c = m.Update(listTickMsg{})
+	_, c = m.Update(searchTickMsg{})
 	runBatch(m, c)
 	if b := barText(m); strings.Contains(b, "rate limit") {
 		t.Fatalf("back to normal: bar %q", b)
@@ -486,7 +335,7 @@ func TestBarPROffCapsReason(t *testing.T) {
 		m.Update(tea.WindowSizeMsg{Width: w, Height: 24})
 		b := barText(m)
 		off, rest, ok := strings.Cut(b, ". Run gh auth login or set user_token.")
-		if !ok || !strings.HasPrefix(off, "PR pages off: command failed") || strings.Contains(b, "second line") {
+		if !ok || !strings.HasPrefix(off, "PR tabs off: command failed") || strings.Contains(b, "second line") {
 			t.Fatalf("%d: bar %q", w, b)
 		}
 		if ansi.StringWidth(off)+37 > 72 {
@@ -496,7 +345,7 @@ func TestBarPROffCapsReason(t *testing.T) {
 		if want := "  config reloaded  "; !strings.HasPrefix(want, strings.TrimSuffix(rest, "…")) && !strings.HasPrefix(rest, want) {
 			t.Fatalf("%d: status not after prOff: %q", w, rest)
 		}
-		if w == 120 && !strings.Contains(rest, "1-3 panel") {
+		if w == 120 && !strings.Contains(rest, "[ ] tabs") {
 			t.Fatalf("120: hints hidden: %q", b)
 		}
 	}
@@ -510,7 +359,7 @@ func TestConfigErrorAndNotesInHelp(t *testing.T) {
 	reason := fmt.Errorf("%w: %w", ErrConfig, errors.New("/home/u/.config/homerun/config.yml: yaml: line 3: did not find expected key"))
 	m := newModel(c, func() time.Time { return now }, Options{PRsErr: reason, Warns: []string{"user_token is stored as plaintext"}, Log: "/state/homerun.log"})
 	m.Update(stateMsg{&st})
-	if b := barText(m); !strings.HasPrefix(b, "PR pages off: config error. Press ? for details.") || strings.Contains(b, "gh auth login") {
+	if b := barText(m); !strings.HasPrefix(b, "PR tabs off: config error. Press ? for details.") || strings.Contains(b, "gh auth login") {
 		t.Fatalf("bar %q", b)
 	}
 	m.Update(tea.WindowSizeMsg{Width: 200, Height: 60})

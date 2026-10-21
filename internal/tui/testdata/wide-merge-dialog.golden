@@ -1,19 +1,19 @@
-╭─#1 e2e PR──────────────────────╮╭─Description────────────────────────────────────────────────────────────────────────╮
-│  Description                   ││#1 e2e PR  @matt · feat → main                                                      │
-│✘ Checks 2/4                    ││✔ no conflicts                                                                      │
-│                                ││Checks ✔ 1 passed · ◌ 1 pending                                                     │
-│                                ││Reviews: approved · Files 3 (+40 −7) · 💬 1                                         │
-│                                ││Open                                                                                │
-│                                ││────────────────────────────────────────────────────────────────────────────────────│
-│                                ││                                                                                    │
-│                                ││ Heading                                                                            │
-│                                ││                                                                                    │
-│                                ││Makes the thing b optional.                                                         │
-│                                ││                                                                                    │
-│                                ││Timeline                                                                            │
-│                                ││● abc1234 headline · @matt · 2h ago                                                 │
-│                                ││💬 @bob · 1h ago                                                                    │
-│                                ││  looks good                                                                        │
+homerun  repo o/e2e ▾                                                                            engine: client · 1 runs
+1 My PRs 2 · 2 Review requested 2 · 3 All open 2 · 4 Branches 1 · 5 Runs 3                                              
+╭─#1 e2e PR──────────────────────────────────────────────────────╮╭─Description────────────────────────────────────────╮
+│  Description                                                   ││#1 e2e PR  @matt · feat → main                      │
+│✘ Checks 2/4                                                    ││✔ no conflicts                                      │
+│                                                                ││Checks ✔ 1 passed · ◌ 1 pending                     │
+│                                                                ││Reviews: approved · Files 3 (+40 −7) · 💬 1         │
+│                                                                ││Open                                                │
+│                                                                ││────────────────────────────────────────────────────│
+│                                                                ││                                                    │
+│                                                                ││ Heading                                            │
+│                                                                ││                                                    │
+│                                                                ││Makes the thing b optional.                         │
+│                                                                ││                                                    │
+│                                                                ││Timeline                                            │
+│                                                                ││● abc1234 headline · @matt · 2h ago                 │
 │                         ╭─────────────────────────────────────────────────────────────────╮                          │
 │                         │ Merge #1 into main?                                             │                          │
 │                         │                                                                 │                          │
@@ -21,20 +21,20 @@
 │                         │                                                                 │                          │
 │                         │ [tab] switch · [y] merge · any other key cancels                │                          │
 │                         ╰─────────────────────────────────────────────────────────────────╯                          │
-│                                ││Merge                                                                               │
-│                                ││✔ Ready to merge                                                                    │
-│                                ││                                                                                    │
-│                                ││                                                                                    │
-│                                ││                                                                                    │
-│                                ││                                                                                    │
-│                                ││                                                                                    │
-│                                ││                                                                                    │
-│                                ││                                                                                    │
-│                                ││                                                                                    │
-│                                ││                                                                                    │
-│                                ││                                                                                    │
-│                                ││                                                                                    │
-│                                ││                                                                                    │
-│                                ││                                                                                    │
-╰────────────────────────────────╯╰────────────────────────────────────────────────────────────────────────────────────╯
+│                                                                ││⟳ build                                             │
+│                                                                ││                                                    │
+│                                                                ││Merge                                               │
+│                                                                ││✔ Ready to merge                                    │
+│                                                                ││                                                    │
+│                                                                ││                                                    │
+│                                                                ││                                                    │
+│                                                                ││                                                    │
+│                                                                ││                                                    │
+│                                                                ││                                                    │
+│                                                                ││                                                    │
+│                                                                ││                                                    │
+│                                                                ││                                                    │
+│                                                                ││                                                    │
+│                                                                ││                                                    │
+╰────────────────────────────────────────────────────────────────╯╰────────────────────────────────────────────────────╯
 j/k up/down • m merge • u update branch • c comment • o open • esc back • ? help • q quit

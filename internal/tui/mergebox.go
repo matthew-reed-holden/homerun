@@ -157,7 +157,7 @@ func (m *model) onMutated(msg mutatedMsg) tea.Cmd {
 	if mine {
 		return m.refetchPR()
 	}
-	return m.fetchList(false)
+	return m.fetchSearches(false)
 }
 
 // mergeDetail opens the merge dialog for repo#n, or says why it can't.
@@ -192,6 +192,9 @@ func (m *model) updateDetail(repo string, n int, d *pr.Detail) {
 	case d.State != "OPEN":
 		m.say(fmt.Sprintf("Can't update: #%d is %s", n, strings.ToLower(d.State)))
 		return
+	case d.Behind < 0:
+		m.say("commits behind unknown; try again")
+		return
 	case d.Behind == 0:
 		m.say("already up to date with " + base)
 		return
@@ -219,13 +222,14 @@ func (m *model) prMutate(merge bool) {
 	}
 }
 
-// rowMutate is m or u on a dashboard row: the dialog waits for a fresh detail.
+// rowMutate is m or u on a table row: the dialog waits for a fresh detail.
 func (m *model) rowMutate(merge bool) tea.Cmd {
 	if m.o.PRs == nil {
+		m.say("PR tabs off: no GitHub token")
 		return nil
 	}
-	it := m.selectedItem()
-	if it == nil || it.PR == 0 {
+	s, ok := m.selPR()
+	if !ok {
 		if merge {
 			m.say("nothing to merge here")
 		} else {
@@ -233,22 +237,23 @@ func (m *model) rowMutate(merge bool) tea.Cmd {
 		}
 		return nil
 	}
-	api, repo, n := m.o.PRs, m.selectedRepo(), it.PR
+	client, repo, n := m.o.PRs, m.repo().Name, s.Number
 	m.say(fmt.Sprintf("loading #%d…", n))
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), prTimeout)
 		defer cancel()
-		d, err := api.Detail(ctx, repo, n)
+		d, err := client.Detail(ctx, repo, n)
 		return rowDetailMsg{merge: merge, repo: repo, n: n, d: d, err: err}
 	}
 }
 
-// onRowDetail opens the dialog unless the user has moved on since.
+// onRowDetail opens the dialog unless the user has moved on since: another
+// row or repo, a dialog, the preview or a PR.
 func (m *model) onRowDetail(msg rowDetailMsg) {
-	if m.pr != nil || m.dlg != nil || m.selectedRepo() != msg.repo {
+	if m.pr != nil || m.dlg != nil || m.focus != onTable || m.repo().Name != msg.repo {
 		return
 	}
-	if it := m.selectedItem(); it == nil || it.PR != msg.n {
+	if s, ok := m.selPR(); !ok || s.Number != msg.n {
 		return
 	}
 	switch {

@@ -1,0 +1,24 @@
+homerun  repo o/e2e ▾                                    engine: client · 1 runs
+1 My PRs 2 · 2 Review requested 2 · 3 All open 2 · 4 Branches 1 · 5 Runs 3      
+╭─runs, newest first───────────────────────────────────────────────────────────╮
+│  Target                                      SHA      Status       Took  Age │
+│⟳ #1                                          d954af8  running    1m12s…      │
+│· #2                                          abc1234  done           0s  3h  │
+│✔ main                                        fd387ab  passed      1m00s  10m │
+│                                                                              │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─#1 · d954af8 · running───────────────────────────────────────────────────────╮
+│no checks yet                                                                 │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+[ ] tabs • l/enter preview • r rerun • x cancel • y copy sha • o open • R repo …

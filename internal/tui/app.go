@@ -18,14 +18,13 @@ import (
 	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 )
 
-type pane int
+// area is where focus is: the table pane or the preview beside it.
+type area int
 
 const (
-	paneRepos pane = iota
-	paneItems
-	paneRuns
-	paneMain
-	paneSections // inside a PR
+	onTable area = iota
+	onPreview
+	paneSections // inside a PR, its sections in the table pane's place
 )
 
 type (
@@ -61,7 +60,7 @@ type Options struct {
 	// AddRepo registers a repo; an error that is an InstallLinker offers its link.
 	AddRepo func(ctx context.Context, name string) error
 	Quit    <-chan struct{} // closed on a signal that must quit at once (SIGHUP)
-	PRs     pr.API          // nil: PR pages off
+	PRs     pr.API          // nil: PR tabs off
 	PRsErr  error           // why they are off; wraps ErrConfig for a broken config
 	Warns   []string        // config warnings, listed in help
 	Log     string          // where the engine logs while the TUI runs
@@ -90,29 +89,31 @@ type model struct {
 	err       error
 	errSince  time.Time
 
-	focus              pane
-	left               pane // the left panel the main pane follows
-	repos, items, runs list
-	tree               tree
-	treeKey            string
-	log                *logView
-	zoom               bool
-	dlg                *dialog
-	pk                 *picker
-	status             string
-	statusAt           time.Time
-	w, h               int
-	help               help.Model
+	focus    area
+	tabs     []tab
+	tab      int // the active tab
+	tree     tree
+	treeKey  string
+	log      *logView
+	zoom     bool
+	dlg      *dialog
+	pk       *picker
+	status   string
+	statusAt time.Time
+	w, h     int
+	help     help.Model
 
-	prs     map[string]map[int]pr.Summary // by repo
-	behind  map[string]int                // "repo#n" -> commits behind base
-	prRepo  string                        // the repo the list was last fetched for
-	prDelay time.Duration                 // the next list poll interval
-	listErr string                        // the list error said last; "" after a good list
-	prRetry time.Time                     // when the raised list poll runs next
-	pr      *prView                       // the open PR; nil on the dashboard
-	picked  string                        // the repo enter picked; "" or gone means the first
-	prGen   int                           // identifies the open PR so a stale fetch or tick is ignored
+	behind   map[string]int           // "repo#n" -> commits behind base
+	prRepo   string                   // the repo the searches last ran for
+	prDelay  time.Duration            // the next search poll interval
+	prRetry  time.Time                // when the raised search poll runs next
+	tickWait int                      // a tick's searches still to land
+	tickLow  bool                     // one of them found the rate limit low
+	flows    map[string][]pr.Workflow // Actions workflows by repo; nil: the token may not read them
+	flowsAt  map[string]time.Time     // when they were last asked for
+	pr       *prView                  // the open PR; nil on the dashboard
+	picked   string                   // the picked repo; "" or gone means the first
+	prGen    int                      // identifies the open PR so a stale fetch or tick is ignored
 
 	gen      int // identifies the current log stream so a stale one is ignored
 	nextLine func() tea.Cmd
@@ -120,20 +121,22 @@ type model struct {
 }
 
 func newModel(c *api.Client, now func() time.Time, o Options) *model {
-	m := &model{c: c, now: now, o: o, hostErr: o.HostErr, prDelay: prPoll, w: 120, h: 40, focus: paneItems, left: paneItems, help: help.New(),
-		repos: list{n: 1, title: "Repos"}, items: list{n: 2, title: "Branches & PRs"}, runs: list{n: 3, title: "Runs"}}
+	m := &model{c: c, now: now, o: o, hostErr: o.HostErr, prDelay: prPoll, w: 120, h: 40, help: help.New(), tabs: newTabs(o.Tabs)}
+	for m.off(m.tab) { // without a token, open on Branches
+		m.tab++
+	}
 	if n := len(o.Warns); n > 0 {
 		m.say(fmt.Sprintf("config: %d warning(s), press ? to see them", n))
 	}
 	return m
 }
 
-// notes are what help shows below the keys: why PR pages are off in full,
+// notes are what help shows below the keys: why PR tabs are off in full,
 // config warnings, and where the log is.
 func (m *model) notes() []string {
 	var out []string
 	if m.o.PRs == nil && m.o.PRsErr != nil {
-		out = append(out, "PR pages off: "+termsafe.Text(m.o.PRsErr.Error()))
+		out = append(out, "PR tabs off: "+termsafe.Text(m.o.PRsErr.Error()))
 	}
 	for _, w := range m.o.Warns {
 		out = append(out, "warning: "+termsafe.Line(w))
@@ -214,8 +217,7 @@ func (m *model) activeRuns() int {
 
 func (m *model) say(s string) { m.status, m.statusAt = termsafe.Line(s), m.now() }
 
-// repo is the picked repo, which scopes items, the main pane and PR polling;
-// the repos cursor only browses.
+// repo is the picked repo, which scopes every tab, the preview and PR polling.
 func (m *model) repo() api.Repo {
 	for _, r := range m.state.Repos {
 		if r.Name == m.picked {
@@ -228,67 +230,23 @@ func (m *model) repo() api.Repo {
 	return api.Repo{}
 }
 
-// pick scopes the dashboard to the repo under the repos cursor.
-func (m *model) pick() tea.Cmd {
-	if m.repos.cur >= len(m.repos.rows) {
-		return nil
-	}
-	return m.pickRepo(m.repos.rows[m.repos.cur].key)
-}
-
 // pickRepo scopes the dashboard to the named repo.
 func (m *model) pickRepo(name string) tea.Cmd {
-	m.picked = name
-	m.items.home()
+	m.picked, m.focus = name, onTable
+	for i := range m.tabs {
+		m.tabs[i].rows.home()
+	}
 	m.refresh()
-	m.focusLeft(paneItems)
 	return m.prSync()
 }
 
-// item is the selected branch or PR; nil on an unhandled-workflow row.
-func (m *model) item() *api.Item {
-	r := m.repo()
-	if m.items.cur < len(r.Items) {
-		return &r.Items[m.items.cur]
-	}
-	return nil
-}
-
-func (m *model) run() *api.Run {
-	if m.runs.cur < len(m.state.Runs) {
-		return &m.state.Runs[m.runs.cur]
-	}
-	return nil
-}
-
-func (m *model) list(p pane) *list {
-	switch p {
-	case paneRepos:
-		return &m.repos
-	case paneRuns:
-		return &m.runs
-	case paneSections:
-		return &m.pr.secs
-	}
-	return &m.items
-}
-
+// refresh rebuilds the rows for the current state and width, and the preview.
 func (m *model) refresh() {
-	m.repos.set(repoEntries(m.state, m.repo().Name))
-	m.items.title = "Branches & PRs"
-	if n := m.repo().Name; n != "" {
-		m.items.title += " · " + repoShort(n)
-	}
-	m.items.set(m.itemRows())
-	m.runs.set(runEntries(m.state.Runs, m.now()))
+	m.tableRows()
 	if m.pr != nil {
 		m.syncSections()
 	}
 	m.syncMain()
-}
-
-func (m *model) itemRows() []entry {
-	return itemEntries(m.repo(), m.now(), m.prs[m.repo().Name], m.behindOf)
 }
 
 func itemSource(r api.Repo, it api.Item, now time.Time) (string, string, []api.Check, string) {
@@ -306,9 +264,10 @@ func itemSource(r api.Repo, it api.Item, now time.Time) (string, string, []api.C
 	return "item:" + r.Name + ":" + it.Label, termsafe.Line(t), it.Checks, ""
 }
 
-// source is what the main pane shows: a key naming its owner (so a refresh keeps
-// fold state but a new selection resets it), a title, checks, or an error.
-func (m *model) source() (key, title string, cs []api.Check, errText string) {
+// previewSource is what the preview shows: a key naming its owner (so a
+// refresh keeps fold state but a new selection resets it), a title, checks,
+// or an error.
+func (m *model) previewSource() (key, title string, cs []api.Check, errText string) {
 	if p := m.pr; p != nil {
 		if p.section == 1 {
 			cs, _ := m.prChecks()
@@ -320,33 +279,57 @@ func (m *model) source() (key, title string, cs []api.Check, errText string) {
 		}
 		return fmt.Sprintf("pr:%s:%d", m.prRef(), p.section), m.prTitle(), nil, ""
 	}
-	switch m.left {
-	case paneRuns:
-		if r := m.run(); r != nil {
-			return "run:" + r.ID, termsafe.Line(fmt.Sprintf("%s %s · %s · %s", repoShort(r.Repo), r.Label, short(r.SHA), r.Status)), r.Checks, ""
+	r := m.repo()
+	switch m.at().kind {
+	case tabRuns:
+		if run := m.run(); run != nil {
+			return "run:" + run.ID, termsafe.Line(fmt.Sprintf("%s · %s · %s", run.Label, short(run.SHA), run.Status)), run.Checks, ""
 		}
-	case paneRepos:
-		r := m.repo()
+	case tabBranches:
+		if it := m.selBranch(); it != nil {
+			return itemSource(r, *it, m.now())
+		}
 		if r.Error != "" {
 			return "repo:" + r.Name, termsafe.Line(r.Name), nil, termsafe.Line(r.Error)
 		}
-		if len(r.Items) > 0 {
-			return itemSource(r, r.Items[0], m.now())
-		}
 	default:
-		if it := m.item(); it != nil {
-			return itemSource(m.repo(), *it, m.now())
+		s, ok := m.selPR()
+		if !ok {
+			break
 		}
+		it := m.itemFor(r.Name, s.Number)
+		if it != nil {
+			k, t, _, e := itemSource(r, *it, m.now())
+			return k, t, mergedChecks(it, s.Checks), e
+		}
+		t := fmt.Sprintf("#%d %s · @%s", s.Number, s.Title, s.Author)
+		if a := age(s.Updated, m.now()); a != "" {
+			t += " · " + a + " ago"
+		}
+		return fmt.Sprintf("pr:%s#%d", r.Name, s.Number), termsafe.Line(t), mergedChecks(nil, s.Checks), ""
 	}
 	return "", "", nil, ""
+}
+
+// required names the checks GitHub marks required on the PR the preview shows.
+func required(gh []pr.Check) map[string]bool {
+	req := map[string]bool{}
+	for _, c := range gh {
+		if c.Required {
+			req[c.Name] = true
+		}
+	}
+	return req
 }
 
 func (m *model) syncMain() {
 	m.tree.req = nil
 	if m.pr != nil {
 		_, m.tree.req = m.prChecks()
+	} else if s, ok := m.selPR(); ok {
+		m.tree.req = required(s.Checks)
 	}
-	key, _, cs, _ := m.source()
+	key, _, cs, _ := m.previewSource()
 	if key != m.treeKey {
 		m.treeKey = key
 		m.tree.reset(cs)
@@ -360,6 +343,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
+		m.refresh()
 	case stateMsg:
 		m.state, m.connected, m.err, m.hostErr = *msg.s, true, nil, nil
 		m.pinLaunch()
@@ -369,13 +353,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.openPicker()
 		}
 		return m, m.prSync()
-	case listMsg:
-		m.onList(msg)
-		if msg.tick {
-			return m, listTick(m.prDelay)
-		}
-	case listTickMsg:
+	case searchMsg:
+		return m, m.onSearch(msg)
+	case searchTickMsg:
 		return m, m.onTick()
+	case flowsMsg:
+		m.onFlows(msg)
 	case detailMsg:
 		return m, m.onDetail(msg)
 	case detailTickMsg:
@@ -458,40 +441,6 @@ func (m *model) addRepo(name string) tea.Cmd {
 	}
 }
 
-func (m *model) focusLeft(p pane) {
-	m.focus = p
-	if m.left != p {
-		m.left = p
-		m.syncMain()
-	}
-}
-
-func (m *model) cycle(d int) {
-	order := []pane{paneRepos, paneItems, paneRuns, paneMain}
-	i := 0
-	for j, p := range order {
-		if p == m.focus {
-			i = j
-		}
-	}
-	next := order[(i+d+len(order))%len(order)]
-	if next == paneMain {
-		m.focus = paneMain
-		return
-	}
-	m.focusLeft(next)
-}
-
-// moved reacts to a cursor change in panel p; the repos cursor changes nothing
-// until enter picks.
-func (m *model) moved(p pane, before int) tea.Cmd {
-	if p == paneRepos {
-		return nil
-	}
-	m.syncMain()
-	return nil
-}
-
 func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 	if m.dlg != nil {
 		d := m.dlg
@@ -523,16 +472,18 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 		return tea.Quit
 	case key.Matches(k, keys.Help):
 		m.dlg = helpDialog(m.notes()...)
-	case key.Matches(k, keys.Panel1):
-		m.focusLeft(paneRepos)
-	case key.Matches(k, keys.Panel2):
-		m.focusLeft(paneItems)
-	case key.Matches(k, keys.Panel3):
-		m.focusLeft(paneRuns)
-	case key.Matches(k, keys.Next):
-		m.cycle(1)
-	case key.Matches(k, keys.Prev):
-		m.cycle(-1)
+	case key.Matches(k, keys.NextTab):
+		return m.stepTab(1)
+	case key.Matches(k, keys.PrevTab):
+		return m.stepTab(-1)
+	case key.Matches(k, keys.Tab):
+		return m.switchTab(int(k.String()[0] - '1'))
+	case key.Matches(k, keys.Next), key.Matches(k, keys.Prev):
+		if m.focus == onTable {
+			m.focus = onPreview
+		} else {
+			m.focus = onTable
+		}
 	case key.Matches(k, keys.Repo) && m.connected:
 		m.openPicker()
 	case key.Matches(k, keys.Reload):
@@ -548,21 +499,20 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 		return m.open()
 	case key.Matches(k, keys.Copy):
 		return m.copySHA()
-	case key.Matches(k, keys.Merge) && m.log == nil:
+	case key.Matches(k, keys.Merge) && m.focus == onTable:
 		return m.rowMutate(true)
-	case key.Matches(k, keys.Update) && m.log == nil:
+	case key.Matches(k, keys.Update) && m.focus == onTable:
 		return m.rowMutate(false)
-	case m.focus == paneMain:
+	case m.focus == onPreview:
 		return m.mainKey(k)
 	default:
-		return m.leftKey(k)
+		return m.tableKey(k)
 	}
 	return nil
 }
 
-func (m *model) leftKey(k tea.KeyPressMsg) tea.Cmd {
-	l := m.list(m.focus)
-	before := l.cur
+func (m *model) tableKey(k tea.KeyPressMsg) tea.Cmd {
+	l := &m.at().rows
 	switch {
 	case key.Matches(k, keys.Down):
 		l.move(1)
@@ -572,18 +522,17 @@ func (m *model) leftKey(k tea.KeyPressMsg) tea.Cmd {
 		l.home()
 	case key.Matches(k, keys.Bottom):
 		l.end()
-	case key.Matches(k, keys.Into) && m.focus == paneRepos:
-		return m.pick()
 	case key.Matches(k, keys.Into):
-		if it := m.selectedItem(); key.Matches(k, keys.Enter) && m.o.PRs != nil && it != nil && it.PR > 0 {
-			return m.openPR(m.repo().Name, it.PR)
+		if s, ok := m.selPR(); key.Matches(k, keys.Enter) && m.o.PRs != nil && ok {
+			return m.openPR(m.repo().Name, s.Number)
 		}
-		m.focus = paneMain
+		m.focus = onPreview
 		return nil
 	default:
 		return nil
 	}
-	return m.moved(m.focus, before)
+	m.syncMain()
+	return nil
 }
 
 func (m *model) mainKey(k tea.KeyPressMsg) tea.Cmd {
@@ -604,7 +553,7 @@ func (m *model) mainKey(k tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(k, keys.Enter):
 		return m.openLog()
 	case key.Matches(k, keys.Back), key.Matches(k, keys.Esc):
-		m.focus = m.left
+		m.focus = onTable
 	}
 	return nil
 }
@@ -615,7 +564,7 @@ func (m *model) logKey(k tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(k, keys.Esc):
 		m.closeLog()
 	case key.Matches(k, keys.Back):
-		m.focus = m.left
+		m.focus = onTable
 	case key.Matches(k, keys.Down):
 		l.scroll(1)
 	case key.Matches(k, keys.Up):
@@ -736,32 +685,36 @@ func readLine(lines <-chan string, errc <-chan error, gen int) tea.Cmd {
 	}
 }
 
+// layout places the panes below the header and tab row: side by side from
+// 100 columns, else the table over the preview.
 type layout struct {
-	leftW, mainW, bodyH int
-	panels              []pane
-	heights             []int
+	top            int // the first body row
+	tw, th         int // the table pane, at (0, top); 0×0 while zoomed
+	px, py, pw, ph int // the preview pane
 }
 
 func (m *model) layout() layout {
-	bodyH := m.h - 1
-	if m.zoom {
-		return layout{mainW: m.w, bodyH: bodyH}
+	bodyH := max(0, m.h-3)
+	l := layout{top: 2}
+	switch {
+	case m.zoom:
+		l.py, l.pw, l.ph = l.top, m.w, bodyH
+	case m.w >= 100:
+		l.tw, l.th = m.w*11/20, bodyH
+		l.px, l.py, l.pw, l.ph = l.tw, l.top, m.w-l.tw, bodyH
+	default:
+		l.tw, l.th = m.w, max(5, bodyH*2/5)
+		l.py, l.pw, l.ph = l.top+l.th, m.w, bodyH-l.th
 	}
-	leftW := 34
-	if m.pr != nil {
-		if m.w < 80 {
-			leftW = 26
-		}
-		return layout{leftW: leftW, mainW: m.w - leftW, bodyH: bodyH, panels: []pane{paneSections}, heights: []int{bodyH}}
-	}
-	if m.w < 80 {
-		leftW = 26
-		return layout{leftW: leftW, mainW: m.w - leftW, bodyH: bodyH, panels: []pane{m.left}, heights: []int{bodyH}}
-	}
-	h1 := clampInt(len(m.repos.rows)+2, 3, bodyH/4)
-	h3 := max(5, bodyH/3)
-	return layout{leftW: leftW, mainW: m.w - leftW, bodyH: bodyH,
-		panels: []pane{paneRepos, paneItems, paneRuns}, heights: []int{h1, bodyH - h1 - h3, h3}}
+	return l
+}
+
+func (l layout) inTable(x, y int) bool {
+	return x < l.tw && y >= l.top && y < l.top+l.th
+}
+
+func (l layout) inPreview(x, y int) bool {
+	return x >= l.px && x < l.px+l.pw && y >= l.py && y < l.py+l.ph
 }
 
 func (m *model) View() tea.View {
@@ -772,8 +725,8 @@ func (m *model) View() tea.View {
 }
 
 func (m *model) render() string {
-	if m.w < 60 || m.h < 15 {
-		return "terminal too small (need 60×15)"
+	if m.w < 80 || m.h < 24 {
+		return "terminal too small (need 80×24)"
 	}
 	if !m.connected {
 		msg := "Start the daemon: homerun daemon\n\n(q to quit)"
@@ -789,15 +742,16 @@ func (m *model) render() string {
 		return lipgloss.Place(m.w, m.h, lipgloss.Center, lipgloss.Center, msg)
 	}
 	lay := m.layout()
-	body := m.mainView(lay.mainW, lay.bodyH)
-	if lay.leftW > 0 {
-		var col []string
-		for i, p := range lay.panels {
-			col = append(col, m.list(p).view(lay.leftW, lay.heights[i], m.focus == p))
+	body := m.mainView(lay.pw, lay.ph)
+	if lay.tw > 0 {
+		table := m.tableView(lay.tw, lay.th)
+		if lay.px > 0 {
+			body = lipgloss.JoinHorizontal(lipgloss.Top, table, body)
+		} else {
+			body = table + "\n" + body
 		}
-		body = lipgloss.JoinHorizontal(lipgloss.Top, strings.Join(col, "\n"), body)
 	}
-	screen := body + "\n" + m.bar()
+	screen := m.header() + "\n" + m.tabRow() + "\n" + body + "\n" + m.bar()
 	if m.dlg != nil {
 		screen = overlay(screen, m.dlg.view(m.w), m.w, m.h)
 	}
@@ -810,42 +764,50 @@ func (m *model) render() string {
 	return screen
 }
 
+// tableView is the active tab's table, or an open PR's sections in its place.
+func (m *model) tableView(w, h int) string {
+	if m.pr != nil {
+		return m.pr.secs.view(w, h, m.focus == paneSections)
+	}
+	return m.at().rows.view(w, h, m.focus == onTable)
+}
+
 func (m *model) mainView(w, h int) string {
 	if m.pr != nil && m.pr.section == 0 {
 		return m.descView(w, h)
 	}
-	_, title, _, errText := m.source()
-	focused := m.focus == paneMain
+	_, title, _, errText := m.previewSource()
+	focused := m.focus == onPreview
 	switch {
 	case errText != "":
 		return frame(title, strings.Split(red.Width(w-2).Render(errText), "\n"), w, h, focused)
 	case m.log != nil:
 		return m.log.view(title+" · log", w, h, focused)
 	}
-	sum := m.summaryBlock(w - 2)
-	if len(sum) == 0 {
+	head := m.previewHead(w - 2)
+	if len(head) == 0 {
 		return m.tree.view(title, w, h, m.now(), focused)
 	}
-	inner := max(0, h-2-len(sum))
-	return frame(title, append(sum, m.tree.rows(w, inner, m.now(), focused)...), w, h, focused)
+	inner := max(0, h-2-len(head))
+	return frame(title, append(head, m.tree.rows(w, inner, m.now(), focused)...), w, h, focused)
 }
 
 func (m *model) bar() string {
-	ctx := inPanels
+	ctx := inTable
 	switch {
-	case m.pr != nil && m.focus != paneMain:
+	case m.pr != nil && m.focus != onPreview:
 		ctx = inPRSections
 	case m.pr != nil && m.pr.section == 0:
 		ctx = inPRDesc
-	case m.focus == paneMain && m.log != nil:
+	case m.focus == onPreview && m.log != nil:
 		ctx = inLog
-	case m.focus == paneMain && m.pr != nil:
+	case m.focus == onPreview && m.pr != nil:
 		ctx = inPRChecks
-	case m.focus == paneMain:
+	case m.focus == onPreview:
 		ctx = inTree
 	case m.o.PRs != nil:
-		if it := m.selectedItem(); it != nil && it.PR > 0 {
-			ctx = inPRRow
+		if _, ok := m.selPR(); ok {
+			ctx = inTablePR
 		}
 	}
 	// Standing lines and a fresh status lead, so truncation cuts key hints first.
@@ -879,28 +841,18 @@ func (m *model) click(mo tea.Mouse) tea.Cmd {
 		m.prClick(mo, lay)
 		return nil
 	}
-	if mo.X < lay.leftW {
-		y := mo.Y
-		for i, p := range lay.panels {
-			if y < lay.heights[i] {
-				m.focusLeft(p)
-				l := m.list(p)
-				before := l.cur
-				if y < lay.heights[i]-1 {
-					l.click(y)
-				}
-				if p == paneRepos && y >= 1 && y < lay.heights[i]-1 {
-					return m.pick()
-				}
-				return m.moved(p, before)
-			}
-			y -= lay.heights[i]
+	switch {
+	case lay.inTable(mo.X, mo.Y):
+		m.focus = onTable
+		if y := mo.Y - lay.top; y < lay.th-1 {
+			m.at().rows.click(y)
 		}
-		return nil
-	}
-	m.focus = paneMain
-	if m.log == nil && mo.Y < lay.bodyH-1 {
-		m.tree.click(mo.Y - len(m.summaryBlock(lay.mainW-2)))
+		m.syncMain()
+	case lay.inPreview(mo.X, mo.Y):
+		m.focus = onPreview
+		if y := mo.Y - lay.py; m.log == nil && y < lay.ph-1 {
+			m.tree.click(y - len(m.previewHead(lay.pw-2)))
+		}
 	}
 	return nil
 }
@@ -915,48 +867,43 @@ func (m *model) wheel(mo tea.Mouse) tea.Cmd {
 	}
 	lay := m.layout()
 	if m.pr != nil {
-		m.prWheel(d, lay, mo.X)
+		m.prWheel(d, lay, mo.X, mo.Y)
 		return nil
 	}
-	if mo.X < lay.leftW {
-		y := mo.Y
-		for i, p := range lay.panels {
-			if y < lay.heights[i] {
-				l := m.list(p)
-				before := l.cur
-				l.move(d)
-				return m.moved(p, before)
-			}
-			y -= lay.heights[i]
-		}
-		return nil
-	}
-	if m.log != nil {
+	switch {
+	case lay.inTable(mo.X, mo.Y):
+		m.at().rows.move(d)
+		m.syncMain()
+	case !lay.inPreview(mo.X, mo.Y):
+	case m.log != nil:
 		m.log.scroll(3 * d)
-		return nil
+	default:
+		m.tree.move(d)
 	}
-	m.tree.move(d)
 	return nil
 }
 
-// selectedItem is the item the main pane shows, so actions never disagree with
-// it: the open PR's own item inside a PR (nil once the daemon drops it), else
-// the first item while the repos panel is focused (its cursor is stale then).
+// selectedItem is the daemon item the preview shows, so actions never
+// disagree with it: the open PR's own item inside a PR (nil once the daemon
+// drops it), else the selected PR's or branch's item.
 func (m *model) selectedItem() *api.Item {
 	if m.pr != nil {
 		_, it := m.prItem()
 		return it
 	}
-	switch m.left {
-	case paneRepos:
-		if r := m.repo(); len(r.Items) > 0 {
-			return &r.Items[0]
+	switch m.at().kind {
+	case tabSearch:
+		if s, ok := m.selPR(); ok {
+			return m.itemFor(m.repo().Name, s.Number)
 		}
-	case paneItems:
-		return m.item()
+	case tabBranches:
+		return m.selBranch()
 	}
 	return nil
 }
+
+// onRuns is whether the Runs tab is showing, outside a PR.
+func (m *model) onRuns() bool { return m.pr == nil && m.at().kind == tabRuns }
 
 // selectedRepo is the repo selectedItem belongs to.
 func (m *model) selectedRepo() string {
@@ -968,7 +915,7 @@ func (m *model) selectedRepo() string {
 
 // target is what r reruns: the selected run, or the selected (or first) item.
 func (m *model) target() (req api.StartRequest, fork bool, author string, ok bool) {
-	if m.left == paneRuns && m.pr == nil {
+	if m.onRuns() {
 		r := m.run()
 		if r == nil {
 			return req, false, "", false
@@ -1067,9 +1014,9 @@ func (m *model) itemRun() (id, label string) {
 
 func (m *model) cancel() {
 	id, label, finished := "", "", false
-	if c, _, ok := m.tree.selected(); ok && m.focus == paneMain {
+	if c, _, ok := m.tree.selected(); ok && m.focus == onPreview {
 		id, label, finished = c.RunID, displayName(c.Name), c.Status == "completed"
-	} else if m.left == paneRuns && m.pr == nil {
+	} else if m.onRuns() {
 		if r := m.run(); r != nil {
 			id, label, finished = r.ID, r.Label, !live(r.Status)
 		}
@@ -1085,14 +1032,19 @@ func (m *model) cancel() {
 
 func (m *model) open() tea.Cmd {
 	u := ""
-	if c, _, ok := m.tree.selected(); ok && m.focus == paneMain {
+	if c, _, ok := m.tree.selected(); ok && m.focus == onPreview {
 		u = c.URL
+	}
+	if u == "" && m.pr == nil && m.focus == onTable && m.rowKey() == "more" {
+		u = m.searchURL()
 	}
 	if u == "" {
 		if it := m.selectedItem(); it != nil {
 			u = it.URL
 		} else if m.pr != nil && m.pr.d != nil {
 			u = m.pr.d.URL
+		} else if s, ok := m.selPR(); ok && m.pr == nil {
+			u = fmt.Sprintf("https://github.com/%s/pull/%d", m.repo().Name, s.Number)
 		}
 	}
 	if !httpURL(u) {
@@ -1113,12 +1065,14 @@ func openCmd(u string) tea.Cmd {
 
 func (m *model) copySHA() tea.Cmd {
 	sha := ""
-	if m.left == paneRuns && m.pr == nil {
+	if m.onRuns() {
 		if r := m.run(); r != nil {
 			sha = r.SHA
 		}
 	} else if it := m.selectedItem(); it != nil {
 		sha = it.SHA
+	} else if s, ok := m.selPR(); ok && m.pr == nil {
+		sha = s.HeadSHA
 	}
 	if sha == "" {
 		m.say("nothing to copy here")

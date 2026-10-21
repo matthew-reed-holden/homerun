@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -39,44 +40,49 @@ func readGolden(name string) (string, error) {
 	return string(b), err
 }
 
+// goldenResult is a richer My PRs result for the table goldens: a failing
+// PR homerun runs, one awaiting review and a draft homerun never ran.
+func goldenResult() pr.SearchResult {
+	return pr.SearchResult{Total: 3, PRs: []pr.Summary{
+		{Number: 1, Title: "e2e PR", Author: "matt", HeadRef: "feat", BaseRef: "main", HeadSHA: "d954af80000",
+			Mergeable: "MERGEABLE", ReviewDecision: "APPROVED", ChangedFiles: 3, Additions: 40, Deletions: 7, Comments: 2,
+			Body: "Makes the thing\noptional.", Updated: now.Add(-5 * time.Minute),
+			Checks: []pr.Check{{Name: "ci/gh", Status: "completed", Conclusion: "failure", Required: true, App: "github-actions"}}},
+		{Number: 2, Title: "typo fix", Author: "bob", ReviewDecision: "REVIEW_REQUIRED", Updated: now.Add(-3 * time.Hour)},
+		{Number: 5, Title: "pr: GraphQL page cache", Author: "sam", IsDraft: true, Updated: now.Add(-5 * 24 * time.Hour)},
+	}}
+}
+
 func TestGolden(t *testing.T) {
 	cases := []struct {
 		name string
 		w, h int
 		keys []string
 	}{
-		{"wide-items", 120, 40, []string{"j"}},
-		{"wide-items-badges", 120, 40, []string{"j"}},
-		{"wide-pr-summary", 120, 40, []string{"j"}},
-		{"standard-pr-summary", 80, 24, []string{"j"}},
-		{"wide-pr-description", 120, 40, []string{"j", "enter", "l"}},
-		{"wide-pr-checks", 120, 40, []string{"j", "enter", "j", "l"}},
-		{"standard-pr-checks", 80, 24, []string{"j", "enter", "j", "l"}},
-		{"standard-pr-description", 80, 24, []string{"j", "enter", "l"}},
-		{"wide-merge-dialog", 120, 40, []string{"j", "enter", "l", "m"}},
-		{"standard-merge-dialog", 80, 24, []string{"j", "enter", "l", "m"}},
-		{"wide-comment", 120, 40, []string{"j", "enter", "l", "c", "h", "i"}},
-		{"standard-comment", 80, 24, []string{"j", "enter", "l", "c", "h", "i"}},
-		{"wide-runs", 120, 40, []string{"3"}},
-		{"wide-fork-dialog", 120, 40, []string{"j", "j", "r"}},
-		{"standard-tree", 80, 24, []string{"j", "l"}},
+		{"wide-prs", 120, 40, nil},
+		{"standard-prs", 80, 24, nil},
+		{"wide-branches", 120, 40, []string{"4"}},
+		{"wide-runs", 120, 40, []string{"5"}},
+		{"standard-runs", 80, 24, []string{"5"}},
+		{"wide-pr-description", 120, 40, []string{"enter", "l"}},
+		{"wide-pr-checks", 120, 40, []string{"enter", "j", "l"}},
+		{"standard-pr-checks", 80, 24, []string{"enter", "j", "l"}},
+		{"standard-pr-description", 80, 24, []string{"enter", "l"}},
+		{"wide-merge-dialog", 120, 40, []string{"enter", "l", "m"}},
+		{"standard-merge-dialog", 80, 24, []string{"enter", "l", "m"}},
+		{"wide-comment", 120, 40, []string{"enter", "l", "c", "h", "i"}},
+		{"standard-comment", 80, 24, []string{"enter", "l", "c", "h", "i"}},
+		{"wide-fork-dialog", 120, 40, []string{"j", "r"}},
 		{"wide-repo-picker", 120, 40, []string{"R"}},
 		{"standard-repo-picker", 80, 24, []string{"R"}},
-		{"narrow", 70, 20, nil},
-		{"too-small", 50, 12, nil},
+		{"too-small", 79, 24, nil},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			m, _ := newTestModel(t)
-			if c.name == "wide-items-badges" {
-				m.o.PRs = &pr.Fake{}
-				m.Update(listMsg{repo: "o/e2e", sums: map[int]pr.Summary{1: {Number: 1, ReviewDecision: "APPROVED", Mergeable: "CONFLICTING", IsDraft: true}}})
-			}
-			if strings.HasSuffix(c.name, "-pr-summary") {
-				m.o.PRs = &pr.Fake{}
-				m.Update(listMsg{repo: "o/e2e", sums: map[int]pr.Summary{1: {Number: 1, Title: "e2e PR", Author: "matt", HeadRef: "feat", BaseRef: "main",
-					Mergeable: "MERGEABLE", MergeState: "BEHIND", ReviewDecision: "REVIEW_REQUIRED", ChangedFiles: 3, Additions: 40, Deletions: 7, Comments: 2,
-					Body: "Makes the thing\noptional.", Checks: []pr.Check{{Name: "pass", Status: "completed", Conclusion: "success"}, {Name: "fail", Status: "completed", Conclusion: "failure", Required: true}}}}})
+			if strings.HasSuffix(c.name, "-prs") {
+				m.Update(searchMsg{repo: "o/e2e", tab: 0, query: "is:open author:@me", res: goldenResult()})
+				m.behind = map[string]int{"o/e2e#1": 3}
 			}
 			m.Update(tea.WindowSizeMsg{Width: c.w, Height: c.h})
 			if d := detailFixture(); strings.HasSuffix(c.name, "-pr-description") || strings.HasSuffix(c.name, "-pr-checks") || strings.HasSuffix(c.name, "-merge-dialog") || strings.HasSuffix(c.name, "-comment") {
@@ -85,7 +91,7 @@ func TestGolden(t *testing.T) {
 					d.MergeMethods = []string{"MERGE", "SQUASH", "REBASE"}
 				}
 				recordDetailTicks(t)
-				m.o.PRs = &pr.Fake{Details: map[string]*pr.Detail{"o/e2e#1": d}}
+				m.o.PRs.(*pr.Fake).Details = map[string]*pr.Detail{"o/e2e#1": d}
 				for _, k := range c.keys {
 					run(m, m.key(press(k)))
 				}
@@ -107,7 +113,8 @@ func TestLongTextNeverBreaksLayout(t *testing.T) {
 	st.Repos[0].Error = ""
 	m.Update(stateMsg{&st})
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	for _, ks := range [][]string{nil, {"j"}, {"j", "l"}, {"j", "l", "j", "j", "j"}, {"3"}} {
+	m.Update(searchMsg{repo: st.Repos[0].Name, tab: 0, query: "is:open author:@me", res: pr.SearchResult{Total: 1, PRs: []pr.Summary{{Number: 1, Title: long, Author: long}}}})
+	for _, ks := range [][]string{nil, {"l"}, {"j", "j", "j"}, {"h", "4"}, {"5"}} {
 		keysIn(m, ks...)
 		lines := strings.Split(m.render(), "\n")
 		if len(lines) != 24 {

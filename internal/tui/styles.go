@@ -14,12 +14,14 @@ import (
 )
 
 var (
-	green  = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	red    = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	yellow = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	dim    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	bold   = lipgloss.NewStyle().Bold(true)
-	sel    = lipgloss.NewStyle().Reverse(true)
+	green   = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	red     = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	yellow  = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	dim     = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	blue    = lipgloss.NewStyle().Foreground(lipgloss.Color("4"))
+	magenta = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
+	bold    = lipgloss.NewStyle().Bold(true)
+	sel     = lipgloss.NewStyle().Reverse(true)
 )
 
 func Icon(status, conclusion string) string {
@@ -53,16 +55,19 @@ func Rollup(cs []api.Check) string {
 	return out
 }
 
-func paint(icon string) string {
+func paint(icon string) string { return tint(icon, icon) }
+
+// tint renders s in icon's colour.
+func tint(icon, s string) string {
 	switch icon {
 	case "✔":
-		return green.Render(icon)
+		return green.Render(s)
 	case "✘":
-		return red.Render(icon)
+		return red.Render(s)
 	case "⟳", "◇":
-		return yellow.Render(icon)
+		return yellow.Render(s)
 	}
-	return dim.Render(icon)
+	return dim.Render(s)
 }
 
 func dur(d time.Duration) string {

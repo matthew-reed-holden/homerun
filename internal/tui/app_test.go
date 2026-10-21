@@ -17,6 +17,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/matthew-reed-holden/homerun/internal/api"
+	"github.com/matthew-reed-holden/homerun/internal/pr"
 )
 
 type fakeDaemon struct {
@@ -130,14 +131,11 @@ func press(s string) tea.KeyPressMsg {
 	return tea.KeyPressMsg{Code: r, Text: s}
 }
 
+// newTestModel is a 120×40 model on the fixture with PR tabs on, its
+// searches answered by e2eResult; it opens on My PRs with #1 selected.
 func newTestModel(t *testing.T) (*model, *fakeDaemon) {
 	t.Helper()
-	st := fixture()
-	f, c := newFake(t, st)
-	m := newModel(c, func() time.Time { return now }, Options{})
-	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	m.Update(stateMsg{&st})
-	return m, f
+	return searchModelDaemon(t, &pr.Fake{Results: e2eResults(e2eResult())}, fixture())
 }
 
 func keysIn(m *model, ks ...string) tea.Cmd {
@@ -174,7 +172,7 @@ func TestScreensBeforeData(t *testing.T) {
 
 func TestScreenIsExactSize(t *testing.T) {
 	m, _ := newTestModel(t)
-	for _, sz := range [][2]int{{120, 40}, {80, 24}, {70, 20}} {
+	for _, sz := range [][2]int{{120, 40}, {80, 24}, {100, 30}, {90, 30}} {
 		m.Update(tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
 		lines := strings.Split(m.render(), "\n")
 		if len(lines) != sz[1] {
@@ -188,42 +186,41 @@ func TestScreenIsExactSize(t *testing.T) {
 	}
 }
 
-func TestPanelFocusAndMainFollows(t *testing.T) {
+func TestPreviewFollowsTable(t *testing.T) {
 	m, _ := newTestModel(t)
-	keysIn(m, "j") // items: #1
-	if !strings.Contains(ansi.Strip(m.render()), "#1 e2e PR · d954af8 · @matt") {
-		t.Fatalf("main pane title:\n%s", ansi.Strip(m.render()))
+	if !strings.Contains(screen(m), "#1 e2e PR · d954af8 · @matt") {
+		t.Fatalf("preview title:\n%s", screen(m))
 	}
-	keysIn(m, "3", "j", "j") // runs: r1
-	if m.focus != paneRuns || !strings.Contains(ansi.Strip(m.render()), "e2e main · fd387ab · done") {
-		t.Fatalf("runs:\n%s", ansi.Strip(m.render()))
+	keysIn(m, "5", "j", "j") // runs: r1
+	if m.at().kind != tabRuns || !strings.Contains(screen(m), "main · fd387ab · done") {
+		t.Fatalf("runs:\n%s", screen(m))
 	}
-	keysIn(m, "1")
-	if m.focus != paneRepos {
-		t.Fatal("1")
-	}
-	keysIn(m, "tab", "tab", "tab")
-	if m.focus != paneMain {
-		t.Fatalf("tab cycle ended at %d", m.focus)
+	keysIn(m, "tab")
+	if m.focus != onPreview {
+		t.Fatal("tab into the preview")
 	}
 	keysIn(m, "shift+tab")
-	if m.focus != paneRuns {
-		t.Fatalf("shift+tab at %d", m.focus)
+	if m.focus != onTable {
+		t.Fatal("shift+tab back to the table")
 	}
-	keysIn(m, "2", "l")
-	if m.focus != paneMain || m.left != paneItems {
-		t.Fatal("l into main")
+	keysIn(m, "4", "l")
+	if m.focus != onPreview || m.at().kind != tabBranches {
+		t.Fatal("l into the preview")
 	}
 	keysIn(m, "h")
-	if m.focus != paneItems {
+	if m.focus != onTable {
 		t.Fatal("h back")
+	}
+	keysIn(m, "l", "1")
+	if m.focus != onTable || m.tab != 0 {
+		t.Fatal("a tab key leaves the preview")
 	}
 }
 
 func TestOpenLogAtFailedStep(t *testing.T) {
 	m, f := newTestModel(t)
 	f.logs["r1"] = runLog
-	keysIn(m, "j", "l", "j", "j", "j") // #1 → main: pass, fail, Set up job, echo bad
+	keysIn(m, "l", "j", "j", "j") // #1 → main: pass, fail, Set up job, echo bad
 	cmd := keysIn(m, "enter")
 	drain(m, cmd)
 	if m.log == nil || m.log.lines[m.log.top] != "⭐ Run Main echo bad; exit 1" || m.log.ended != "run finished" {
@@ -233,7 +230,7 @@ func TestOpenLogAtFailedStep(t *testing.T) {
 		t.Fatal("log title")
 	}
 	keysIn(m, "+")
-	if !m.zoom || strings.Contains(ansi.Strip(m.render()), "1 Repos") {
+	if !m.zoom || strings.Contains(ansi.Strip(m.render()), "#  Title") {
 		t.Fatal("zoom")
 	}
 	keysIn(m, "esc")
@@ -248,7 +245,7 @@ func TestOpenLogAtFailedStep(t *testing.T) {
 
 func TestLogNeedsLocalRun(t *testing.T) {
 	m, _ := newTestModel(t)
-	keysIn(m, "j", "j", "l") // #2 has no checks
+	keysIn(m, "j", "l") // #2 has no checks
 	if cmd := keysIn(m, "enter"); cmd != nil || m.log != nil {
 		t.Fatal("opened a log with nothing to show")
 	}
@@ -256,12 +253,12 @@ func TestLogNeedsLocalRun(t *testing.T) {
 
 func TestRefreshKeepsMainPaneConsistent(t *testing.T) {
 	m, _ := newTestModel(t)
-	keysIn(m, "j", "l") // #1 tree
+	keysIn(m, "l") // #1 tree
 	st := fixture()
-	st.Repos[0].Items = st.Repos[0].Items[:1] // #1 closed
+	st.Repos[0].Items = st.Repos[0].Items[:1] // homerun dropped #1
 	m.Update(stateMsg{&st})
-	if m.items.cur != 0 || strings.Contains(ansi.Strip(m.render()), "e2e PR") {
-		t.Fatalf("stale main pane:\n%s", ansi.Strip(m.render()))
+	if len(m.tree.checks) != 0 || strings.Contains(screen(m), "CI / fail") {
+		t.Fatalf("stale preview:\n%s", screen(m))
 	}
 	empty := api.State{}
 	m.Update(stateMsg{&empty})
@@ -282,16 +279,14 @@ func TestStaleBanner(t *testing.T) {
 	}
 }
 
-func TestNarrowShowsFocusedPanelOnly(t *testing.T) {
+func TestStackedBelow100(t *testing.T) {
 	m, _ := newTestModel(t)
-	m.Update(tea.WindowSizeMsg{Width: 70, Height: 20})
-	out := ansi.Strip(m.render())
-	if !strings.Contains(out, "2 Branches & PRs") || strings.Contains(out, "1 Repos") || strings.Contains(out, "3 Runs") {
-		t.Fatalf("narrow:\n%s", out)
-	}
-	keysIn(m, "3")
-	if !strings.Contains(ansi.Strip(m.render()), "3 Runs") {
-		t.Fatal("panel key in narrow mode")
+	m.Update(tea.WindowSizeMsg{Width: 90, Height: 30})
+	lines := strings.Split(screen(m), "\n")
+	lay := m.layout()
+	if !strings.HasPrefix(lines[lay.top], "╭─is:open author:@me─") || !strings.HasSuffix(lines[lay.top], "╮") ||
+		!strings.HasPrefix(lines[lay.py], "╭─#1 e2e PR") || lay.th != 10 || lay.ph != 17 {
+		t.Fatalf("layout %+v:\n%s", lay, strings.Join(lines, "\n"))
 	}
 }
 
@@ -309,7 +304,7 @@ func TestQuitKey(t *testing.T) {
 func TestStaleLogMessagesIgnored(t *testing.T) {
 	m, f := newTestModel(t)
 	f.logs["r1"] = runLog
-	keysIn(m, "j", "l", "j", "j", "j")
+	keysIn(m, "l", "j", "j", "j")
 	drain(m, keysIn(m, "enter"))
 	lines, ended := len(m.log.lines), m.log.ended
 	m.Update(logMsg{m.gen - 1, "stale"})
@@ -329,7 +324,7 @@ func TestStaleLogMessagesIgnored(t *testing.T) {
 func TestLogErrorEndsStream(t *testing.T) {
 	m, _ := newTestModel(t)
 	m.c = api.NewClient(filepath.Join(t.TempDir(), "missing"))
-	keysIn(m, "j", "l", "j", "j", "j")
+	keysIn(m, "l", "j", "j", "j")
 	drain(m, keysIn(m, "enter"))
 	if m.log == nil || !strings.HasPrefix(m.log.ended, "stream ended") {
 		t.Fatalf("ended: %+v", m.log)
@@ -339,7 +334,7 @@ func TestLogErrorEndsStream(t *testing.T) {
 func TestRefreshKeepsLogOpen(t *testing.T) {
 	m, f := newTestModel(t)
 	f.logs["r1"] = runLog
-	keysIn(m, "j", "l", "j", "j", "j")
+	keysIn(m, "l", "j", "j", "j")
 	drain(m, keysIn(m, "enter"))
 	st := fixture()
 	m.Update(stateMsg{&st})
@@ -351,7 +346,7 @@ func TestRefreshKeepsLogOpen(t *testing.T) {
 func TestSearchTypingDoesNotQuit(t *testing.T) {
 	m, f := newTestModel(t)
 	f.logs["r1"] = runLog
-	keysIn(m, "j", "l", "j", "j", "j")
+	keysIn(m, "l", "j", "j", "j")
 	drain(m, keysIn(m, "enter"))
 	keysIn(m, "/")
 	if !m.log.typing {
@@ -364,18 +359,6 @@ func TestSearchTypingDoesNotQuit(t *testing.T) {
 	}
 	if m.log.input.Value() != "q" {
 		t.Fatalf("input %q", m.log.input.Value())
-	}
-}
-
-func TestRepoNoOpKeepsItemsAndLog(t *testing.T) {
-	m, f := newTestModel(t)
-	f.logs["r1"] = runLog
-	keysIn(m, "j", "l", "j", "j", "j")
-	drain(m, keysIn(m, "enter"))
-	m.focus = paneRepos // "1" itself re-targets the main pane and legitimately drops the log
-	keysIn(m, "k")
-	if m.items.cur != 1 || m.log == nil {
-		t.Fatalf("items.cur=%d log=%v", m.items.cur, m.log)
 	}
 }
 
@@ -392,13 +375,14 @@ func TestClickBounds(t *testing.T) {
 	}
 	st.Repos[0].Items = items
 	m.Update(stateMsg{&st})
+	keysIn(m, "4")
 	lay := m.layout()
-	m.click(tea.Mouse{X: 5, Y: lay.heights[0] + lay.heights[1] - 1, Button: tea.MouseLeft}) // items bottom border
-	if m.items.cur != 0 {
-		t.Fatalf("border click selected %d", m.items.cur)
+	m.click(tea.Mouse{X: 5, Y: lay.top + lay.th - 1, Button: tea.MouseLeft}) // table bottom border
+	if m.at().rows.cur != 0 {
+		t.Fatalf("border click selected %d", m.at().rows.cur)
 	}
-	for _, y := range []int{lay.bodyH - 1, lay.bodyH} { // main bottom border, key bar
-		m.click(tea.Mouse{X: 50, Y: y, Button: tea.MouseLeft})
+	for _, y := range []int{lay.py + lay.ph - 1, lay.py + lay.ph} { // preview bottom border, key bar
+		m.click(tea.Mouse{X: lay.px + 5, Y: y, Button: tea.MouseLeft})
 		if m.tree.cur != 0 {
 			t.Fatalf("click at y=%d moved tree to %d", y, m.tree.cur)
 		}
@@ -411,20 +395,20 @@ func TestDialogBlocksWheelAndRightClick(t *testing.T) {
 	if m.dlg == nil {
 		t.Fatal("no dialog")
 	}
-	m.wheel(tea.Mouse{X: 5, Y: 8, Button: tea.MouseWheelDown})
-	if m.items.cur != 0 {
+	m.wheel(tea.Mouse{X: 5, Y: 5, Button: tea.MouseWheelDown})
+	if m.at().rows.cur != 0 {
 		t.Fatal("wheel under dialog")
 	}
 	m.dlg = nil
-	m.click(tea.Mouse{X: 5, Y: 8, Button: tea.MouseRight})
-	if m.items.cur != 0 || m.focus != paneItems {
+	m.click(tea.Mouse{X: 5, Y: 5, Button: tea.MouseRight})
+	if m.at().rows.cur != 0 || m.focus != onTable {
 		t.Fatal("right click acted")
 	}
 }
 
 func TestForkRunNeedsYFromItems(t *testing.T) {
 	m, f := newTestModel(t)
-	keysIn(m, "j", "j") // #2, a fork
+	keysIn(m, "j") // #2, a fork
 	if cmd := keysIn(m, "r"); cmd != nil || m.dlg == nil {
 		t.Fatal("r on a fork must open a dialog, not start")
 	}
@@ -444,7 +428,7 @@ func TestForkRunNeedsYFromItems(t *testing.T) {
 
 func TestForkRunNeedsYFromRuns(t *testing.T) {
 	m, f := newTestModel(t)
-	keysIn(m, "3", "j") // r3, a fork run
+	keysIn(m, "5", "j") // r3, a fork run
 	if cmd := keysIn(m, "r"); cmd != nil || m.dlg == nil {
 		t.Fatal("rerun of a fork run must ask")
 	}
@@ -463,16 +447,20 @@ func TestForkRunNeedsYFromRuns(t *testing.T) {
 
 func TestRerunAndCancel(t *testing.T) {
 	m, f := newTestModel(t)
-	cmd := keysIn(m, "r") // main branch, not a fork: starts directly
+	cmd := keysIn(m, "r") // #1, not a fork: starts directly
 	if cmd == nil || m.dlg != nil {
 		t.Fatal("rerun")
 	}
 	m.Update(cmd())
-	if len(f.starts) != 1 || f.starts[0] != (api.StartRequest{Repo: "o/e2e", Ref: "main"}) || !strings.Contains(m.status, "queued run r9") {
+	if len(f.starts) != 1 || f.starts[0] != (api.StartRequest{Repo: "o/e2e", PR: 1}) || !strings.Contains(m.status, "queued run r9") {
 		t.Fatalf("starts %+v status %q", f.starts, m.status)
 	}
-	keysIn(m, "3") // r2 running
-	keysIn(m, "c")
+	m.Update(keysIn(m, "4", "r")()) // main
+	if len(f.starts) != 2 || f.starts[1] != (api.StartRequest{Repo: "o/e2e", Ref: "main"}) {
+		t.Fatalf("starts %+v", f.starts)
+	}
+	keysIn(m, "5") // r2 running
+	keysIn(m, "x")
 	if m.dlg == nil || !strings.Contains(ansi.Strip(m.render()), "Cancel run r2") {
 		t.Fatal("cancel dialog")
 	}
@@ -489,7 +477,7 @@ func TestOpenCopyReload(t *testing.T) {
 	old := openURL
 	openURL = func(u string) error { opened = append(opened, u); return nil }
 	t.Cleanup(func() { openURL = old })
-	cmd := keysIn(m, "j", "o") // #1 item URL
+	cmd := keysIn(m, "o") // #1 item URL
 	m.Update(cmd())
 	keysIn(m, "l")
 	cmd = keysIn(m, "o") // tree: pass check URL
@@ -509,7 +497,7 @@ func TestOpenCopyReload(t *testing.T) {
 
 func TestOpenRefusesNonHTTP(t *testing.T) {
 	m, _ := newTestModel(t)
-	m.state.Repos[0].Items[0].URL = "file:///etc/passwd"
+	m.state.Repos[0].Items[1].URL = "file:///etc/passwd"
 	m.refresh()
 	old := openURL
 	openURL = func(u string) error { t.Fatalf("opened %q", u); return nil }
@@ -531,18 +519,19 @@ func TestActionErrorShowsStatus(t *testing.T) {
 
 func TestMouseSelects(t *testing.T) {
 	m, _ := newTestModel(t)
-	// 120×40: repos panel is rows 0-3 (2 repos + borders), items start at row 4; row 6 is the second item.
-	m.Update(tea.MouseClickMsg{X: 3, Y: 6, Button: tea.MouseLeft})
-	if m.focus != paneItems || m.items.cur != 1 {
-		t.Fatalf("click: focus %d cur %d", m.focus, m.items.cur)
+	keysIn(m, "5", "tab")
+	// 120×40: the table's top border is row 2, its column head row 3, so row 5 is the second run.
+	m.Update(tea.MouseClickMsg{X: 3, Y: 5, Button: tea.MouseLeft})
+	if m.focus != onTable || m.at().rows.cur != 1 {
+		t.Fatalf("click: focus %d cur %d", m.focus, m.at().rows.cur)
 	}
-	m.Update(tea.MouseWheelMsg{X: 3, Y: 6, Button: tea.MouseWheelDown})
-	if m.items.cur != 2 {
-		t.Fatalf("wheel: cur %d", m.items.cur)
+	m.Update(tea.MouseWheelMsg{X: 3, Y: 5, Button: tea.MouseWheelDown})
+	if m.at().rows.cur != 2 {
+		t.Fatalf("wheel: cur %d", m.at().rows.cur)
 	}
-	m.Update(tea.MouseClickMsg{X: 60, Y: 2, Button: tea.MouseLeft})
-	if m.focus != paneMain {
-		t.Fatal("click into main")
+	m.Update(tea.MouseClickMsg{X: 80, Y: 4, Button: tea.MouseLeft})
+	if m.focus != onPreview {
+		t.Fatal("click into the preview")
 	}
 }
 
@@ -558,31 +547,10 @@ func TestHelpPopup(t *testing.T) {
 	}
 }
 
-func TestActionsFollowMainPaneFromRepos(t *testing.T) {
-	m, f := newTestModel(t)
-	var opened []string
-	old := openURL
-	openURL = func(u string) error { opened = append(opened, u); return nil }
-	t.Cleanup(func() { openURL = old })
-	keysIn(m, "j", "j", "1") // items cursor on #2, but panel 1 shows main
-	keysIn(m, "y")
-	if !strings.Contains(m.status, "fd387ab") {
-		t.Fatalf("status %q", m.status)
-	}
-	m.Update(keysIn(m, "o")())
-	if len(opened) != 1 || opened[0] != "https://github.com/o/e2e/tree/main" {
-		t.Fatalf("opened %v", opened)
-	}
-	m.Update(keysIn(m, "r")())
-	if len(f.starts) != 1 || f.starts[0] != (api.StartRequest{Repo: "o/e2e", Ref: "main"}) {
-		t.Fatalf("starts %+v", f.starts)
-	}
-}
-
 func TestInsertedRunKeepsSelectionAndLog(t *testing.T) {
 	m, f := newTestModel(t)
 	f.logs["r1"] = runLog
-	keysIn(m, "3", "j", "j", "l") // runs: r1 → main
+	keysIn(m, "5", "j", "j", "l") // runs: r1 → preview
 	drain(m, keysIn(m, "enter"))
 	if m.log == nil {
 		t.Fatal("no log")
@@ -598,20 +566,20 @@ func TestInsertedRunKeepsSelectionAndLog(t *testing.T) {
 func TestInsertedItemKeepsSelectionAndLog(t *testing.T) {
 	m, f := newTestModel(t)
 	f.logs["r1"] = runLog
-	keysIn(m, "j", "l", "j", "j", "j") // #1 → main
+	keysIn(m, "4", "l", "j") // main → its pass check
 	drain(m, keysIn(m, "enter"))
 	st := fixture()
 	items := st.Repos[0].Items
-	st.Repos[0].Items = append([]api.Item{items[0], {Label: "dev", Ref: "dev", SHA: "1234567890"}}, items[1:]...)
+	st.Repos[0].Items = append([]api.Item{{Label: "dev", Ref: "dev", SHA: "1234567890"}}, items...)
 	m.Update(stateMsg{&st})
-	if it := m.item(); it == nil || it.Label != "#1" || m.log == nil {
-		t.Fatalf("item %+v log %v", m.item(), m.log)
+	if it := m.selectedItem(); it == nil || it.Label != "main" || m.log == nil {
+		t.Fatalf("item %+v log %v", m.selectedItem(), m.log)
 	}
 }
 
 func TestInsertedRepoKeepsSelection(t *testing.T) {
 	m, _ := newTestModel(t)
-	keysIn(m, "1", "j", "enter") // o/backend
+	keysIn(m, "R", "down", "enter") // o/backend
 	st := fixture()
 	st.Repos = append([]api.Repo{{Name: "o/aaa"}}, st.Repos...)
 	m.Update(stateMsg{&st})
@@ -620,35 +588,13 @@ func TestInsertedRepoKeepsSelection(t *testing.T) {
 	}
 }
 
-func TestCancelFromItems(t *testing.T) {
-	m, _ := newTestModel(t)
-	st := fixture()
-	st.Repos[0].Items[1].Checks[1].Status, st.Repos[0].Items[1].Checks[1].RunID = "in_progress", "r7"
-	m.Update(stateMsg{&st})
-	keysIn(m, "j", "c") // #1 has a running local check
-	if m.dlg == nil || !strings.Contains(ansi.Strip(m.render()), "Cancel run r7") {
-		t.Fatalf("no cancel dialog for r7; status %q", m.status)
-	}
-	keysIn(m, "esc")
-	st = fixture()
-	m.Update(stateMsg{&st})
-	keysIn(m, "c") // #1's checks are finished, but run r2 for its SHA is running
-	if m.dlg == nil || !strings.Contains(ansi.Strip(m.render()), "Cancel run r2") {
-		t.Fatalf("no cancel dialog for r2; status %q", m.status)
-	}
-	keysIn(m, "esc", "1", "c") // panel 1 shows main, which has nothing live
-	if m.dlg != nil || !strings.Contains(m.status, "nothing to cancel") {
-		t.Fatalf("dialog %v status %q", m.dlg, m.status)
-	}
-}
-
 func TestCancelRefusesFinished(t *testing.T) {
 	m, _ := newTestModel(t)
-	keysIn(m, "3", "j", "j", "c") // r1 is done
+	keysIn(m, "5", "j", "j", "x") // r1 is done
 	if m.dlg != nil || !strings.Contains(m.status, "nothing to cancel") {
 		t.Fatalf("finished run: dialog %v status %q", m.dlg, m.status)
 	}
-	keysIn(m, "l", "c") // its pass check is completed
+	keysIn(m, "l", "x") // its pass check is completed
 	if m.dlg != nil || !strings.Contains(m.status, "nothing to cancel") {
 		t.Fatalf("finished check: dialog %v status %q", m.dlg, m.status)
 	}
@@ -661,7 +607,7 @@ func TestOpenLogAtRepeatedStepName(t *testing.T) {
 	steps[0].Name, steps[0].Stage, steps[1].Name = "make", "Main", "make"
 	m.Update(stateMsg{&st})
 	f.logs["r1"] = "[CI / fail] ⭐ Run Main make\n[CI / fail] ok\n[CI / fail] ⭐ Run Main make\n[CI / fail] bad"
-	keysIn(m, "j", "l", "j", "j", "j") // the second make
+	keysIn(m, "l", "j", "j", "j") // the second make
 	drain(m, keysIn(m, "enter"))
 	if m.log == nil || m.log.top != 2 {
 		t.Fatalf("log top: %v", m.log != nil && m.log.top == 2)
@@ -710,12 +656,9 @@ func TestRepeatedStepCountUsesFirstLine(t *testing.T) {
 		{Name: "make\nfoo", Stage: "Main", Status: "completed", Conclusion: "success"},
 		{Name: "make\nbar", Stage: "Main", Status: "completed", Conclusion: "success"},
 	}
-	f, c := newFake(t, st)
+	m, f := searchModelDaemon(t, &pr.Fake{Results: e2eResults(e2eResult())}, st)
 	f.logs["r1"] = "[CI / fail] ⭐ Run Main make\n[CI / fail] ⭐ Run Main make"
-	m := newModel(c, func() time.Time { return now }, Options{})
-	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	m.Update(stateMsg{&st})
-	keysIn(m, "j", "l", "j", "j", "j") // #1 → main: pass, fail, make foo, make bar
+	keysIn(m, "l", "j", "j", "j") // #1 → preview: pass, fail, make foo, make bar
 	keysIn(m, "enter")
 	if m.log == nil || m.log.skip != 1 {
 		t.Fatalf("log: %+v", m.log)

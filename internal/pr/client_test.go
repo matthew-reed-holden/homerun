@@ -24,37 +24,32 @@ func newTest(t *testing.T, h http.HandlerFunc) *Client {
 	return c
 }
 
-func TestListQueryAndParse(t *testing.T) {
-	var gotAuth, gotPath, gotBody string
+func TestSearchParsesChecks(t *testing.T) {
+	var gotAuth, gotPath string
 	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
-		b, _ := io.ReadAll(r.Body)
-		gotAuth, gotPath, gotBody = r.Header.Get("Authorization"), r.Method+" "+r.URL.Path, string(b)
-		io.WriteString(w, `{"data":{"repository":{"p15":null,"p14":{"number":14,"state":"OPEN","title":"t","author":{"login":"a"},
+		gotAuth, gotPath = r.Header.Get("Authorization"), r.Method+" "+r.URL.Path
+		io.WriteString(w, `{"data":{"search":{"issueCount":1,"nodes":[{"__typename":"PullRequest","number":14,"state":"OPEN","title":"t","author":{"login":"a"},
 "headRefOid":"abc","commits":{"nodes":[{"commit":{"statusCheckRollup":{"contexts":{"nodes":[
 {"__typename":"CheckRun","name":"lint","status":"COMPLETED","conclusion":"FAILURE","detailsUrl":"https://x/1","isRequired":true},
-{"__typename":"StatusContext","context":"ci/x","state":"PENDING","targetUrl":""}]}}}}]}}}}}`)
+{"__typename":"StatusContext","context":"ci/x","state":"PENDING","targetUrl":""}]}}}}]}}]}}}`)
 	})
-	got, err := c.List(context.Background(), "o/r", []int{14, 15})
+	res, err := c.Search(context.Background(), "o/r", "is:open")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if gotAuth != "bearer T" || gotPath != "POST /graphql" {
 		t.Fatalf("auth %q path %q", gotAuth, gotPath)
 	}
-	for _, want := range []string{`p14: pullRequest(number: 14)`, `isRequired(pullRequestNumber: 14)`, `"owner":"o"`, `"name":"r"`} {
-		if !strings.Contains(gotBody, want) {
-			t.Errorf("body missing %s: %s", want, gotBody)
-		}
+	if len(res.PRs) != 1 {
+		t.Fatalf("got %v", res)
 	}
-	if len(got) != 1 {
-		t.Fatalf("got %v", got)
-	}
+	got := res.PRs[0]
 	want := []Check{{Name: "lint", Status: "completed", Conclusion: "failure", URL: "https://x/1", Required: true}, {Name: "ci/x", Status: "in_progress"}}
-	if !reflect.DeepEqual(got[14].Checks, want) {
-		t.Fatalf("checks %+v", got[14].Checks)
+	if !reflect.DeepEqual(got.Checks, want) {
+		t.Fatalf("checks %+v", got.Checks)
 	}
-	if got[14].Author != "a" || got[14].HeadSHA != "abc" {
-		t.Fatalf("summary %+v", got[14])
+	if got.Author != "a" || got.HeadSHA != "abc" {
+		t.Fatalf("summary %+v", got)
 	}
 }
 
@@ -73,7 +68,7 @@ func TestGraphQLErrorMessage(t *testing.T) {
 	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, `{"errors":[{"message":"Could not resolve"}]}`)
 	})
-	_, err := c.List(context.Background(), "o/r", []int{1})
+	_, err := c.Search(context.Background(), "o/r", "")
 	if err == nil || !strings.Contains(err.Error(), "Could not resolve") {
 		t.Fatalf("err %v", err)
 	}
@@ -96,94 +91,40 @@ func TestRateLow(t *testing.T) {
 		default:
 			h.Set("X-RateLimit-Remaining", m)
 			h.Set("X-RateLimit-Limit", "5000")
-			io.WriteString(w, `{"data":{"repository":{}}}`)
+			io.WriteString(w, `{"data":{"search":{"issueCount":0,"nodes":[]}}}`)
 		}
 	})
 	ctx := context.Background()
-	if _, err := c.List(ctx, "o/r", []int{1}); err != nil || !c.RateLow() {
+	if _, err := c.Search(ctx, "o/r", ""); err != nil || !c.RateLow() {
 		t.Fatalf("400/5000: err %v low %v", err, c.RateLow())
 	}
 	mode.Store("4000")
-	if _, err := c.List(ctx, "o/r", []int{1}); err != nil || c.RateLow() {
+	if _, err := c.Search(ctx, "o/r", ""); err != nil || c.RateLow() {
 		t.Fatalf("4000/5000: err %v low %v", err, c.RateLow())
 	}
 	for _, m := range []string{"403", "gql"} {
 		mode.Store(m)
-		_, err := c.List(ctx, "o/r", []int{1})
+		_, err := c.Search(ctx, "o/r", "")
 		var rl *RateLimitError
 		if !errors.As(err, &rl) || rl.Reset.Unix() != reset || !c.RateLow() {
 			t.Fatalf("%s: err %v low %v", m, err, c.RateLow())
 		}
 		mode.Store("4000")
-		c.List(ctx, "o/r", []int{1})
+		c.Search(ctx, "o/r", "")
 	}
 }
 
 func TestTokenNeverInError(t *testing.T) {
 	c := newTest(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(401) })
 	c.token = "SECRET-TOKEN"
-	_, err := c.List(context.Background(), "o/r", []int{1})
+	_, err := c.Search(context.Background(), "o/r", "")
 	if err == nil || strings.Contains(err.Error(), "SECRET-TOKEN") {
 		t.Fatalf("401 err %v", err)
 	}
 	c.BaseURL = "http://SECRET-TOKEN.invalid:1"
-	_, err = c.List(context.Background(), "o/r", []int{1})
+	_, err = c.Search(context.Background(), "o/r", "")
 	if err == nil || strings.Contains(err.Error(), "SECRET-TOKEN") {
 		t.Fatalf("transport err %v", err)
-	}
-}
-
-func TestListOmitsClosedAndMerged(t *testing.T) {
-	var body string
-	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
-		b, _ := io.ReadAll(r.Body)
-		body = string(b)
-		io.WriteString(w, `{"data":{"repository":{"p1":{"state":"OPEN","title":"o"},"p2":{"state":"CLOSED","title":"c"},"p3":{"state":"MERGED","title":"m"}}}}`)
-	})
-	got, err := c.List(context.Background(), "o/r", []int{1, 2, 3})
-	if err != nil || len(got) != 1 || got[1].Title != "o" {
-		t.Fatalf("got %v err %v", got, err)
-	}
-	if !strings.Contains(body, " state ") {
-		t.Fatalf("query does not select state: %s", body)
-	}
-}
-
-func TestListChunksOver50(t *testing.T) {
-	var n atomic.Int32
-	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
-		n.Add(1)
-		io.WriteString(w, `{"data":{"repository":{}}}`)
-	})
-	nums := make([]int, 51)
-	for i := range nums {
-		nums[i] = i + 1
-	}
-	if _, err := c.List(context.Background(), "o/r", nums); err != nil || n.Load() != 2 {
-		t.Fatalf("requests %d err %v", n.Load(), err)
-	}
-}
-
-func TestListNotFoundIsNotFatal(t *testing.T) {
-	body := `{"data":{"repository":{"p14":{"number":14,"state":"OPEN","title":"t"},"p15":null}},"errors":[{"type":"NOT_FOUND","message":"Could not resolve to a PullRequest"}]}`
-	c := newTest(t, func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, body) })
-	got, err := c.List(context.Background(), "o/r", []int{14, 15})
-	if err != nil || len(got) != 1 || got[14].Title != "t" {
-		t.Fatalf("got %v err %v", got, err)
-	}
-	body = `{"data":{"repository":{"p14":{"number":14}}},"errors":[{"type":"NOT_FOUND","message":"x"},{"type":"FORBIDDEN","message":"nope"}]}`
-	if _, err := c.List(context.Background(), "o/r", []int{14}); err == nil || !strings.Contains(err.Error(), "nope") {
-		t.Fatalf("err %v", err)
-	}
-}
-
-func TestListMissingRepoFails(t *testing.T) {
-	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, `{"data":{"repository":null},"errors":[{"type":"NOT_FOUND","path":["repository"],"message":"Could not resolve to a Repository"}]}`)
-	})
-	_, err := c.List(context.Background(), "o/r", []int{1})
-	if err == nil || !strings.Contains(err.Error(), "Could not resolve to a Repository") {
-		t.Fatalf("err %v", err)
 	}
 }
 

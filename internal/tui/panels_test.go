@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/matthew-reed-holden/homerun/internal/api"
+	"github.com/matthew-reed-holden/homerun/internal/pr"
 )
 
 var now = time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
@@ -84,50 +85,58 @@ func TestListClickSelects(t *testing.T) {
 	}
 }
 
-func TestItemEntries(t *testing.T) {
-	r := api.Repo{Name: "o/r", Unhandled: []string{".github/workflows/nightly.yml"}, Items: []api.Item{
-		{Label: "main", Ref: "main", SHA: "fd387ab9999", Checks: []api.Check{{Status: "completed", Conclusion: "success"}}},
-		{Label: "#1", PR: 1, Title: "e2e \x1b]52;c;aGk=\x07PR", Author: "matt", Updated: now.Add(-5 * time.Minute), SHA: "d954af8"},
-		{Label: "#2", PR: 2, Title: "typo", Author: "bob", Fork: true, SHA: "abc"},
-	}}
-	es := itemEntries(r, now, nil, nil)
-	if len(es) != 4 {
-		t.Fatalf("entries: %+v", es)
+func TestListHeadOffsetsRows(t *testing.T) {
+	l := &list{head: "  #  Title"}
+	l.set(rows(5))
+	out := strings.Split(ansi.Strip(l.view(20, 5, false)), "\n")
+	if !strings.Contains(out[1], "#  Title") || !strings.Contains(out[2], "row 0") || strings.Contains(out[3], "row 2") {
+		t.Fatalf("head:\n%s", strings.Join(out, "\n"))
 	}
-	if es[0].icon != "✔" || es[0].text != "main  fd387ab" {
-		t.Errorf("branch: %+v", es[0])
-	}
-	if strings.ContainsRune(es[1].text, '\x1b') || !strings.Contains(es[1].text, "@matt") || !strings.HasSuffix(es[1].text, " 5m") {
-		t.Errorf("pr: %q", es[1].text)
-	}
-	if es[2].icon != "◇" || !strings.Contains(es[2].text, "awaiting") {
-		t.Errorf("fork: %+v", es[2])
-	}
-	if !strings.Contains(ansi.Strip(es[3].text), "not handled: .github/workflows/nightly.yml") {
-		t.Errorf("unhandled: %+v", es[3])
+	l.click(1) // the head
+	l.click(3)
+	if l.cur != 1 {
+		t.Fatalf("cur %d", l.cur)
 	}
 }
 
-func TestRepoAndRunEntries(t *testing.T) {
-	st := api.State{Repos: []api.Repo{
-		{Name: "o/a", Items: []api.Item{{Checks: []api.Check{{Status: "completed", Conclusion: "failure"}}}}},
-		{Name: "o/b", Error: "bad config"},
-	}}
-	re := repoEntries(st, "")
-	if re[0].icon != "✘" || re[0].text != "o/a" || re[1].icon != "✘" || re[1].text != "o/b (error)" {
-		t.Fatalf("repos: %+v", re)
+func TestBranchAndPRRows(t *testing.T) {
+	st := fixture()
+	st.Repos[0].Items = append(st.Repos[0].Items, api.Item{Label: "spike/\x1b]52;c;aGk=\x07x", Ref: "spike", SHA: "0c41e9a0000", Updated: now.Add(-50 * time.Hour)})
+	m := searchModelState(t, &pr.Fake{Results: e2eResults(e2eResult())}, st)
+	if !strings.HasPrefix(rowText(m, 1), "◇    2  typo fix") { // a fork PR awaiting the owner
+		t.Fatalf("fork row %q", rowText(m, 1))
 	}
-	runs := []api.Run{
-		{Repo: "o/e2e", Label: "#1", Status: "running", Started: now.Add(-72 * time.Second)},
-		{Repo: "o/e2e", Label: "main", Status: "queued"},
-		{Repo: "o/e2e", Label: "main", Status: "done", Started: now.Add(-11 * time.Minute), Finished: now.Add(-10 * time.Minute),
-			Checks: []api.Check{{Status: "completed", Conclusion: "success"}}},
+	keysIn(m, "4")
+	if got := rowKeys(m); len(got) != 2 {
+		t.Fatalf("branch rows %v", got)
 	}
-	want := []entry{{"⟳", "e2e #1 1m12s…", ""}, {"·", "e2e main queued", ""}, {"✔", "e2e main 1m00s 10m", ""}}
-	got := runEntries(runs, now)
-	for i := range want {
-		if got[i].icon != want[i].icon || got[i].text != want[i].text {
-			t.Errorf("run %d: %+v want %+v", i, got[i], want[i])
-		}
+	indexAll(t, rowText(m, 0), "✔ main", "fd387ab", "✔ 1/1")
+	if r := m.at().rows.rows[1]; strings.Contains(r.text, "]52") || !strings.Contains(rowText(m, 1), "· spike/") || !strings.HasSuffix(strings.TrimSpace(rowText(m, 1)), "2d") {
+		t.Fatalf("branch row %q", rowText(m, 1))
 	}
+}
+
+func TestRepoAndRunRows(t *testing.T) {
+	st := fixture()
+	st.Repos = append(st.Repos, api.Repo{Name: "o/a", Items: []api.Item{{Checks: []api.Check{{Status: "completed", Conclusion: "failure"}}}}}, api.Repo{Name: "o/b", Error: "bad config"})
+	st.Runs = []api.Run{
+		{ID: "q", Repo: "o/e2e", Label: "main", Status: "queued", Created: now.Add(-time.Minute)},
+		{ID: "c", Repo: "o/e2e", Label: "#2", Status: "cancelled", Started: now.Add(-11 * time.Minute), Finished: now.Add(-10 * time.Minute)},
+		{ID: "f", Repo: "o/e2e", Label: "#1", Status: "done", Started: now.Add(-11 * time.Minute), Finished: now.Add(-10 * time.Minute),
+			Checks: []api.Check{{Status: "completed", Conclusion: "failure"}}},
+	}
+	m := searchModelState(t, &pr.Fake{Results: e2eResults(e2eResult())}, st)
+	if e := m.repoEntry(st.Repos[2]); e.icon != "✘" || e.text != "o/a" {
+		t.Fatalf("repo %+v", e)
+	}
+	if e := m.repoEntry(st.Repos[3]); e.icon != "✘" || e.text != "o/b (error)" {
+		t.Fatalf("repo %+v", e)
+	}
+	if e := ansi.Strip(m.repoEntry(st.Repos[0]).text); e != "o/e2e ● 2 PRs" {
+		t.Fatalf("picked repo %q", e)
+	}
+	keysIn(m, "5")
+	indexAll(t, rowText(m, 0), "· main", "queued", "1m")
+	indexAll(t, rowText(m, 1), "○ #2", "cancelled", "1m00s", "10m")
+	indexAll(t, rowText(m, 2), "✘ #1", "failed", "1m00s", "10m")
 }

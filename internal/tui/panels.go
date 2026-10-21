@@ -3,23 +3,22 @@ package tui
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/matthew-reed-holden/homerun/internal/api"
-	"github.com/matthew-reed-holden/homerun/internal/pr"
-	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 )
 
 // entry is one row; key names what it shows, so a refresh that inserts or
 // reorders rows keeps the cursor on the same thing.
 type entry struct{ icon, text, key string }
 
-// list is one left-hand panel, numbered unless n is 0. It owns its cursor and scroll offset
-// so a state refresh never moves the user's place.
+// list is a framed list of rows, numbered unless n is 0, under an optional
+// column head. It owns its cursor and scroll offset so a state refresh never
+// moves the user's place.
 type list struct {
 	n     int
 	title string
+	head  string // a dim first line naming the columns; "" for none
 	rows  []entry
 	cur   int
 	off   int
@@ -43,15 +42,23 @@ func (l *list) move(d int) { l.cur = clampInt(l.cur+d, 0, len(l.rows)-1) }
 func (l *list) home()      { l.cur = 0 }
 func (l *list) end()       { l.cur = max(0, len(l.rows)-1) }
 
-// click selects the row y lines below the panel's top border.
+// first is the line below the top border where rows start.
+func (l *list) first() int {
+	if l.head != "" {
+		return 2
+	}
+	return 1
+}
+
+// click selects the row y lines below the list's top border.
 func (l *list) click(y int) {
-	if i := l.off + y - 1; y >= 1 && i < len(l.rows) {
+	if i := l.off + y - l.first(); y >= l.first() && i < len(l.rows) {
 		l.cur = i
 	}
 }
 
 func (l *list) view(w, h int, focused bool) string {
-	inner := max(0, h-2)
+	inner := max(0, h-1-l.first())
 	if l.cur < l.off {
 		l.off = l.cur
 	}
@@ -60,6 +67,9 @@ func (l *list) view(w, h int, focused bool) string {
 	}
 	l.off = clampInt(l.off, 0, len(l.rows)-inner)
 	var lines []string
+	if l.head != "" {
+		lines = append(lines, l.head)
+	}
 	for i := l.off; i < len(l.rows) && i < l.off+inner; i++ {
 		r := l.rows[i]
 		if i == l.cur && focused {
@@ -76,7 +86,7 @@ func (l *list) view(w, h int, focused bool) string {
 }
 
 // frame draws a rounded box of exactly w×h cells with the title set into the
-// top border, as lazygit does; the focused box is bright, the others dim.
+// top border; the focused box is bright, the others dim.
 func frame(title string, lines []string, w, h int, focused bool) string {
 	border := dim
 	if focused {
@@ -98,27 +108,6 @@ func frame(title string, lines []string, w, h int, focused bool) string {
 	return strings.Join(out, "\n")
 }
 
-// repoEntries marks the picked repo with ●.
-func repoEntries(st api.State, picked string) []entry {
-	out := make([]entry, 0, len(st.Repos))
-	for _, r := range st.Repos {
-		t := termsafe.Line(r.Name)
-		if r.Name == picked {
-			t += " ●"
-		}
-		if r.Error != "" {
-			out = append(out, entry{"✘", t + " (error)", r.Name})
-			continue
-		}
-		var all []api.Check
-		for _, it := range r.Items {
-			all = append(all, it.Checks...)
-		}
-		out = append(out, entry{Rollup(all), t, r.Name})
-	}
-	return out
-}
-
 // awaiting reports a fork PR homerun is holding for the owner's approval:
 // nothing has run for it locally yet.
 func awaiting(it api.Item) bool {
@@ -131,58 +120,4 @@ func awaiting(it api.Item) bool {
 		}
 	}
 	return true
-}
-
-// itemEntries builds the item rows; prs and behind (both may be nil) add PR badges.
-func itemEntries(r api.Repo, now time.Time, prs map[int]pr.Summary, behind func(n int) (int, bool)) []entry {
-	var out []entry
-	for _, it := range r.Items {
-		if it.PR == 0 {
-			out = append(out, entry{Rollup(it.Checks), termsafe.Line(it.Label) + "  " + short(it.SHA), r.Name + ":" + it.Label})
-			continue
-		}
-		// Badges go ahead of the title, so a long title cannot push them out of the panel.
-		icon, text := Rollup(it.Checks), termsafe.Line(it.Label)
-		if s, ok := prs[it.PR]; ok {
-			b, known := 0, false
-			if behind != nil {
-				b, known = behind(it.PR)
-			}
-			if bs := badges(s, b, known); bs != "" {
-				text += " " + bs
-			}
-		}
-		text += " " + termsafe.Line(it.Title)
-		if it.Author != "" {
-			text += " @" + termsafe.Line(it.Author)
-		}
-		if awaiting(it) {
-			icon, text = "◇", text+" awaiting"
-		} else if a := age(it.Updated, now); a != "" {
-			text += " " + a
-		}
-		out = append(out, entry{icon, text, r.Name + ":" + it.Label})
-	}
-	for _, u := range r.Unhandled {
-		out = append(out, entry{" ", dim.Render("not handled: " + termsafe.Line(u)), "unhandled:" + r.Name + ":" + u})
-	}
-	return out
-}
-
-func runEntries(runs []api.Run, now time.Time) []entry {
-	out := make([]entry, 0, len(runs))
-	for _, r := range runs {
-		name := termsafe.Line(repoShort(r.Repo) + " " + r.Label)
-		switch r.Status {
-		case "running":
-			out = append(out, entry{"⟳", name + " " + timing("in_progress", r.Started, time.Time{}, now), r.ID})
-		case "queued", "requeue":
-			out = append(out, entry{"·", name + " " + r.Status, r.ID})
-		case "cancelled":
-			out = append(out, entry{"○", strings.TrimSpace(name + " cancelled " + age(r.Finished, now)), r.ID})
-		default:
-			out = append(out, entry{Rollup(r.Checks), strings.TrimSpace(name + " " + timing("completed", r.Started, r.Finished, now) + " " + age(r.Finished, now)), r.ID})
-		}
-	}
-	return out
 }

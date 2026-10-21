@@ -1,24 +1,24 @@
-╭─#1 e2e PR──────────────────────╮╭─Description────────────────────────────────╮
-│  Description                   ││#1 e2e PR  @matt · feat → main              │
-│✘ Checks 2/4                    ││✔ no conflicts                              │
-│                                ││Checks ✔ 1 passed · ◌ 1 pending             │
-│                                ││Reviews: approved · Files 3 (+40 −7) · 💬 1 │
-│                                ││Open                                        │
-│                                ││────────────────────────────────────────────│
-│                                ││                                            │
+homerun  repo o/e2e ▾                                    engine: client · 1 runs
+1 My PRs 2 · 2 Review requested 2 · 3 All open 2 · 4 Branches 1 · 5 Runs 3      
+╭─#1 e2e PR────────────────────────────────────────────────────────────────────╮
+│  Description                                                                 │
+│✘ Checks 2/4                                                                  │
+│                                                                              │
+│                                                                              │
+│                                                                              │
 │     ╭─────────────────────────────────────────────────────────────────╮      │
-│     │ Merge #1 into main?                                             │      │
-│     │                                                                 │      │
-│     │ ○ Create a merge commit  ● Squash and merge  ○ Rebase and merge │      │
-│     │                                                                 │      │
-│     │ [tab] switch · [y] merge · any other key cancels                │      │
-│     ╰─────────────────────────────────────────────────────────────────╯      │
-│                                ││  looks good                                │
-│                                ││✔ @bob approved · 1h ago                    │
-│                                ││◆ @matt merged · 5m ago                     │
-│                                ││                                            │
-│                                ││Checks                                      │
-│                                ││✔ lint required                             │
-│                                ││⟳ build                                     │
-╰────────────────────────────────╯╰────────────────────────────────────────────╯
+╰─────│ Merge #1 into main?                                             │──────╯
+╭─Desc│                                                                 │──────╮
+│#1 e2│ ○ Create a merge commit  ● Squash and merge  ○ Rebase and merge │      │
+│✔ no │                                                                 │      │
+│Check│ [tab] switch · [y] merge · any other key cancels                │      │
+│Revie╰─────────────────────────────────────────────────────────────────╯      │
+│Open                                                                          │
+│──────────────────────────────────────────────────────────────────────────────│
+│                                                                              │
+│ Heading                                                                      │
+│                                                                              │
+│Makes the thing b optional.                                                   │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
 j/k up/down • m merge • u update branch • c comment • o open • esc back • ? hel…

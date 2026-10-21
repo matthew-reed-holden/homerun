@@ -81,7 +81,7 @@ func TestKeyBarsAreInHelp(t *testing.T) {
 			inHelp[b.Help().Key] = true
 		}
 	}
-	for _, c := range []barCtx{inPanels, inTree, inLog, inPRSections, inPRDesc, inPRChecks, inPRRow} {
+	for _, c := range []barCtx{inTable, inTree, inLog, inPRSections, inPRDesc, inPRChecks, inTablePR} {
 		for _, b := range keys.bar(c) {
 			if b.Help().Key == "" || !inHelp[b.Help().Key] {
 				t.Errorf("bar %d key %q missing from help", c, b.Help().Key)

@@ -14,7 +14,7 @@ import (
 )
 
 // dialog is a modal box. While it is open it receives every key, so a stray
-// keystroke never reaches the panels behind it.
+// keystroke never reaches the panes behind it.
 type dialog struct {
 	title, body string
 	confirm     tea.Cmd // run on y; nil for an information box

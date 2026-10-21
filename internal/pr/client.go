@@ -14,9 +14,6 @@ import (
 	"time"
 )
 
-// listChunk is how many PRs one GraphQL request asks for; ponytail: fixed, GitHub's node limit is far higher.
-const listChunk = 50
-
 // Client talks to GitHub with the user's token. The token only ever goes in the
 // Authorization header and never appears in an error.
 type Client struct {
@@ -258,40 +255,6 @@ func statusContext(state string) (status, conclusion string) {
 		return "in_progress", ""
 	}
 	return "queued", ""
-}
-
-// List fetches the given PRs of owner/name, 50 per request. Numbers GitHub
-// does not know, and PRs no longer open, are absent from the result.
-func (c *Client) List(ctx context.Context, repo string, numbers []int) (map[int]Summary, error) {
-	owner, name, ok := strings.Cut(repo, "/")
-	if !ok {
-		return nil, fmt.Errorf("github: bad repo %q", repo)
-	}
-	out := map[int]Summary{}
-	for len(numbers) > 0 {
-		chunk := numbers[:min(listChunk, len(numbers))]
-		numbers = numbers[len(chunk):]
-		var q strings.Builder
-		q.WriteString("query($owner:String!,$name:String!){repository(owner:$owner,name:$name){")
-		for _, n := range chunk {
-			fmt.Fprintf(&q, "p%[1]d: pullRequest(number: %[1]d){"+fields+"} ", n)
-		}
-		q.WriteString("}}")
-		var data struct {
-			Repository map[string]*gqlPR
-		}
-		if err := c.query(ctx, q.String(), map[string]any{"owner": owner, "name": name}, &data); err != nil {
-			return nil, err
-		}
-		for _, n := range chunk {
-			// pullRequest(number:) resolves closed and merged PRs too; they get no row data.
-			if p := data.Repository["p"+strconv.Itoa(n)]; p != nil && p.State == "OPEN" {
-				p.Number = n
-				out[n] = p.summary()
-			}
-		}
-	}
-	return out, nil
 }
 
 // workflowPath reduces a resourcePath like /o/r/actions/workflows/ci.yml to .github/workflows/ci.yml.
