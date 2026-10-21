@@ -538,6 +538,42 @@ func TestFilterEditsSearchLine(t *testing.T) {
 	}
 }
 
+// Headings render as bold chalk text without their "## " markers, at every
+// level; a fenced block sits whole on the lit field, with no chroma colours
+// floating on the sky; a link's URL is dim, not underlined.
+func TestMarkdownHeadingsCodeAndLinks(t *testing.T) {
+	out := renderMarkdown("## Summary\n\ntext\n\n### Test plan\n\n```go\ngo test ./internal/daemon -run TestClose\n```\n\nsee [the spec](https://example.com/spec) for why", 60)
+	plain := ansi.Strip(out)
+	if strings.Contains(plain, "#") {
+		t.Fatalf("heading markers in the body:\n%s", plain)
+	}
+	for _, h := range []string{"Summary", "Test"} { // glamour splits "Test plan" into two spans
+		i := strings.Index(out, h)
+		if i < 0 || !strings.HasSuffix(out[:i], ";1m") && !strings.HasSuffix(out[:i], "[1m") {
+			t.Fatalf("%s not bold:\n%q", h, out)
+		}
+	}
+	lines := strings.Split(out, "\n")
+	code := -1
+	for i, l := range lines {
+		if strings.Contains(l, "go test") {
+			code = i
+		}
+	}
+	if code < 0 || !strings.Contains(lines[code], "48;2;27;42;68") {
+		t.Fatalf("code block not on the lit field:\n%q", out)
+	}
+	if strings.Contains(lines[code], "38;2;") && !strings.Contains(lines[code], "38;2;232;236;242") {
+		t.Fatalf("code block coloured by chroma, not chalk:\n%q", lines[code])
+	}
+	if strings.Contains(out, "\x1b[4m") || strings.Contains(out, ";4m") || strings.Contains(out, ";4;") {
+		t.Fatalf("link underlined:\n%q", out)
+	}
+	if i := strings.Index(out, "https://example.com"); i < 0 || !strings.Contains(out[max(0, i-30):i], dimSGR) {
+		t.Fatalf("link URL not dim:\n%q", out)
+	}
+}
+
 // In the day game a code block's text is the day ink, not glamour's dark grey.
 func TestMarkdownCodeBlockDay(t *testing.T) {
 	setTheme(false)

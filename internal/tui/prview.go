@@ -809,24 +809,28 @@ func mdStyle() gansi.StyleConfig {
 	if th.p == day {
 		s = styles.LightStyleConfig
 	}
-	zero, yes := uint(0), true
+	zero, yes, no := uint(0), true, false
 	s.Document.Margin = &zero
 	s.Document.BlockPrefix, s.Document.BlockSuffix = "", ""
 	s.Document.Color = hex(th.p.fg)
 	s.Heading.Color, s.Heading.Bold = hex(th.p.fg), &yes
-	s.H1.Color, s.H1.BackgroundColor, s.H1.Prefix, s.H1.Suffix = hex(th.p.fg), nil, "", ""
-	s.H6.Color, s.H6.Bold = hex(th.p.fg), &yes
+	s.H1.BackgroundColor = nil
+	// Every heading level is chalk bold text, without the "## " markers the
+	// stock styles put on H2 to H6 (H1 has none).
+	for _, h := range []*gansi.StyleBlock{&s.H1, &s.H2, &s.H3, &s.H4, &s.H5, &s.H6} {
+		h.Prefix, h.Suffix, h.Color, h.Bold = "", "", hex(th.p.fg), &yes
+	}
 	// A block prefix takes the parent's style; a prefix takes the item's.
 	s.Item.BlockPrefix, s.Item.Prefix, s.Item.Color = "", "• ", hex(th.p.clay)
-	s.Link.Color, s.LinkText.Color = hex(th.p.clay), hex(th.p.clay)
+	// The link text is clay; the URL glamour prints after it goes dim, not
+	// underlined (glamour v2 cannot hide it without a custom renderer).
+	s.LinkText.Color = hex(th.p.clay)
+	s.Link.Color, s.Link.Underline = hex(th.p.dim), &no
 	s.Code.Color, s.Code.BackgroundColor = hex(th.p.fg), hex(th.p.lit)
+	// No chroma: its per-token foregrounds drop the block's background, so
+	// code floated on the night sky. The whole block is chalk on the lit field.
+	s.CodeBlock.Chroma = nil
 	s.CodeBlock.Color, s.CodeBlock.BackgroundColor = hex(th.p.fg), hex(th.p.lit)
-	if s.CodeBlock.Chroma != nil {
-		ch := *s.CodeBlock.Chroma
-		ch.Background.BackgroundColor = hex(th.p.lit)
-		ch.Text.Color = hex(th.p.fg)
-		s.CodeBlock.Chroma = &ch
-	}
 	s.BlockQuote.Color = hex(th.p.dim)
 	s.HorizontalRule.Color = hex(th.p.line)
 	return s
