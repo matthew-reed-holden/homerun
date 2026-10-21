@@ -60,6 +60,8 @@ func TestGolden(t *testing.T) {
 		{"wide-runs", 120, 40, []string{"3"}},
 		{"wide-fork-dialog", 120, 40, []string{"j", "j", "r"}},
 		{"standard-tree", 80, 24, []string{"j", "l"}},
+		{"wide-repo-picker", 120, 40, []string{"R"}},
+		{"standard-repo-picker", 80, 24, []string{"R"}},
 		{"narrow", 70, 20, nil},
 		{"too-small", 50, 12, nil},
 	}

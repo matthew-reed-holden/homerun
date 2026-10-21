@@ -43,7 +43,8 @@ To run a commit by hand: `homerun run [--pr N] OWNER/NAME [BRANCH]`. It exits no
 | `space` | fold or unfold a job |
 | `enter` on a job or step | open its log at that step |
 | in a log: `/` `n` `N` `e` `f` `+` `esc` | search, next/prev match, next failure, follow, zoom, back |
-| `r` `c` `o` `y` `R` | rerun (forks ask first), cancel, open on GitHub, copy SHA, reload config |
+| `r` `c` `o` `y` `ctrl+r` | rerun (forks ask first), cancel, open on GitHub, copy SHA, reload config |
+| `R` | pick a repo (fuzzy search) |
 | `?` `q` | help, quit |
 
 ## When this machine is off

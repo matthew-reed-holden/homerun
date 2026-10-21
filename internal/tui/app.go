@@ -81,9 +81,9 @@ type model struct {
 	now func() time.Time
 	o   Options
 
-	hostErr  error // the last Host attempt's error; ticks do not retry after one, R does
+	hostErr  error // the last Host attempt's error; ticks do not retry after one, ctrl+r does
 	hostBusy bool  // a Host attempt is in flight
-	offered  bool  // the add dialog for Launch has been shown
+	offered  bool  // the picker has offered to add Launch
 
 	state     api.State
 	connected bool
@@ -98,6 +98,7 @@ type model struct {
 	log                *logView
 	zoom               bool
 	dlg                *dialog
+	pk                 *picker
 	status             string
 	statusAt           time.Time
 	w, h               int
@@ -232,7 +233,12 @@ func (m *model) pick() tea.Cmd {
 	if m.repos.cur >= len(m.repos.rows) {
 		return nil
 	}
-	m.picked = m.repos.rows[m.repos.cur].key
+	return m.pickRepo(m.repos.rows[m.repos.cur].key)
+}
+
+// pickRepo scopes the dashboard to the named repo.
+func (m *model) pickRepo(name string) tea.Cmd {
+	m.picked = name
 	m.items.home()
 	m.refresh()
 	m.focusLeft(paneItems)
@@ -360,7 +366,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refresh()
 		if m.o.Launch != "" && !m.offered && m.o.AddRepo != nil && m.dlg == nil && !m.hasRepo(m.o.Launch) {
 			m.offered = true
-			m.dlg = addDialog(m.o.Launch, m.addRepo)
+			m.openPicker()
 		}
 		return m, m.prSync()
 	case listMsg:
@@ -495,6 +501,9 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 		m.dlg = nil
 		return d.key(k)
 	}
+	if m.pk != nil {
+		return m.pickerKey(k)
+	}
 	if m.commenting() && k.String() != "ctrl+c" {
 		return m.commentKey(k)
 	}
@@ -524,6 +533,8 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 		m.cycle(1)
 	case key.Matches(k, keys.Prev):
 		m.cycle(-1)
+	case key.Matches(k, keys.Repo) && m.connected:
+		m.openPicker()
 	case key.Matches(k, keys.Reload):
 		if m.hostErr != nil {
 			return m.host()
@@ -771,7 +782,7 @@ func (m *model) render() string {
 		}
 		switch {
 		case m.hostErr != nil:
-			msg = "homerun could not start: " + termsafe.Line(m.hostErr.Error()) + "\n\n(R to retry · q to quit)"
+			msg = "homerun could not start: " + termsafe.Line(m.hostErr.Error()) + "\n\n(ctrl+r to retry · q to quit)"
 		case m.err != nil:
 			msg = termsafe.Line(m.err.Error()) + "\n\n" + msg
 		}
@@ -789,6 +800,9 @@ func (m *model) render() string {
 	screen := body + "\n" + m.bar()
 	if m.dlg != nil {
 		screen = overlay(screen, m.dlg.view(m.w), m.w, m.h)
+	}
+	if m.pk != nil {
+		screen = overlay(screen, m.pickerView(), m.w, m.h)
 	}
 	if m.commenting() {
 		screen = overlay(screen, m.commentView(), m.w, m.h)
@@ -839,7 +853,7 @@ func (m *model) bar() string {
 	if m.err != nil {
 		warn := "stale: daemon unreachable (since " + dur(m.now().Sub(m.errSince)) + ")"
 		if m.hostErr != nil {
-			warn += " · could not start: " + termsafe.Line(m.hostErr.Error()) + " · R retries"
+			warn += " · could not start: " + termsafe.Line(m.hostErr.Error()) + " · ctrl+r retries"
 		}
 		parts = append(parts, yellow.Render(warn))
 	}
@@ -857,7 +871,7 @@ func (m *model) bar() string {
 
 // click and wheel map a mouse position onto the layout.
 func (m *model) click(mo tea.Mouse) tea.Cmd {
-	if m.dlg != nil || m.commenting() || mo.Button != tea.MouseLeft {
+	if m.dlg != nil || m.pk != nil || m.commenting() || mo.Button != tea.MouseLeft {
 		return nil
 	}
 	lay := m.layout()
@@ -892,7 +906,7 @@ func (m *model) click(mo tea.Mouse) tea.Cmd {
 }
 
 func (m *model) wheel(mo tea.Mouse) tea.Cmd {
-	if m.dlg != nil || m.commenting() {
+	if m.dlg != nil || m.pk != nil || m.commenting() {
 		return nil
 	}
 	d := 1

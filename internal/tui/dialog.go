@@ -94,14 +94,6 @@ func quitDialog(n int) *dialog {
 	}
 }
 
-func addDialog(name string, add func(string) tea.Cmd) *dialog {
-	return &dialog{
-		title:   "Add " + termsafe.Line(name) + " to homerun?",
-		body:    "[y] add · any other key skips",
-		confirm: add(name),
-	}
-}
-
 // InstallLinker is an AddRepo error that knows the App's install page.
 type InstallLinker interface{ InstallLink() string }
 

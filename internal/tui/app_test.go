@@ -121,6 +121,10 @@ func press(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
 	case "ctrl+s":
 		return tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}
+	case "ctrl+r":
+		return tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl}
+	case "down":
+		return tea.KeyPressMsg{Code: tea.KeyDown}
 	}
 	r := []rune(s)[0]
 	return tea.KeyPressMsg{Code: r, Text: s}
@@ -496,7 +500,7 @@ func TestOpenCopyReload(t *testing.T) {
 	if cmd := keysIn(m, "y"); cmd == nil || !strings.Contains(m.status, "d954af8") {
 		t.Fatal("copy")
 	}
-	cmd = keysIn(m, "R")
+	cmd = keysIn(m, "ctrl+r")
 	m.Update(cmd())
 	if f.reloads != 1 {
 		t.Fatal("reload")
@@ -856,7 +860,7 @@ func TestHostErrorShownBeforeData(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	s := ansi.Strip(m.render())
 	if !strings.Contains(s, "homerun could not start: no GitHub App configured; run: homerun setup") ||
-		!strings.Contains(s, "(R to retry · q to quit)") || strings.Contains(s, "Start the daemon") {
+		!strings.Contains(s, "(ctrl+r to retry · q to quit)") || strings.Contains(s, "Start the daemon") {
 		t.Fatalf("screen:\n%s", s)
 	}
 	m.Update(hostMsg{err: errors.New("act not found on PATH (see: homerun doctor)")})
@@ -865,7 +869,7 @@ func TestHostErrorShownBeforeData(t *testing.T) {
 	}
 }
 
-func TestHostErrorStopsAutoRetryUntilR(t *testing.T) {
+func TestHostErrorStopsAutoRetryUntilCtrlR(t *testing.T) {
 	calls := 0
 	_, c := newFake(t, api.State{})
 	m := newModel(c, func() time.Time { return now }, Options{
@@ -885,8 +889,8 @@ func TestHostErrorStopsAutoRetryUntilR(t *testing.T) {
 			t.Fatalf("a tick retried after a host error: %d calls", calls)
 		}
 	}
-	if !hostAttempt(t, m, keysIn(m, "R")) || calls != 2 {
-		t.Fatalf("R did not retry: %d calls", calls)
+	if !hostAttempt(t, m, keysIn(m, "ctrl+r")) || calls != 2 {
+		t.Fatalf("ctrl+r did not retry: %d calls", calls)
 	}
 }
 
@@ -955,33 +959,6 @@ func TestNoLaunchRepoUnchanged(t *testing.T) {
 	}
 }
 
-func TestUnregisteredLaunchOffersAdd(t *testing.T) {
-	var added []string
-	m := launchModel(t, "o/new", func(_ context.Context, n string) error { added = append(added, n); return nil }, "o/a")
-	if m.dlg == nil || m.dlg.title != "Add o/new to homerun?" || !strings.Contains(m.dlg.body, "[y] add · any other key skips") {
-		t.Fatalf("%+v", m.dlg)
-	}
-	cmd := keysIn(m, "y")
-	if cmd == nil {
-		t.Fatal("no cmd")
-	}
-	m.Update(cmd())
-	if len(added) != 1 || added[0] != "o/new" || !strings.Contains(m.status, "Added o/new.") {
-		t.Fatal(added, m.status)
-	}
-
-	var n int
-	m = launchModel(t, "o/new", func(context.Context, string) error { n++; return nil }, "o/a")
-	if cmd := keysIn(m, "x"); cmd != nil {
-		m.Update(cmd())
-	}
-	st := api.State{Repos: []api.Repo{{Name: "o/a"}}}
-	m.Update(stateMsg{&st})
-	if m.dlg != nil || n != 0 {
-		t.Fatal("dialog came back or add ran", n)
-	}
-}
-
 type installErr struct{ link string }
 
 func (e installErr) Error() string {
@@ -993,7 +970,7 @@ func TestAddFailureWithoutInstallLinkOpensNothing(t *testing.T) {
 	m := launchModel(t, "o/new", func(context.Context, string) error {
 		return errors.New("GET https://api.github.com/repos/o/new: dial tcp: connection refused")
 	}, "o/a")
-	m.Update(keysIn(m, "y")())
+	m.Update(keysIn(m, "down", "enter")())
 	if m.dlg == nil || m.dlg.open != "" || strings.Contains(m.dlg.body, "[o] open") || !strings.Contains(m.dlg.body, "connection refused") {
 		t.Fatalf("%+v", m.dlg)
 	}
@@ -1004,7 +981,7 @@ func TestAddFailureShowsInstallLink(t *testing.T) {
 	m := launchModel(t, "o/new", func(context.Context, string) error {
 		return fmt.Errorf("add: %w", installErr{link})
 	}, "o/a")
-	m.Update(keysIn(m, "y")())
+	m.Update(keysIn(m, "down", "enter")())
 	if m.dlg == nil || !strings.Contains(m.dlg.body, link) || m.dlg.open != link {
 		t.Fatalf("%+v", m.dlg)
 	}
@@ -1060,7 +1037,7 @@ func TestStaleBannerShowsFailedRehost(t *testing.T) {
 	if strings.Contains(out, "\x1b[2J") {
 		t.Fatalf("unsafe banner: %q", out)
 	}
-	if plain := ansi.Strip(out); !strings.Contains(plain, "stale: daemon unreachable (since 0s) · could not start: act not found on PATH · R retries") {
+	if plain := ansi.Strip(out); !strings.Contains(plain, "stale: daemon unreachable (since 0s) · could not start: act not found on PATH · ctrl+r retries") {
 		t.Fatalf("banner: %q", plain)
 	}
 }
