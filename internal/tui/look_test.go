@@ -541,3 +541,16 @@ func TestFilterBarPushesTable(t *testing.T) {
 		}
 	}
 }
+
+// In the day game a code block's text is the day ink, not glamour's dark grey.
+func TestMarkdownCodeBlockDay(t *testing.T) {
+	setTheme(false)
+	defer setTheme(true)
+	out := renderMarkdown("```go\nfunc main() {}\n```", 40)
+	if strings.Contains(out, "38;5;251") || strings.Contains(out, "38;2;198;198;198") {
+		t.Fatalf("code block in dark grey on the day field: %q", out)
+	}
+	if !strings.Contains(out, "38;2;19;33;58") {
+		t.Fatalf("code block text not the day fg: %q", out)
+	}
+}

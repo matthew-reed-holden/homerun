@@ -494,11 +494,15 @@ func hex(c color.Color) *string {
 	return &s
 }
 
-// mdStyle is glamour's dark style in the palette, without the page margin:
-// chalk bold headings, clay bullets and links, code on the lit field, dim
-// quotes. Never glamour's auto style: it queries the terminal.
+// mdStyle is glamour's dark or light style, after the game, in the palette
+// without the page margin: chalk bold headings, clay bullets and links, code
+// on the lit field in the ink, dim quotes. Built per render, so a theme change
+// takes at once. Never glamour's auto style: it queries the terminal.
 func mdStyle() gansi.StyleConfig {
 	s := styles.DarkStyleConfig
+	if th.p == day {
+		s = styles.LightStyleConfig
+	}
 	zero, yes := uint(0), true
 	s.Document.Margin = &zero
 	s.Document.BlockPrefix, s.Document.BlockSuffix = "", ""
@@ -514,6 +518,7 @@ func mdStyle() gansi.StyleConfig {
 	if s.CodeBlock.Chroma != nil {
 		ch := *s.CodeBlock.Chroma
 		ch.Background.BackgroundColor = hex(th.p.lit)
+		ch.Text.Color = hex(th.p.fg)
 		s.CodeBlock.Chroma = &ch
 	}
 	s.BlockQuote.Color = hex(th.p.dim)
