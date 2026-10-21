@@ -33,6 +33,8 @@ type tab struct {
 	kind        tabKind
 	name, query string
 	edit        string // the session's query; "" means query
+	prev        string // edit before the one being tried
+	trying      bool   // edit has not yet had a good search
 	rows        list
 	res         map[string]pr.SearchResult // by repo
 	at          map[string]time.Time       // when res was fetched, by repo
@@ -128,13 +130,19 @@ func (m *model) fetchTab(i int, tick bool) tea.Cmd {
 // doubled up to five minutes while rate limited, back to a minute after.
 func (m *model) onSearch(msg searchMsg) tea.Cmd {
 	if t := &m.tabs[msg.tab]; msg.query == t.q() {
-		if msg.err == nil {
-			t.res[msg.repo], t.at[msg.repo], t.err = msg.res, m.now(), ""
-		} else if e := msg.err.Error(); e != t.err {
-			t.err = e
-			var rl *pr.RateLimitError
-			if !errors.As(msg.err, &rl) { // the rate line covers that
-				m.say("PR search failed: " + e)
+		var rl *pr.RateLimitError
+		switch {
+		case msg.err == nil:
+			t.res[msg.repo], t.at[msg.repo], t.err, t.trying = msg.res, m.now(), "", false
+		case t.trying && !errors.As(msg.err, &rl):
+			t.edit, t.trying, m.fltErr = t.prev, false, msg.err.Error()
+			m.tableRows()
+		default:
+			if e := msg.err.Error(); e != t.err {
+				t.err = e
+				if !errors.As(msg.err, &rl) { // the rate line covers that
+					m.say("PR search failed: " + e)
+				}
 			}
 		}
 		m.refresh()

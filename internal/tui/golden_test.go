@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"flag"
 	"os"
 	"path/filepath"
@@ -125,5 +126,25 @@ func TestLongTextNeverBreaksLayout(t *testing.T) {
 				t.Fatalf("keys %v line %d width %d", ks, i, w)
 			}
 		}
+	}
+}
+
+func TestGoldenFilter(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		w, h int
+		err  bool
+	}{{"wide-filter", 120, 40, false}, {"wide-filter-error", 120, 40, true}} {
+		t.Run(c.name, func(t *testing.T) {
+			f := &pr.Fake{Results: e2eResults(e2eResult())}
+			m := searchModel(t, f)
+			keysIn(m, "/", "ctrl+u")
+			typeFilter(m, "is:open label:bug")
+			if c.err {
+				f.SearchErr = errors.New("github: Invalid search query")
+				run(m, m.key(press("enter")))
+			}
+			golden(t, c.name, ansi.Strip(m.render()))
+		})
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/matthew-reed-holden/homerun/internal/api"
@@ -98,6 +99,8 @@ type model struct {
 	zoom     bool
 	dlg      *dialog
 	pk       *picker
+	flt      *textinput.Model // the query bar, open on a PR tab; it takes every key
+	fltErr   string           // GitHub's rejection of an edited query, until the next key
 	status   string
 	statusAt time.Time
 	w, h     int
@@ -447,6 +450,7 @@ func (m *model) addRepo(name string) tea.Cmd {
 }
 
 func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
+	m.fltErr = ""
 	if m.dlg != nil {
 		d := m.dlg
 		if d.onKey != nil && d.onKey(k) {
@@ -457,6 +461,9 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 	}
 	if m.pk != nil {
 		return m.pickerKey(k)
+	}
+	if m.flt != nil {
+		return m.filterKey(k)
 	}
 	if m.commenting() && k.String() != "ctrl+c" {
 		return m.commentKey(k)
@@ -503,6 +510,12 @@ func (m *model) tableKey(k tea.KeyPressMsg) tea.Cmd {
 		return m.stepTab(1)
 	case key.Matches(k, keys.PrevTab):
 		return m.stepTab(-1)
+	case key.Matches(k, keys.Filter):
+		if m.at().kind != tabSearch || m.off(m.tab) {
+			return nil
+		}
+		m.openFilter()
+		return nil
 	case key.Matches(k, keys.Down):
 		l.move(1)
 	case key.Matches(k, keys.Up):
@@ -715,6 +728,9 @@ type layout struct {
 
 func (m *model) layout() layout {
 	bodyH := max(0, m.h-3)
+	if m.fltErr != "" {
+		bodyH--
+	}
 	l := layout{top: 2}
 	switch {
 	case m.zoom:
@@ -772,6 +788,9 @@ func (m *model) render() string {
 		}
 	}
 	screen := m.header() + "\n" + m.tabRow() + "\n" + body + "\n" + m.bar()
+	if m.fltErr != "" {
+		screen += "\n" + m.filterErrLine()
+	}
 	if m.dlg != nil {
 		screen = overlay(screen, m.dlg.view(m.w), m.w, m.h)
 	}
@@ -810,6 +829,9 @@ func (m *model) mainView(w, h int) string {
 }
 
 func (m *model) bar() string {
+	if m.flt != nil {
+		return m.filterBar()
+	}
 	ctx := inTable
 	switch {
 	case m.focus == onPreview && m.log != nil:
@@ -846,7 +868,7 @@ func (m *model) bar() string {
 
 // click and wheel map a mouse position onto the layout.
 func (m *model) click(mo tea.Mouse) tea.Cmd {
-	if m.dlg != nil || m.pk != nil || m.commenting() || mo.Button != tea.MouseLeft {
+	if m.dlg != nil || m.pk != nil || m.flt != nil || m.commenting() || mo.Button != tea.MouseLeft {
 		return nil
 	}
 	lay := m.layout()
@@ -878,7 +900,7 @@ func (m *model) click(mo tea.Mouse) tea.Cmd {
 }
 
 func (m *model) wheel(mo tea.Mouse) tea.Cmd {
-	if m.dlg != nil || m.pk != nil || m.commenting() {
+	if m.dlg != nil || m.pk != nil || m.flt != nil || m.commenting() {
 		return nil
 	}
 	d := 1

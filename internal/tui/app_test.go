@@ -126,6 +126,8 @@ func press(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl}
 	case "down":
 		return tea.KeyPressMsg{Code: tea.KeyDown}
+	case "ctrl+u":
+		return tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl}
 	}
 	r := []rune(s)[0]
 	return tea.KeyPressMsg{Code: r, Text: s}

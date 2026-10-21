@@ -9,7 +9,7 @@ type keyMap struct {
 	Up, Down, Top, Bottom, Fold, Enter, Esc              key.Binding
 	Search, NextMatch, PrevMatch, NextFail, Follow, Zoom key.Binding
 	Rerun, Cancel, Open, Copy, Reload, Help, Quit        key.Binding
-	Merge, Update, Comment, Send, Repo                   key.Binding
+	Merge, Update, Comment, Send, Repo, Filter, Clear    key.Binding
 }
 
 func bind(help, desc string, ks ...string) key.Binding {
@@ -47,6 +47,8 @@ var keys = keyMap{
 	Comment:   bind("c", "comment", "c"),
 	Send:      bind("ctrl+s", "send", "ctrl+s"),
 	Repo:      bind("R", "repo", "R"),
+	Filter:    bind("/", "filter", "/"),
+	Clear:     bind("ctrl+u", "clear", "ctrl+u"),
 	Reload:    bind("ctrl+r", "reload config", "ctrl+r"),
 	Help:      bind("?", "help", "?"),
 	Quit:      bind("q", "quit", "q", "ctrl+c"),
@@ -78,7 +80,7 @@ func (k keyMap) bar(c barCtx) []key.Binding {
 
 func (k keyMap) groups() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Tabs, k.Tab, k.Next, k.Into, k.Back, k.Repo, k.Reload, k.Help, k.Quit},
+		{k.Tabs, k.Tab, k.Next, k.Into, k.Back, k.Repo, k.Filter, k.Reload, k.Help, k.Quit},
 		{k.Up, k.Down, k.Top, k.Bottom, k.Fold, k.Enter},
 		{k.Search, k.NextMatch, k.PrevMatch, k.NextFail, k.Follow, k.Zoom, k.Esc},
 		{k.Rerun, k.Cancel, k.Open, k.Copy, k.Merge, k.Update, k.Comment, k.Send},
