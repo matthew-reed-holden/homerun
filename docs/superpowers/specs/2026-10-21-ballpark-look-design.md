@@ -140,6 +140,15 @@ These are my calls, marked so the user can check them:
   An app slug truncates to 10 cells with `…`. Tile columns in tables get a
   fixed width: the widest tile in view, capped at 12.
 
+## Polish round (after the first build)
+
+On a real screen, the first build was tighter than the mockup and was missing parts of it. The user asked for these before merging:
+
+- **Theme switcher.** A named theme registry (night, day), `theme: auto | night | day` in config, and `T` to cycle while running. It replaces the non-goal below as far as built-in themes go; user-defined themes come later and plug into the registry.
+- **Spacing.** One-cell outer gutters and a blank line between rows. The mockup's CSS line height is taller than a terminal row; the gap line is the terminal's version of it. Also: aligned icon column heads, the always-visible search line, the PR-state lead glyph, `engine ●` and `updated …` in the strip, and a short, focused dugout line.
+- **Hover preview.** Selecting a PR shows the full preview (header, tiles, five tabs) instead of the old summary block. Detail loads after the cursor rests. Reviews, Files and Commits show a placeholder until their parts are built.
+- **Checking by eye.** Each visual task is also compared by eye against the mockup, using a rendered dump of the real TUI, not only stripped goldens.
+
 ## Non-goals
 
 - Motion, animations, baseball art, empty-state art, the launch wordmark
