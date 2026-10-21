@@ -170,11 +170,17 @@ func cmdTUI() error {
 	defer signal.Stop(hup)
 	quit := make(chan struct{})
 	go func() { <-hup; close(quit) }()
-	prs, warns, prsErr := userPRs(cfgPath)
+	prs, cfg, warns, prsErr := userPRs(cfgPath)
+	var tabs []tui.Tab
+	if cfg != nil {
+		for _, t := range cfg.Tabs {
+			tabs = append(tabs, tui.Tab{Name: t.Name, Query: t.Query})
+		}
+	}
 	err = tui.Run(api.NewClient(api.SocketPath()), tui.Options{Host: e.tryHost, Hosting: e.hosting, HostErr: hostErr,
 		Launch:  git.OriginRepo(context.Background(), cwd),
 		AddRepo: func(ctx context.Context, n string) error { return addRepo(ctx, cfgPath, n) },
-		Quit:    quit, PRs: prs, PRsErr: prsErr, Warns: warns, Log: logPath})
+		Quit:    quit, PRs: prs, PRsErr: prsErr, Warns: warns, Log: logPath, Tabs: tabs})
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	return errors.Join(err, e.shutdown())
 }
@@ -183,15 +189,16 @@ func cmdTUI() error {
 // PR pages are off. The token stays in this process. Only a missing config
 // falls back to gh: a broken one must not act as a different account.
 // userPRs also returns the config's warnings: while the TUI runs, the log
-// file is the only other place they would appear.
-func userPRs(cfgPath string) (pr.API, []string, error) {
+// file is the only other place they would appear. cfg is nil when the file
+// is missing or broken.
+func userPRs(cfgPath string) (pr.API, *config.User, []string, error) {
 	sec := config.Secret{Cmd: "gh auth token"}
 	cfg, warns, err := config.LoadUser(cfgPath)
 	switch {
 	case err == nil:
 		sec = cfg.UserTokenSecret()
 	case !errors.Is(err, fs.ErrNotExist):
-		return nil, nil, fmt.Errorf("%w: %w", tui.ErrConfig, err)
+		return nil, nil, nil, fmt.Errorf("%w: %w", tui.ErrConfig, err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -203,9 +210,9 @@ func userPRs(cfgPath string) (pr.API, []string, error) {
 		if d := config.Detail(err); d != "" {
 			err = fmt.Errorf("%w: %s", err, d)
 		}
-		return nil, warns, err
+		return nil, cfg, warns, err
 	}
-	return pr.New(tok), warns, nil
+	return pr.New(tok), cfg, warns, nil
 }
 
 func cmdSetup(args []string) error {

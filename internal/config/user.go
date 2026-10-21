@@ -45,6 +45,15 @@ type UserRepo struct {
 	Secrets map[string]Secret `yaml:"secrets"`
 }
 
+// Tab is one saved PR search shown as a TUI tab.
+type Tab struct {
+	Name  string `yaml:"name"`
+	Query string `yaml:"query"`
+}
+
+// maxTabs keeps PR tabs, Branches, Runs, Config and Doctor within the number keys 1-9.
+const maxTabs = 5
+
 type User struct {
 	App          App                 `yaml:"app"`
 	UserToken    *Secret             `yaml:"user_token"`
@@ -53,6 +62,7 @@ type User struct {
 	Retain       Duration            `yaml:"retain"`
 	Platforms    map[string]string   `yaml:"platforms"`
 	Repos        map[string]UserRepo `yaml:"repos"`
+	Tabs         []Tab               `yaml:"tabs"`
 }
 
 // UserTokenSecret is where the TUI gets the user's own GitHub token: the gh CLI unless configured.
@@ -109,6 +119,17 @@ func LoadUser(path string) (*User, []string, error) {
 		platforms[k] = v
 	}
 	u.Platforms = platforms
+	if len(u.Tabs) > maxTabs {
+		return nil, nil, fmt.Errorf("%s: at most %d tabs", path, maxTabs)
+	}
+	for i, t := range u.Tabs {
+		switch {
+		case t.Name == "":
+			return nil, nil, fmt.Errorf("%s: tabs[%d]: name is required", path, i)
+		case t.Query == "":
+			return nil, nil, fmt.Errorf("%s: tabs[%d]: query is required", path, i)
+		}
+	}
 
 	var warns []string
 	if fi, err := os.Stat(path); err == nil && fi.Mode().Perm()&0o077 != 0 {

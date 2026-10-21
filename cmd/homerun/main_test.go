@@ -180,7 +180,7 @@ func TestUserPRsBrokenConfigTurnsPRPagesOff(t *testing.T) {
 	if err := os.WriteFile(p, []byte("user_token: [not a secret\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	api, _, err := userPRs(p)
+	api, _, _, err := userPRs(p)
 	if api != nil || !errors.Is(err, tui.ErrConfig) || !strings.Contains(err.Error(), p) {
 		t.Fatalf("api %v err %v", api, err)
 	}
@@ -188,7 +188,19 @@ func TestUserPRsBrokenConfigTurnsPRPagesOff(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("HOMERUN_TEST_TOKEN", "tok")
-	if api, _, err := userPRs(p); api == nil || err != nil {
+	if api, _, _, err := userPRs(p); api == nil || err != nil {
 		t.Fatalf("configured token: api %v err %v", api, err)
+	}
+}
+
+func TestUserPRsReturnsTabs(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "config.yml")
+	if err := os.WriteFile(p, []byte("user_token: {env: HOMERUN_TEST_TOKEN}\ntabs:\n  - {name: Mine, query: \"is:open author:@me\"}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOMERUN_TEST_TOKEN", "tok")
+	_, cfg, _, err := userPRs(p)
+	if err != nil || cfg == nil || len(cfg.Tabs) != 1 || cfg.Tabs[0].Name != "Mine" {
+		t.Fatalf("cfg %+v err %v", cfg, err)
 	}
 }

@@ -65,7 +65,13 @@ type Options struct {
 	PRsErr  error           // why they are off; wraps ErrConfig for a broken config
 	Warns   []string        // config warnings, listed in help
 	Log     string          // where the engine logs while the TUI runs
+	Tabs    []Tab           // PR searches; nil or empty: DefaultTabs
 }
+
+// Tab is one saved PR search.
+type Tab struct{ Name, Query string }
+
+var DefaultTabs = []Tab{{"My PRs", "is:open author:@me"}, {"Review requested", "is:open review-requested:@me"}, {"All open", "is:open"}}
 
 // ErrConfig marks a PRsErr caused by the config file, not the token.
 var ErrConfig = errors.New("config error")
