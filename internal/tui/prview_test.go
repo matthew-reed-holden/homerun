@@ -894,3 +894,41 @@ func TestHoverRespectsRateLimit(t *testing.T) {
 		t.Fatalf("after the retry time: %v", f.DetailCalls)
 	}
 }
+
+func TestOpenOnChecksBeforeDetailFallsBackToPR(t *testing.T) {
+	m, _ := hoverModel(t)
+	keysIn(m, "enter", "]") // detail not yet fetched
+	var opened []string
+	old := openURL
+	openURL = func(u string) error { opened = append(opened, u); return nil }
+	t.Cleanup(func() { openURL = old })
+	for i := range m.tree.checks {
+		m.tree.checks[i].URL = ""
+	}
+	if m.pr.d != nil || m.pr.section == 0 {
+		t.Fatalf("setup: d=%v section=%d", m.pr.d, m.pr.section)
+	}
+	cmd := keysIn(m, "o")
+	if cmd == nil {
+		t.Fatalf("nothing to open: %q", m.status)
+	}
+	m.Update(cmd())
+	if !slices.Equal(opened, []string{"https://github.com/o/e2e/pull/1"}) {
+		t.Fatalf("opened %v", opened)
+	}
+}
+
+func TestQueuedDetailWaitsOutRateBackoff(t *testing.T) {
+	m, f := hoverModel(t)
+	f.Err = &pr.RateLimitError{}
+	_, first := m.Update(hoverMsg{m.prGen}) // #1's fetch, in flight
+	keysIn(m, "j")
+	m.Update(hoverMsg{m.prGen}) // #2's waits behind it
+	if len(f.DetailCalls) != 0 {
+		t.Fatalf("a second fetch started while one was in flight: %v", f.DetailCalls)
+	}
+	run(m, first) // #1 returns rate limited
+	if len(f.DetailCalls) != 1 {
+		t.Fatalf("the queued fetch started inside the backoff: %v", f.DetailCalls)
+	}
+}

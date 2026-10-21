@@ -275,8 +275,6 @@ func (m *model) pickRepo(name string) tea.Cmd {
 	return m.prSync()
 }
 
-// repaint rebuilds what holds rendered colours after the theme changed: the
-// rows and the PR page.
 // applyTheme sets the palette the choice names, or the terminal's when auto.
 func (m *model) applyTheme() {
 	switch m.themeChoice {
@@ -289,6 +287,8 @@ func (m *model) applyTheme() {
 	}
 }
 
+// repaint rebuilds what holds rendered colours after the theme changed: the
+// rows and the PR page.
 func (m *model) repaint() {
 	m.tableRows()
 	if m.pr != nil {
@@ -1267,9 +1267,7 @@ func (m *model) open() tea.Cmd {
 	switch {
 	case u != "":
 	case m.inPR(): // a check without a URL opens the PR, never a guess
-		if m.pr.d != nil {
-			u = m.pr.d.URL
-		}
+		u = m.prURL()
 	case m.focus == onTable && m.rowKey() == "more":
 		u = m.searchURL()
 	default:

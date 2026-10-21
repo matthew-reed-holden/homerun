@@ -245,7 +245,9 @@ func (m *model) onDetail(msg detailMsg) tea.Cmd {
 	if p := m.pr; p != nil && p.queued {
 		tick := p.queuedTick
 		p.queued, p.queuedTick = false, false
-		next = m.fetchDetail(tick)
+		if !m.now().Before(m.detailRetry) { // inside a backoff, settle or the poll fetches later
+			next = m.fetchDetail(tick)
+		}
 	}
 	p := m.pr
 	if p == nil || msg.gen != m.prGen {
