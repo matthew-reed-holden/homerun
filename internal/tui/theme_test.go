@@ -9,6 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/matthew-reed-holden/homerun/internal/api"
 )
 
 func TestPaletteRoles(t *testing.T) {
@@ -194,5 +195,20 @@ func TestThemeRepaintsAll(t *testing.T) {
 	}
 	if got := m.View().BackgroundColor; got != day.bg {
 		t.Errorf("View bg = %v, want day bg", got)
+	}
+}
+
+// ctrl+c with the picker open puts the previewed game back before quitting
+// (or asking to), so a hosting TUI's quit dialog is drawn in the choice in effect.
+func TestCtrlCRevertsThemePreview(t *testing.T) {
+	defer setTheme(true)
+	m := hostModel(t, Options{Hosting: hosting(true)}, api.Run{ID: "r2", Repo: "o/e2e", Label: "#1", Status: "running"})
+	keysIn(m, "T", "j")
+	if th.p != day {
+		t.Fatal("j did not preview day")
+	}
+	keysIn(m, "ctrl+c")
+	if m.tp != nil || m.dlg == nil || th.p != night || m.themeChoice != themeAuto {
+		t.Fatalf("ctrl+c: picker %v dlg %v day %v choice %q", m.tp != nil, m.dlg != nil, th.p == day, m.themeChoice)
 	}
 }

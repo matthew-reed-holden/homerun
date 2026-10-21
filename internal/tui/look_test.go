@@ -40,8 +40,8 @@ func TestStripNarrow(t *testing.T) {
 			t.Fatalf("strip lacks %q: %q", want, s)
 		}
 	}
-	if strings.Contains(s, long) {
-		t.Fatalf("strip kept the full repo: %q", s)
+	if strings.Contains(s, long) || strings.Contains(s, "updated") { // the banner says the state is stale
+		t.Fatalf("strip kept the full repo or says updated: %q", s)
 	}
 	if !strings.Contains(m.strip(), "38;2;229;72;77m●") {
 		t.Fatalf("engine light not red: %q", m.strip())

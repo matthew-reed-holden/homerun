@@ -13,7 +13,7 @@
     typo fix                                                                    
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
    #1 e2e PR                                                                    
-    OPEN   main ← feat · 3 behind                                               
+    OPEN   main ← feat · 3 behind ·  2                                         
     CI / fail echo bad; exit 1 · 3s ·  approved                               
                                                                                 
    SUMMARY                                                                      

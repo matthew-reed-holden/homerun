@@ -979,7 +979,7 @@ func (m *model) strip() string {
 		return strings.Join(append(parts, ls+engine), stripGap)
 	}
 	ws := m.warnings()
-	if len(ws) == 0 && !m.updated.IsZero() {
+	if len(ws) == 0 && !m.updated.IsZero() && m.err == nil { // the banner says the state is stale
 		ws = []warning{{"updated " + age(m.updated, m.now()) + " ago", th.dim, true}}
 	}
 	// The repo gives way, then ✔ ✘, then the score; before any of that, a

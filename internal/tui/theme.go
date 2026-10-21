@@ -152,11 +152,11 @@ func themeNote(name string) string {
 	return name
 }
 
-// swatch is six ● in a palette's strip, clay, amber, safe, out and lights,
+// swatch is six ● in a palette's fg, clay, amber, safe, out and lights,
 // each coloured from that palette, not the current one.
 func swatch(p palette) string {
 	var b strings.Builder
-	for _, c := range []color.Color{p.strip, p.clay, p.amber, p.safe, p.out, p.lights} {
+	for _, c := range []color.Color{p.fg, p.clay, p.amber, p.safe, p.out, p.lights} {
 		b.WriteString(lipgloss.NewStyle().Foreground(c).Render("●"))
 	}
 	return b.String()

@@ -46,7 +46,6 @@ type prView struct {
 	polling    bool // the detail poll runs: the cursor rested, or the preview was entered
 	queued     bool // a fetch waits for the one in flight
 	queuedTick bool // the waiting fetch is the poll's
-	pageHover  bool // the page was built for the hover (status lines first)
 }
 
 // cachedDetail is a fetched detail and when it came.
@@ -525,12 +524,18 @@ func (m *model) stacked() bool {
 func (m *model) stackedHover() bool { return m.stacked() && !m.inPR() }
 
 // prHeadH is the lines above a PR's tab body for a pane whose inner width
-// is w: the header, the tabs and the rule under them.
+// is w: the header, the tabs and the rule under them; while hovering, the
+// status rows and a blank row too (the stacked hover's status row and
+// blank row stand in for the tabs). They are drawn outside the cached
+// page, so they follow every refresh.
 func (m *model) prHeadH(w int) int {
-	if m.stackedHover() {
-		return len(m.prHeader(w)) + 1 // the status row, no tabs
+	n := len(m.prHeader(w)) + 2
+	if m.pr.section == 0 && !m.inPR() && !m.stackedHover() {
+		if st := m.prStatus(w); len(st) > 0 {
+			n += len(st) + 1
+		}
 	}
-	return len(m.prHeader(w)) + 2
+	return n
 }
 
 // prTabsY is the tabs' line in a pane whose inner width is w; -1 while the
@@ -552,10 +557,14 @@ func (m *model) prPreviewView(w, h int) string {
 	switch {
 	case m.stackedHover():
 		lines = append(lines, truncate(strings.Join(m.prStatus(w-2), th.dim.Render(" · ")), w-2), "")
-		m.syncPage(w-2, inner-1)
+		m.syncPage(w-2, inner)
 		lines = append(lines, strings.Split(m.pr.vp.View(), "\n")...)
 	case m.pr.section == 0:
 		lines = append(lines, m.chips(w-2), foul(w-2, false))
+		if st := m.prStatus(w - 2); len(st) > 0 && !m.inPR() {
+			lines = append(lines, st...)
+			lines = append(lines, "")
+		}
 		m.syncPage(w-2, inner)
 		lines = append(lines, strings.Split(m.pr.vp.View(), "\n")...)
 	case m.pr.section == 1:
@@ -607,9 +616,13 @@ func (m *model) prHeader(w int) []string {
 	if b, ok := m.behind[m.prRef()]; ok && b > 0 && state != "MERGED" && state != "CLOSED" {
 		behind = th.lights.Render(fmt.Sprintf("%d behind", b))
 	}
+	comments := ""
+	if s.Comments > 0 {
+		comments = th.dim.Render(fmt.Sprintf("%s %d", ic("comments"), s.Comments))
+	}
 	if m.stacked() {
-		if behind != "" {
-			tileRow += th.dim.Render(" · ") + behind
+		if extra := dot(behind, comments); extra != "" {
+			tileRow += th.dim.Render(" · ") + extra
 		}
 		return []string{truncate(th.amber.Render(fmt.Sprintf("#%d ", m.pr.number))+title, w), truncate(tileRow, w)}
 	}
@@ -620,9 +633,7 @@ func (m *model) prHeader(w int) []string {
 			who += th.dim.Render(" · " + a + " ago")
 		}
 	}
-	if behind != "" {
-		who = dot(who, behind)
-	}
+	who = dot(who, behind, comments)
 	rows := []string{crumb, truncate(title, w)}
 	switch tw, ww := ansi.StringWidth(tileRow), ansi.StringWidth(who); {
 	case who == "":
@@ -718,16 +729,16 @@ func (m *model) checksFoot(inner int) []string {
 	return append([]string{""}, out...)
 }
 
-// syncPage sizes the viewport and rebuilds the page when the width, the
-// detail or the hover state changed.
+// syncPage sizes the viewport and rebuilds the page when the width or the
+// detail changed.
 func (m *model) syncPage(w, h int) {
 	p := m.pr
 	w, h = max(0, w), max(0, h)
 	p.vp.SetWidth(w)
 	p.vp.SetHeight(h)
-	if hover := !m.inPR(); p.pageW != w || p.pageHover != hover {
+	if p.pageW != w {
 		p.vp.SetContentLines(m.prPage(w))
-		p.pageW, p.pageHover = w, hover
+		p.pageW = w
 	}
 }
 
@@ -736,11 +747,10 @@ func heading(s string) string { return th.fg.Bold(true).Render(s) }
 
 func loading() string { return th.dim.Render("loading…") }
 
-// prPage is the Overview page, w wide: while hovering, the worst check and
-// the review state first; then SUMMARY, the description; ACTIVITY, the
-// timeline; MERGE, the merge box. Before the detail lands it shows the
+// prPage is the Overview page, w wide: SUMMARY, the description; ACTIVITY,
+// the timeline; MERGE, the merge box. Before the detail lands it shows the
 // search's body and what it says of merging, and loading… once, under
-// ACTIVITY.
+// ACTIVITY. (The hover's status rows are drawn above it, outside the cache.)
 func (m *model) prPage(w int) []string {
 	p := m.pr
 	s, known := m.prSummary()
@@ -751,12 +761,6 @@ func (m *model) prPage(w int) []string {
 	}
 	if p.err != nil {
 		out = append(out, strings.Split(th.out.Width(max(1, w)).Render(termsafe.Line(p.err.Error())), "\n")...)
-	}
-	if !m.inPR() && !m.stackedHover() {
-		if st := m.prStatus(w); len(st) > 0 {
-			out = append(out, st...)
-			out = append(out, "")
-		}
 	}
 	out = append(out, heading("SUMMARY"))
 	switch {
@@ -888,10 +892,9 @@ func stateTile(state string, draft bool) string {
 // the icon and a space.
 const lead = 6
 
-// eventLines is one timeline entry as a row: the age in a dim three-cell
-// column, the icon, then the body; a commit's sha and subject, a review's or
-// comment's @who and the first line of what they said. Rows that wrap
-// continue under the body.
+// eventLines is one timeline entry as one row: the age in a dim three-cell
+// column, the icon, then the body cut to the row; a commit's sha and
+// subject, a review's or comment's @who and the first line of what they said.
 func (m *model) eventLines(e pr.Event, w int) []string {
 	who := "@" + termsafe.Line(e.Author)
 	var icon, body string
@@ -915,31 +918,48 @@ func (m *model) eventLines(e pr.Event, w int) []string {
 	default:
 		return nil
 	}
-	ls := wrapLines(body, max(1, w-lead))
-	out := []string{th.dim.Render(rfit(age(e.At, m.now()), 3)) + " " + icon + " " + ls[0]}
-	for _, l := range ls[1:] {
-		out = append(out, strings.Repeat(" ", lead)+l)
-	}
-	return out
+	return []string{th.dim.Render(rfit(age(e.At, m.now()), 3)) + " " + icon + " " + truncate(body, max(1, w-lead))}
 }
+
+// quoteKey names a quote by its text, width and the palette it was styled in.
+type quoteKey struct {
+	text string
+	w    int
+	th   *theme
+}
+
+// quotes memoises quote: the Reviews tab and the page would otherwise run
+// glamour for every event on every frame.
+var quotes = map[quoteKey]string{}
 
 // quote is the first line of what a review or comment said, rendered as
 // markdown w wide and then stripped of its styles, as ": “…”" (with the …
 // when more followed); "" when it said nothing.
 func quote(text string, w int) string {
+	k := quoteKey{text, w, th}
+	if q, ok := quotes[k]; ok {
+		return q
+	}
+	if len(quotes) >= 512 {
+		clear(quotes)
+	}
 	var ls []string
 	for _, l := range strings.Split(renderMarkdown(text, max(1, w)), "\n") {
 		if l = strings.TrimSpace(ansi.Strip(l)); l != "" {
 			ls = append(ls, l)
 		}
 	}
+	q := ""
 	switch len(ls) {
-	case 0:
-		return ""
 	case 1:
-		return ": “" + ls[0] + "”"
+		q = ": “" + ls[0] + "”"
+	default:
+		if len(ls) > 1 {
+			q = ": “" + ls[0] + "…”"
+		}
 	}
-	return ": “" + ls[0] + "…”"
+	quotes[k] = q
+	return q
 }
 
 func reviewEvent(state string) (icon, verb string) {
@@ -1006,10 +1026,14 @@ func mdStyle() gansi.StyleConfig {
 	return s
 }
 
+// mdRenders counts renderMarkdown calls, so a test can see what is cached.
+var mdRenders int
+
 // renderMarkdown renders untrusted markdown w wide. Escapes are stripped
 // before glamour sees the text and from what it returns, keeping only SGR;
 // on a glamour error the plain text is shown.
 func renderMarkdown(s string, w int) string {
+	mdRenders++
 	s = termsafe.Text(s)
 	r, err := glamour.NewTermRenderer(glamour.WithStyles(mdStyle()), glamour.WithWordWrap(max(1, w)))
 	if err != nil {

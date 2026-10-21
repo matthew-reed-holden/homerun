@@ -530,7 +530,12 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 
 func (m *model) press(k tea.KeyPressMsg) tea.Cmd {
 	m.fltErr = ""
-	if k.String() == "ctrl+c" && m.dlg == nil { // the picker and filter inputs would swallow it
+	if k.String() == "ctrl+c" && m.dlg == nil { // the pickers and filter input would swallow it
+		if m.tp != nil { // a previewed game goes back before anything else happens
+			m.themeChoice = m.tp.was
+			m.applyTheme()
+			m.repaint()
+		}
 		m.pk, m.flt, m.tp = nil, nil, nil
 	}
 	if m.dlg != nil {

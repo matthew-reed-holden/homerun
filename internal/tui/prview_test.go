@@ -653,7 +653,7 @@ func TestMergedWhileOpen(t *testing.T) {
 	d := detailFixture()
 	d.MergedBy, d.MergeSHA = "", ""
 	m.pr.d = d
-	if h := strings.TrimRight(ansi.Strip(m.prHeader(80)[2]), " "); !strings.HasSuffix(h, " MERGED   into main") {
+	if h := ansi.Strip(m.prHeader(80)[2]); !strings.Contains(h, " MERGED   into main ") || strings.Contains(h, "into main by") {
 		t.Fatalf("no merger known: %q", h)
 	}
 }
@@ -934,5 +934,60 @@ func TestQueuedDetailWaitsOutRateBackoff(t *testing.T) {
 	run(m, first) // #1 returns rate limited
 	if len(f.DetailCalls) != 1 {
 		t.Fatalf("the queued fetch started inside the backoff: %v", f.DetailCalls)
+	}
+}
+
+// The hover's header carries the search's comment count.
+func TestHoverShowsCommentCount(t *testing.T) {
+	m := goldenModel(t, 120, 40) // #1 has two comments
+	if ls := strings.Join(previewLines(m), "\n"); !strings.Contains(ls, ic("comments")+" 2") {
+		t.Fatalf("comment count missing from the hover:\n%s", ls)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24}) // stacked: on the tile row
+	if ls := previewLines(m); !strings.Contains(ls[1], ic("comments")+" 2") {
+		t.Fatalf("stacked tile row %q", ls[1])
+	}
+}
+
+// The hover's status rows are drawn outside the cached page, so a state
+// refresh that turns a check green after the detail landed shows at once.
+func TestHoverStatusFollowsState(t *testing.T) {
+	m, _ := hoverModel(t)
+	rest(m)
+	if m.pr.d == nil {
+		t.Fatal("detail not loaded")
+	}
+	fail := ic("ci-fail") + " CI / fail"
+	if ls := strings.Join(previewLines(m), "\n"); !strings.Contains(ls, fail) {
+		t.Fatalf("status row lacks the failing check:\n%s", ls)
+	}
+	st := fixture()
+	st.Repos[0].Items[1].Checks[1].Conclusion = "success"
+	m.Update(stateMsg{&st})
+	if ls := strings.Join(previewLines(m), "\n"); strings.Contains(ls, fail) {
+		t.Fatalf("status row stale after the refresh:\n%s", ls)
+	}
+}
+
+// Rendering the Reviews tab again with nothing changed runs glamour for no
+// event: quotes are memoised.
+func TestReviewsTabCachesQuotes(t *testing.T) {
+	m, _ := prOpenModel(t, detailFixture())
+	keysIn(m, "3")
+	m.render()
+	n := mdRenders
+	m.render()
+	m.render()
+	if mdRenders != n {
+		t.Fatalf("%d markdown renders for two unchanged frames", mdRenders-n)
+	}
+}
+
+// An event is one row, cut to the pane; a long quote does not wrap.
+func TestEventRowsAreOneRow(t *testing.T) {
+	m := goldenModel(t, 120, 40)
+	ls := m.eventLines(pr.Event{Kind: "review", Author: "sam", State: "APPROVED", Text: strings.Repeat("long words ", 30)}, 40)
+	if len(ls) != 1 || ansi.StringWidth(ls[0]) > 40 || !strings.HasSuffix(ansi.Strip(ls[0]), "…") {
+		t.Fatalf("event rows %q", ls)
 	}
 }
