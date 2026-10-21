@@ -1,0 +1,1008 @@
+<title>homerun TUI reference</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+/* Layout: a long single-column reference, a slim index on the left at desktop
+   width, every screen drawn in a fixed dark terminal frame. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --fg: #1d2330;
+  --muted: #5d6677;
+  --line: #d8dce4;
+  --accent: #2f5fd0;
+  --pill-now: #e3efe4;   --pill-now-fg: #24603a;
+  --pill-new: #e4ebfb;   --pill-new-fg: #2f4fa8;
+  --pill-r3: #f6ecdc;    --pill-r3-fg: #7a5212;
+  --pill-r4: #efe4f6;    --pill-r4-fg: #66308a;
+
+  /* The terminal frame keeps one dark look in both page themes:
+     it stands for the user's terminal, not the page. Names follow the
+     ANSI slots the Go code uses (lipgloss.Color "1" … "8"). */
+  --t-bg: #16181f;
+  --t-fg: #c9cfdc;
+  --t-dim: #646c80;       /* 8  dim */
+  --t-red: #f0717e;       /* 1  failure */
+  --t-green: #95d17a;     /* 2  success, focused border */
+  --t-yellow: #e2b35f;    /* 3  running, warnings, dialogs */
+  --t-blue: #7aa2f7;      /* 4  active tab, titles (new) */
+  --t-magenta: #bb9af7;   /* 5  homerun's own checks, picked repo (new) */
+  --t-cyan: #7dcfff;      /* 6  commits, links (new) */
+  --t-sel: #2a3350;       /* selected row */
+  --t-border: #343a4c;
+  --t-add: #1c3324;
+  --t-del: #3a1c24;
+
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-head: "IBM Plex Sans Condensed", "IBM Plex Sans", "Arial Narrow", sans-serif;
+  --f-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101218; --surface: #171a22; --fg: #dde2ec; --muted: #8d95a8; --line: #2a2f3c; --accent: #86a8f5;
+    --pill-now: #1d3324; --pill-now-fg: #9fd8a8;
+    --pill-new: #1f2a47; --pill-new-fg: #a9c0f7;
+    --pill-r3: #3a2d17; --pill-r3-fg: #e8c385;
+    --pill-r4: #33223f; --pill-r4-fg: #d4b2ee;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101218; --surface: #171a22; --fg: #dde2ec; --muted: #8d95a8; --line: #2a2f3c; --accent: #86a8f5;
+  --pill-now: #1d3324; --pill-now-fg: #9fd8a8;
+  --pill-new: #1f2a47; --pill-new-fg: #a9c0f7;
+  --pill-r3: #3a2d17; --pill-r3-fg: #e8c385;
+  --pill-r4: #33223f; --pill-r4-fg: #d4b2ee;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px;
+}
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+code, kbd { font-family: var(--f-mono); font-size: 0.86em; }
+kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--surface); white-space: nowrap; }
+
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 48px; }
+@media (max-width: 960px) { .wrap { grid-template-columns: minmax(0, 1fr); gap: 24px; } }
+
+nav.index { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; font-size: 13.5px; }
+@media (max-width: 960px) { nav.index { position: static; } }
+nav.index ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+nav.index ol ol { padding-left: 12px; margin-block: 2px 6px; }
+nav.index a { color: var(--muted); text-decoration: none; display: block; padding: 1px 0; }
+nav.index a:hover { color: var(--fg); }
+nav.index .label { font-family: var(--f-head); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; font-size: 12px; color: var(--fg); margin-bottom: 8px; }
+
+main { min-width: 0; display: flex; flex-direction: column; gap: 56px; }
+header.top h1 { font-family: var(--f-head); font-weight: 700; font-size: 40px; line-height: 1.1; margin: 0 0 8px; text-wrap: balance; letter-spacing: -0.01em; }
+header.top p { margin: 0; color: var(--muted); max-width: 68ch; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 14px; font-size: 13px; color: var(--muted); }
+.meta b { color: var(--fg); font-weight: 500; }
+
+section > h2 { font-family: var(--f-head); font-weight: 700; font-size: 26px; margin: 0 0 6px; text-wrap: balance; }
+section > p.lede { margin: 0 0 20px; color: var(--muted); max-width: 70ch; }
+.view { display: flex; flex-direction: column; gap: 10px; margin-top: 28px; }
+.view h3 { font-family: var(--f-head); font-weight: 600; font-size: 19px; margin: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.view p { margin: 0; max-width: 72ch; }
+.view ul { margin: 0; padding-left: 20px; max-width: 72ch; }
+
+.pill { font-family: var(--f-body); font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding: 1px 8px; border-radius: 999px; }
+.p-now { background: var(--pill-now); color: var(--pill-now-fg); }
+.p-new { background: var(--pill-new); color: var(--pill-new-fg); }
+.p-r3 { background: var(--pill-r3); color: var(--pill-r3-fg); }
+.p-r4 { background: var(--pill-r4); color: var(--pill-r4-fg); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; color: var(--muted); align-items: center; }
+
+/* Token and glyph tables */
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.card h4 { margin: 0 0 10px; font-family: var(--f-head); font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; }
+.swatches { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; }
+.sw { display: grid; grid-template-columns: 22px 64px minmax(0, 1fr); gap: 10px; align-items: center; }
+.sw i { width: 22px; height: 22px; border-radius: 4px; display: block; border: 1px solid var(--line); }
+.sw code { color: var(--muted); }
+table.glyphs { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+table.glyphs td { padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.glyphs td:first-child { font-family: var(--f-mono); width: 44px; background: var(--t-bg); text-align: center; }
+.tablewrap { overflow-x: auto; }
+table.keys { border-collapse: collapse; font-size: 13.5px; min-width: 640px; width: 100%; }
+table.keys th, table.keys td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.keys th { font-family: var(--f-head); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+
+/* Terminal frames */
+.term {
+  background: var(--t-bg); color: var(--t-fg); font-family: var(--f-mono); font-size: 12.5px; line-height: 1.5;
+  border-radius: 8px; padding: 14px 14px 10px; overflow-x: auto; min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.screen { min-width: 940px; display: flex; flex-direction: column; gap: 6px; }
+.screen.s80 { min-width: 640px; max-width: 680px; }
+.screen.s60 { min-width: 520px; max-width: 560px; }
+.ln { white-space: pre; }
+.cols { display: flex; gap: 4px; align-items: stretch; }
+.stack { display: flex; flex-direction: column; gap: 4px; }
+.pane { position: relative; border: 1px solid var(--t-border); border-radius: 5px; padding: 10px 10px 6px; white-space: pre; min-width: 0; overflow: hidden; }
+.pane.f { border-color: var(--t-green); }
+.pane > .ttl { position: absolute; top: -0.78em; left: 8px; background: var(--t-bg); padding: 0 4px; color: var(--t-dim); }
+.pane.f > .ttl { color: var(--t-fg); font-weight: 700; }
+.dlg { border: 1px solid var(--t-yellow); border-radius: 5px; padding: 10px 14px; white-space: pre; align-self: center; background: var(--t-bg); box-shadow: 0 0 0 6px var(--t-bg); }
+.overlay { position: relative; }
+.overlay > .under { opacity: 0.35; }
+.overlay > .over { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+
+.d { color: var(--t-dim); } .r { color: var(--t-red); } .g { color: var(--t-green); } .y { color: var(--t-yellow); }
+.b { color: var(--t-blue); } .m { color: var(--t-magenta); } .c { color: var(--t-cyan); } .B { font-weight: 700; }
+.sel { background: var(--t-sel); display: inline-block; min-width: 100%; }
+.tab { padding: 0 6px; color: var(--t-dim); }
+.tab.on { background: var(--t-blue); color: var(--t-bg); border-radius: 3px; font-weight: 700; }
+.add { background: var(--t-add); } .del { background: var(--t-del); }
+.bar { white-space: pre; color: var(--t-dim); padding-top: 2px; }
+.bar .k { color: var(--t-fg); }
+.cursor { background: var(--t-fg); color: var(--t-bg); }
+
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+html { scroll-behavior: smooth; }
+section { scroll-margin-top: 16px; }
+.view { scroll-margin-top: 16px; }
+</style>
+
+<div class="wrap">
+<nav class="index" aria-label="Contents">
+  <div class="label">Contents</div>
+  <ol>
+    <li><a href="#principles">Principles</a></li>
+    <li><a href="#tokens">Tokens and glyphs</a></li>
+    <li><a href="#libraries">Libraries</a></li>
+    <li><a href="#motion">Motion and the ballpark</a></li>
+    <li><a href="#keys">Keys</a></li>
+    <li><a href="#dashboard">Dashboard</a>
+      <ol>
+        <li><a href="#v-prs">PR tabs</a></li>
+        <li><a href="#v-filter">Filter bar</a></li>
+        <li><a href="#v-repo">Repo picker</a></li>
+        <li><a href="#v-branches">Branches tab</a></li>
+        <li><a href="#v-runs">Runs tab</a></li>
+        <li><a href="#v-config">Config tab</a></li>
+        <li><a href="#v-doctor">Doctor tab</a></li>
+        <li><a href="#v-score">Scoreboard</a></li>
+      </ol>
+    </li>
+    <li><a href="#preview">PR preview</a>
+      <ol>
+        <li><a href="#v-overview">Overview</a></li>
+        <li><a href="#v-checks">Checks</a></li>
+        <li><a href="#v-log">Log viewer</a></li>
+        <li><a href="#v-files">Files and diff</a></li>
+        <li><a href="#v-commits">Commits</a></li>
+        <li><a href="#v-reviews">Reviews</a></li>
+      </ol>
+    </li>
+    <li><a href="#dialogs">Dialogs</a></li>
+    <li><a href="#states">States</a></li>
+    <li><a href="#small">Small terminals</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="top">
+  <h1>homerun TUI reference</h1>
+  <p>The target design for homerun's terminal UI: a gh-dash style dashboard of PR searches for the picked repo, with a tabbed preview you can move into the way you move between lazygit's panels. Each screen is drawn the way homerun will render it at about 120×36 unless marked otherwise.</p>
+  <div class="meta">
+    <span>Epic <b>homerun-7ju</b></span>
+    <span>Spec <b>docs/superpowers/specs/2026-10-17-local-first-pr-workflow-design.md</b></span>
+    <span>Revised <b>2026-10-20</b></span>
+  </div>
+  <div class="legend" style="margin-top:14px">
+    <span><span class="pill p-now">now</span> built today</span>
+    <span><span class="pill p-new">redesign</span> the next step, before release 3</span>
+    <span><span class="pill p-r3">release 3</span> files and diff</span>
+    <span><span class="pill p-r4">release 4</span> reviews</span>
+  </div>
+</header>
+
+<section id="principles">
+  <h2>Principles</h2>
+  <div class="grid2">
+    <div class="card"><h4>Search first</h4><p style="margin:0">Every PR tab is a saved GitHub search, scoped to the picked repo. <kbd>/</kbd> edits the current tab's query in GitHub's own syntax, so nothing new has to be learned.</p></div>
+    <div class="card"><h4>Move in, not just look</h4><p style="margin:0">The preview is a panel you can enter. <kbd>l</kbd> or <kbd>enter</kbd> goes in, <kbd>h</kbd> or <kbd>esc</kbd> comes out, one level at a time. A breadcrumb in the title always says where you are.</p></div>
+    <div class="card"><h4>Width goes to the work</h4><p style="margin:0">Lists stay narrow. A diff, a log or a check tree takes the whole screen and the PR list steps aside until <kbd>esc</kbd>.</p></div>
+    <div class="card"><h4>Local and GitHub, side by side</h4><p style="margin:0">homerun's own checks and GitHub-hosted ones share one column and one tree. A PR homerun has not run on says so instead of looking broken.</p></div>
+  </div>
+</section>
+
+<section id="tokens">
+  <h2>Tokens and glyphs</h2>
+  <p class="lede">The TUI draws with the terminal's ANSI palette, so it follows the user's theme. The colors below are how these mockups render each slot. Slots marked new are not in <code>internal/tui/styles.go</code> yet.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Color slots</h4>
+      <div class="swatches">
+        <div class="sw"><i style="background:var(--t-red)"></i><code>ANSI 1</code><span>Failure, conflicts, blocking merge lines</span></div>
+        <div class="sw"><i style="background:var(--t-green)"></i><code>ANSI 2</code><span>Success, approval, the focused panel's border</span></div>
+        <div class="sw"><i style="background:var(--t-yellow)"></i><code>ANSI 3</code><span>Running, behind base, warnings, dialog borders</span></div>
+        <div class="sw"><i style="background:var(--t-blue)"></i><code>ANSI 4</code><span>Active tab, PR titles in the preview (new)</span></div>
+        <div class="sw"><i style="background:var(--t-magenta)"></i><code>ANSI 5</code><span>homerun's own checks, the picked repo (new)</span></div>
+        <div class="sw"><i style="background:var(--t-cyan)"></i><code>ANSI 6</code><span>Commit SHAs, links (new)</span></div>
+        <div class="sw"><i style="background:var(--t-dim)"></i><code>ANSI 8</code><span>Secondary text, unfocused borders, key hints</span></div>
+        <div class="sw"><i style="background:var(--t-sel)"></i><code>reverse</code><span>Selected row; today it is reverse video</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <h4>Glyphs</h4>
+      <table class="glyphs">
+        <tr><td class="g">✔</td><td>passed, approved</td></tr>
+        <tr><td class="r">✘</td><td>failed, changes requested</td></tr>
+        <tr><td class="y">⟳</td><td>running</td></tr>
+        <tr><td class="d">·</td><td>queued, or no checks</td></tr>
+        <tr><td class="d">○</td><td>skipped, neutral, review required</td></tr>
+        <tr><td class="y">◇</td><td>fork PR waiting for your approval to run</td></tr>
+        <tr><td class="r">⚔</td><td>merge conflicts</td></tr>
+        <tr><td class="y">↓3</td><td>3 commits behind base</td></tr>
+        <tr><td class="m">●</td><td>the picked repo</td></tr>
+        <tr><td class="g">✓</td><td>file marked viewed</td></tr>
+        <tr><td class="d">◌</td><td>draft, pending review</td></tr>
+        <tr><td>💬</td><td>comment thread</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h4>Frames</h4>
+      <ul style="margin:0;padding-left:18px">
+        <li>Rounded boxes with the title set into the top border, as today.</li>
+        <li>The focused box has a bright border and a bold title; the rest are dim.</li>
+        <li>Tabs sit on the first line inside a box: the active tab is a filled blue chip, the others dim text.</li>
+        <li>Counts ride on tab labels: <code>Checks 2/5</code>, <code>Files 1/4</code>.</li>
+        <li>Drill-down titles are breadcrumbs: <code>#41 › CI / e2e › Run tests</code>.</li>
+        <li>Dialogs are yellow-bordered and centred over a dimmed screen.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="libraries">
+  <h2>Libraries</h2>
+  <p class="lede">The Charm stack, used for what each does best. homerun already depends on the first four; huh, harmonica and log are new. huh v2 builds on the same Bubble Tea v2 stack (checked 2026-10-21).</p>
+  <div class="tablewrap">
+  <table class="keys">
+    <tr><th>Library</th><th>Today</th><th>In the redesign</th></tr>
+    <tr><td><b>Bubble Tea v2</b></td><td>The app loop.</td><td>Unchanged.</td></tr>
+    <tr><td><b>Bubbles v2</b></td><td>viewport, textarea, help.</td><td>Also textinput for <kbd>/</kbd> and the repo picker, spinner frames for the loading runner.</td></tr>
+    <tr><td><b>Lip Gloss v2</b></td><td>Colors, <code>Place</code>, <code>JoinHorizontal</code>. Boxes are hand-drawn in <code>frame()</code>.</td><td>Borders and titled panels, <code>lipgloss/table</code> for the PR, Runs and Commits tables, <code>lipgloss/tree</code> for the file tree and job tree. Replaces the hand-drawn frames.</td></tr>
+    <tr><td><b>Glamour v2</b></td><td>PR bodies, with a style hard-coded in <code>prview.go</code>.</td><td>A style sheet built from these tokens, overridable by a glamour JSON style in config. Also renders comments, reviews and GitHub check summaries.</td></tr>
+    <tr><td><b>huh</b></td><td>Not used.</td><td>The Config form, and the merge, update and comment dialogs.</td></tr>
+    <tr><td><b>Harmonica</b></td><td>Not used.</td><td>Springs and projectiles for every motion below.</td></tr>
+    <tr><td><b>log</b></td><td>Not used; <code>slog</code> writes plain text.</td><td>A <code>slog</code> handler for <code>homerun.log</code> and a foreground <code>homerun daemon</code>. Run logs are act's output; homerun colors them itself with Lip Gloss (step headers, FAIL/PASS/error lines, search matches).</td></tr>
+  </table>
+  </div>
+</section>
+
+<style>
+  .moves { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .move { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .move h4 { margin: 0; font-family: var(--f-head); font-size: 16px; }
+  .move p { margin: 0; font-size: 14px; color: var(--muted); }
+  .move .term { white-space: pre; }
+  .stage { position: relative; height: 96px; background: var(--t-bg); border-radius: 8px; overflow: hidden; font-family: var(--f-mono); color: var(--t-fg); }
+  .stage .ball { position: absolute; width: 9px; height: 9px; border-radius: 50%; background: var(--t-fg); offset-path: path("M 34 78 Q 170 -40 330 30"); offset-distance: 0%; }
+  .stage .batter { position: absolute; left: 14px; bottom: 6px; white-space: pre; line-height: 1.1; font-size: 12px; }
+  .stage .banner { position: absolute; right: 14px; bottom: 10px; color: var(--t-yellow); font-weight: 700; font-size: 12px; }
+  .diamond { position: relative; width: 84px; height: 84px; margin: 6px auto; }
+  .diamond .base { position: absolute; width: 10px; height: 10px; border: 1.5px solid var(--t-dim); transform: rotate(45deg); }
+  .diamond .runner { position: absolute; width: 10px; height: 10px; background: var(--t-yellow); transform: rotate(45deg); left: 37px; top: 70px; }
+  @media (prefers-reduced-motion: no-preference) {
+    .stage .ball { animation: hr 2.8s cubic-bezier(.2,.6,.4,1) infinite; }
+    .diamond .runner { animation: bases 2.4s steps(1) infinite; }
+  }
+  @keyframes hr { 0% { offset-distance: 0%; opacity: 1 } 70% { offset-distance: 100%; opacity: 1 } 71%, 100% { offset-distance: 100%; opacity: 0 } }
+  @keyframes bases { 0% { left: 37px; top: 70px } 25% { left: 70px; top: 37px } 50% { left: 37px; top: 4px } 75% { left: 4px; top: 37px } }
+</style>
+
+<section id="motion">
+  <h2>Motion and the ballpark</h2>
+  <p class="lede">Baseball lives in motion and empty states only; statuses keep plain words (queued, running, failed). Every animation lasts about a second, never blocks a key, and plays once, except the loading runner. <code>animations: on | reduced | off</code> in config; reduced keeps the runner and banners and drops movement.</p>
+  <div class="moves">
+    <div class="move">
+      <h4>Loading: running the bases</h4>
+      <div class="stage" style="height:auto;padding:6px"><div class="diamond" aria-hidden="true">
+        <span class="base" style="left:37px;top:70px"></span><span class="base" style="left:70px;top:37px"></span><span class="base" style="left:37px;top:4px"></span><span class="base" style="left:4px;top:37px"></span><span class="runner"></span>
+      </div></div>
+      <div class="term"><span class="d">frames</span>  <span class="y">◆</span><span class="d">◇◇◇</span> → <span class="d">◇</span><span class="y">◆</span><span class="d">◇◇</span> → <span class="d">◇◇</span><span class="y">◆</span><span class="d">◇</span> → <span class="d">◇◇◇</span><span class="y">◆</span>   <span class="d">“searching GitHub…”</span></div>
+      <p>Replaces every spinner: searches, detail fetches, Doctor's checks.</p>
+    </div>
+    <div class="move" style="grid-column:1/-1">
+      <h4>Merge: home run</h4>
+      <div class="term" id="hr-stage" aria-label="Home run animation: pitch, swing, the ball clears the fence, the crowd stands, then a HOME RUN banner" style="white-space:pre;line-height:1.25"></div>
+      <p>Plays over the preview pane when a merge succeeds, about 1.6 seconds at 70ms a frame; any key skips it. The pitch comes in from the mound, the swing flashes on contact, the ball follows a projectile path (harmonica) over the fence trailing dots, the bleachers stand, then the block-letter banner names the PR. The row leaves the tab on the next refresh.</p>
+    </div>
+    <div class="move">
+      <h4>Run starts: the pitch</h4>
+      <div class="term"><span class="d">mound</span>  •     ·    ·    ·  <span class="d">plate</span>
+<span class="d">then</span>   <span class="y">⟳</span> 41  daemon: cut retry backoff…  <span class="y">⟳ 0/5</span></div>
+      <p>A ball crosses the row from right to left, and the row's icon starts its soft pulse.</p>
+    </div>
+    <div class="move">
+      <h4>All checks pass: the crack</h4>
+      <div class="term">  <span class="g">✔</span> 41  daemon: cut retry backoff…  <span class="g B">✔ 5/5</span>  <span class="y">⟋ crack</span></div>
+      <p>A bat swings through the row's left edge and the row flashes once in green.</p>
+    </div>
+    <div class="move">
+      <h4>A check fails: caught</h4>
+      <div class="term">  <span class="r">✘</span> CI / e2e   <span class="d">(</span>•<span class="d">)</span> → <span class="r B">(●)</span>  <span class="d">caught</span></div>
+      <p>A glove closes on the failing row. Only on transitions to failure, never on a list that loads already failed.</p>
+    </div>
+    <div class="move">
+      <h4>Update branch: stolen base</h4>
+      <div class="term">  <span class="y">↓3</span>  ·─────▸  <span class="g">↓0</span>   <span class="d">slides in on a spring</span></div>
+      <p>The behind count slides to zero after GitHub confirms the update.</p>
+    </div>
+    <div class="move">
+      <h4>Copy SHA: in the glove</h4>
+      <div class="term"><span class="d">bar</span>  <span class="g">(●)</span> caught <span class="c">9f8e7d6</span></div>
+      <p>The toast in the bar, in place of “copied”.</p>
+    </div>
+    <div class="move">
+      <h4>Rate limited: rain delay</h4>
+      <div class="term"><span class="d"> ╱  ╱   ╱  ╱   ╱  ╱   ╱</span>
+<span class="y">GitHub rate limit, retrying at 14:31</span></div>
+      <p>Light rain over the bar line until polling resumes.</p>
+    </div>
+    <div class="move">
+      <h4>Engine down: lights out</h4>
+      <div class="term"><span class="d">▔▔ ○ ○ ○ ▔▔</span>  <span class="r">homerun engine unreachable since 14:05 · r retry</span></div>
+      <p>The banner's stadium lights dim one by one, then the text stays.</p>
+    </div>
+    <div class="move">
+      <h4>No PRs match: empty bleachers</h4>
+      <div class="term"><span class="d"> ▁▁▁▁▁▁▁▁▁▁▁▁
+ ▂▂▂▂▂▂▂▂▂▂▂▂
+ ▃▃▃▃▃▃▃▃▃▃▃▃</span>
+  No open PRs match this search.
+  <span class="d">/ to change it · 3 for All open</span></div>
+      <p>Static. The same art fronts an empty Runs or Branches tab with its own line.</p>
+    </div>
+    <div class="move">
+      <h4>Launch: the wordmark</h4>
+      <div class="term"><span class="B b">homerun</span> <span class="y">⟋</span>  ·  ·  ·  •   <span class="d">once per session, any key skips</span></div>
+      <p>The ball leaves the wordmark, then the dashboard draws. Skipped when homerun opens in under 300ms anyway.</p>
+    </div>
+    <div class="move">
+      <h4>Everyday motion</h4>
+      <div class="term"><span class="tab">My PRs</span> <span class="tab on">Review</span> <span class="d">◂ spring</span>
+<span class="sel"> 39  tui: repos cursor only…</span> <span class="d">◂ glides</span></div>
+      <p>The active tab chip slides between tabs; the selection bar glides on long jumps (<kbd>G</kbd>, <kbd>g</kbd>, <kbd>n</kbd>); a diff or log springs the preview out to full width; dialogs and the repo picker scale in from the centre.</p>
+    </div>
+  </div>
+</section>
+
+<section id="keys">
+  <h2>Keys</h2>
+  <p class="lede">Vim-style movement everywhere. Letter keys act on what is selected, and the bar at the bottom lists the ones that apply right now.</p>
+  <div class="tablewrap">
+  <table class="keys">
+    <tr><th>Where</th><th>Keys</th></tr>
+    <tr><td>Everywhere</td><td><kbd>j</kbd>/<kbd>k</kbd> move · <kbd>g</kbd>/<kbd>G</kbd> top/bottom · <kbd>?</kbd> help · <kbd>q</kbd> quit · <kbd>R</kbd> repo picker · <kbd>,</kbd> Config · <kbd>!</kbd> Doctor · <kbd>S</kbd> scoreboard</td></tr>
+    <tr><td>Config</td><td><kbd>tab</kbd>/<kbd>shift+tab</kbd> field · <kbd>enter</kbd> edit · <kbd>ctrl+s</kbd> save · <kbd>e</kbd> open in <code>$EDITOR</code> · <kbd>esc</kbd> discard changes</td></tr>
+    <tr><td>Doctor</td><td><kbd>ctrl+r</kbd> run again · <kbd>enter</kbd> fix or open the named page · <kbd>o</kbd> open install page</td></tr>
+    <tr><td>Dashboard</td><td><kbd>[</kbd>/<kbd>]</kbd> or <kbd>1</kbd>–<kbd>9</kbd> tabs · <kbd>/</kbd> filter · <kbd>l</kbd>/<kbd>enter</kbd> into the preview · <kbd>r</kbd> rerun · <kbd>m</kbd> merge · <kbd>u</kbd> update · <kbd>o</kbd> open · <kbd>y</kbd> copy SHA · <kbd>ctrl+r</kbd> refresh</td></tr>
+    <tr><td>Preview</td><td><kbd>[</kbd>/<kbd>]</kbd> tabs · <kbd>enter</kbd> drill in · <kbd>h</kbd>/<kbd>esc</kbd> out one level · <kbd>c</kbd> comment · <kbd>m</kbd>/<kbd>u</kbd> merge/update</td></tr>
+    <tr><td>Checks</td><td><kbd>enter</kbd> job tree · <kbd>r</kbd> rerun · <kbd>x</kbd> cancel · <kbd>o</kbd> open on GitHub · <kbd>space</kbd> fold</td></tr>
+    <tr><td>Log</td><td><kbd>/</kbd> search · <kbd>n</kbd>/<kbd>N</kbd> next/previous match or failure · <kbd>f</kbd> follow · <kbd>esc</kbd> back</td></tr>
+    <tr><td>Diff</td><td><kbd>j</kbd>/<kbd>k</kbd> in the tree picks a file · <kbd>]</kbd>/<kbd>[</kbd> file · <kbd>n</kbd>/<kbd>N</kbd> hunk · <kbd>v</kbd> viewed · <kbd>s</kbd> split/unified · <kbd>t</kbd> hide tree · <kbd>c</kbd> comment · <kbd>V</kbd> range</td></tr>
+    <tr><td>Reviews</td><td><kbd>enter</kbd> jump to line · <kbd>r</kbd> reply · <kbd>x</kbd> resolve · <kbd>a</kbd> submit review · <kbd>A</kbd> discard pending</td></tr>
+  </table>
+  </div>
+  <p style="margin-top:12px;color:var(--muted);font-size:14px;max-width:72ch">Cancel moves from <kbd>c</kbd> to <kbd>x</kbd> on the dashboard so <kbd>c</kbd> always means comment. Today's panel numbers <kbd>1</kbd>–<kbd>3</kbd> become tab numbers.</p>
+</section>
+
+<section id="dashboard">
+  <h2>Dashboard</h2>
+  <p class="lede">One header line, a row of tabs, the PR table on the left and the preview on the right. Tabs come from config; homerun adds <code>repo:&lt;picked repo&gt;</code> to every search.</p>
+
+  <div class="view" id="v-prs">
+    <h3>PR tabs <span class="pill p-new">redesign</span></h3>
+    <div class="term"><div class="screen">
+<div class="ln"><span class="B b">homerun</span>  <span class="d">repo</span> <span class="m">matthew-reed-holden/homerun ▾</span>                                  <span class="d">engine: hosted here · 2 runs</span></div>
+<div class="ln"><span class="tab on">1 My PRs 3</span> <span class="tab">2 Review requested 1</span> <span class="tab">3 All open 7</span> <span class="tab">4 Branches 2</span> <span class="tab">5 Runs 4</span>  <span class="d">│</span> <span class="tab">6 Config</span> <span class="tab">7 Doctor <span class="y">!</span></span></div>
+<div class="cols">
+<div class="pane f" style="flex:1.05"><span class="ttl">is:open author:@me</span>   #  Title                               CI       Rev  ↓   Age
+<span class="sel"> <span class="r">✘</span> 41  daemon: cut retry backoff on quit  <span class="r">✘ 3/5</span>    <span class="g">✔</span>   <span class="y">↓3</span>  2h</span>
+ <span class="y">⟳</span> 39  tui: repos cursor only browses      <span class="y">⟳ 2/5</span>    <span class="d">○</span>        1d
+ <span class="g">✔</span> 37  docs: TUI reference                 <span class="g">✔ 5/5</span>    <span class="g">✔</span>        3d
+ <span class="d">·</span> 35  <span class="d">◌ draft</span> pr: GraphQL page cache     <span class="d">· not run</span> <span class="d">○</span>        5d
+
+
+
+</div>
+<div class="pane" style="flex:1"><span class="ttl">#41</span><span class="tab on">Overview</span> <span class="tab">Checks 3/5</span> <span class="tab">Reviews 1</span> <span class="tab">Files 4</span> <span class="tab">Commits 2</span>
+<span class="B b">daemon: cut retry backoff on quit</span>
+<span class="d">@matt · fix/quit-backoff → main · 2h</span>
+<span class="r">✘ CI / e2e</span> <span class="d">— go test ./... (1m12s)</span>
+<span class="g">✔ approved</span> by @sam · <span class="y">↓3 behind</span>
+───────────────────────────────────────
+Quitting the TUI waited out gh.Retry
+backoff when GitHub was degraded. This
+cuts the backoff short on close…
+</div>
+</div>
+<div class="bar"><span class="k">[ ]</span> tabs · <span class="k">/</span> filter · <span class="k">l</span> preview · <span class="k">r</span> rerun · <span class="k">m</span> merge · <span class="k">u</span> update · <span class="k">o</span> open · <span class="k">R</span> repo · <span class="k">?</span> help</div>
+    </div></div>
+    <ul>
+      <li>The table's title shows the tab's full query, so <kbd>/</kbd> starts from something you can read.</li>
+      <li>The first column is homerun's own rollup; <code>CI</code> counts every check, homerun's and GitHub's.</li>
+      <li><span style="color:var(--muted)">· not run</span> marks a PR homerun has never run on. Its CI column then counts GitHub's checks only.</li>
+      <li>Branches, Runs and the header's run count cover the picked repo only.</li>
+      <li>Default tabs: My PRs (<code>is:open author:@me</code>), Review requested (<code>is:open review-requested:@me</code>), All open (<code>is:open</code>), then Branches and Runs, which are not searches.</li>
+      <li>After the divider, Config and Doctor are about homerun itself, not the picked repo. Doctor's tab carries <code>!</code> or <code>✘</code> when a check needs attention.</li>
+    </ul>
+  </div>
+
+  <div class="view" id="v-filter">
+    <h3>Filter bar <span class="pill p-new">redesign</span></h3>
+    <div class="term"><div class="screen">
+<div class="ln"><span class="tab">1 My PRs 3</span> <span class="tab">2 Review requested 1</span> <span class="tab on">3 All open 2</span> <span class="tab">4 Branches 2</span> <span class="tab">5 Runs 4</span></div>
+<div class="pane f"><span class="ttl">is:open label:bug</span>   #  Title                               CI       Rev  ↓   Age
+<span class="sel"> <span class="r">✘</span> 41  daemon: cut retry backoff on quit  <span class="r">✘ 3/5</span>    <span class="g">✔</span>   <span class="y">↓3</span>  2h</span>
+ <span class="g">✔</span> 33  gh: honest App-install errors       <span class="g">✔ 5/5</span>    <span class="d">○</span>        6d
+</div>
+<div class="ln"><span class="y">/</span> is:open label:bug<span class="cursor"> </span>                                         <span class="d">enter apply · esc keep old · ctrl+u clear</span></div>
+<div class="ln"><span class="r">✘</span> <span class="d">GitHub rejected the last query: “lable” is not a qualifier. The tab kept its old query.</span></div>
+    </div></div>
+    <ul>
+      <li>The query is GitHub search syntax. <code>repo:</code> is added for you and never shown in the box.</li>
+      <li>An edited query lasts until homerun quits. Saving it as a tab is done in config.</li>
+      <li>The error line appears only after a rejected query; the table keeps the last good results.</li>
+    </ul>
+  </div>
+
+  <div class="view" id="v-repo">
+    <h3>Repo picker <span class="pill p-new">redesign</span></h3>
+    <div class="term"><div class="screen overlay">
+<div class="under"><div class="ln"><span class="B b">homerun</span>  <span class="d">repo</span> <span class="m">matthew-reed-holden/homerun ▾</span></div>
+<div class="ln"><span class="tab on">1 My PRs 3</span> <span class="tab">2 Review requested 1</span> <span class="tab">3 All open 7</span></div>
+<div class="pane" style="height:220px"></div></div>
+<div class="over"><div class="dlg"><span class="B">Pick a repo</span>
+
+<span class="y">›</span> hom<span class="cursor"> </span>
+
+<span class="sel"> <span class="r">✘</span> matthew-reed-holden/homerun <span class="m">●</span>     3 PRs </span>
+ <span class="g">✔</span> lordhill-digital/homerun-demo      1 PR
+ <span class="d">+ add lordhill-digital/theostack-infra (this folder)</span>
+
+<span class="d">enter pick · esc cancel</span></div></div>
+    </div></div>
+    <ul>
+      <li>Fuzzy search over registered repos; each row shows its rollup and open-PR count.</li>
+      <li>When homerun starts inside an unregistered repo, the picker offers to add it, replacing today's add dialog on launch.</li>
+      <li>The pick is kept by name, so repos added or reordered later keep it.</li>
+    </ul>
+  </div>
+
+  <div class="view" id="v-branches">
+    <h3>Branches tab <span class="pill p-new">redesign</span></h3>
+    <div class="term"><div class="screen">
+<div class="ln"><span class="tab">1 My PRs 3</span> <span class="tab">2 Review requested 1</span> <span class="tab">3 All open 7</span> <span class="tab on">4 Branches 2</span> <span class="tab">5 Runs 4</span></div>
+<div class="cols">
+<div class="pane f" style="flex:1"><span class="ttl">branches homerun runs</span>   Branch          SHA       Checks    Age
+<span class="sel"> <span class="g">✔</span> main            fd387ab   <span class="g">✔ 3/3</span>    10m</span>
+ <span class="r">✘</span> spike/termsafe  0c41e9a   <span class="r">✘ 1/3</span>     1d
+</div>
+<div class="pane" style="flex:1"><span class="ttl">main · fd387ab</span><span class="g">✔</span> CI / unit                       34s
+<span class="g">✔</span> CI / lint                        8s
+<span class="g">✔</span> CI / e2e                      1m02s
+</div>
+</div>
+<div class="bar"><span class="k">enter</span> checks · <span class="k">r</span> rerun · <span class="k">x</span> cancel · <span class="k">y</span> copy sha · <span class="k">o</span> open</div>
+    </div></div>
+    <p>Branches without an open PR that homerun watches. The right side is today's check tree. It works without a GitHub token.</p>
+  </div>
+
+  <div class="view" id="v-runs">
+    <h3>Runs tab <span class="pill p-now">now</span> <span class="pill p-new">redesign</span></h3>
+    <div class="term"><div class="screen">
+<div class="ln"><span class="tab">1 My PRs 3</span> <span class="tab">2 Review requested 1</span> <span class="tab">3 All open 7</span> <span class="tab">4 Branches 2</span> <span class="tab on">5 Runs 4</span></div>
+<div class="cols">
+<div class="pane f" style="flex:1.1"><span class="ttl">runs, newest first</span>   Target            SHA       Status        Took   Age
+<span class="sel"> <span class="y">⟳</span> #41               9f8e7d6   running       1m12s…     </span>
+ <span class="d">·</span> #39               3be2a10   queued                   0s
+ <span class="g">✔</span> main              fd387ab   done          1m00s    10m
+ <span class="r">✘</span> spike/termsafe    0c41e9a   done            48s     1d
+</div>
+<div class="pane" style="flex:1"><span class="ttl">#41 · 9f8e7d6 · running</span><span class="g">✔</span> CI / unit                       34s
+<span class="y">⟳</span> CI / e2e                     1m12s…
+  <span class="g">✔</span> Set up job                      1s
+  <span class="y">⟳</span> go test ./...                1m08s…
+<span class="d">·</span> CI / lint                     queued
+</div>
+</div>
+<div class="bar"><span class="k">enter</span> log · <span class="k">r</span> rerun · <span class="k">x</span> cancel · <span class="k">y</span> copy sha</div>
+    </div></div>
+    <p>Today's Runs panel as a full-width table, for the picked repo only, including older heads that are no longer on a PR. Other repos' runs are a pick (<kbd>R</kbd>) or the scoreboard away.</p>
+  </div>
+
+  <div class="view" id="v-config">
+    <h3>Config tab <span class="pill p-new">redesign</span></h3>
+    <div class="term"><div class="screen">
+<div class="ln"><span class="tab">1 My PRs 3</span> <span class="tab">2 Review requested 1</span> <span class="tab">3 All open 7</span> <span class="tab">4 Branches 2</span> <span class="tab">5 Runs 4</span>  <span class="d">│</span> <span class="tab on">6 Config</span> <span class="tab">7 Doctor <span class="y">!</span></span></div>
+<div class="cols">
+<div class="pane" style="flex:0.42"><span class="ttl">sections</span>  Engine
+  GitHub
+<span class="sel"> <span class="y">●</span> PR tabs</span>
+  Diff and display
+  Platforms
+  Repos 2
+</div>
+<div class="pane f" style="flex:2"><span class="ttl">~/.config/homerun/config.yml · unsaved</span><span class="d">┃</span> <span class="B">PR tabs</span>  <span class="d">searches shown as tabs; repo: is added for you</span>
+
+  Name                        Query
+  <span class="b">┃</span> My PRs                   <span class="sel"> is:open author:@me<span class="cursor"> </span>                       </span>
+  <span class="d">┃</span> Review requested         is:open review-requested:@me
+  <span class="d">┃</span> All open                 is:open
+  <span class="d">┃</span> <span class="y">Bugs</span> <span class="d">(new)</span>               <span class="y">is:open label:bug</span>
+  <span class="d">+ add tab</span>
+
+<span class="d">┃</span> <span class="B">Diff and display</span>
+  Diff mode                   <span class="sel"> side-by-side </span>  unified
+  Animations                  <span class="sel"> on </span>  reduced  off
+</div>
+</div>
+<div class="bar"><span class="y">1 unsaved change</span>  <span class="k">tab</span> field · <span class="k">enter</span> edit · <span class="k">ctrl+s</span> save · <span class="k">e</span> open in $EDITOR · <span class="k">esc</span> discard</div>
+    </div></div>
+    <div class="term"><div class="screen">
+<div class="pane f"><span class="ttl">~/.config/homerun/config.yml › GitHub</span><span class="d">┃</span> <span class="B">GitHub</span>
+
+  App ID                      123456
+  App private key             <span class="c">{cmd: op read op://dev/homerun/key}</span>    <span class="d">enter change source</span>
+  Your token                  <span class="c">{cmd: gh auth token}</span>                   <span class="d">enter change source</span>
+
+  <span class="d">Secrets are shown as where they come from, never their values.</span>
+</div>
+<div class="ln"><span class="g">✔</span> <span class="d">Saved. The engine reloaded its config at 14:22.</span></div>
+    </div></div>
+    <ul>
+      <li>A huh form over the same file homerun reads today. Sections on the left, fields on the right.</li>
+      <li>Saving validates first: a bad value keeps the form open with the field's error under it, and nothing is written.</li>
+      <li>Secrets are edited as their source (<code>cmd</code>, <code>env</code> or <code>file</code>). Typing a plain value shows the plaintext warning before saving.</li>
+      <li><kbd>e</kbd> opens the file in <code>$EDITOR</code>; on close homerun validates it and shows any error the same way.</li>
+    </ul>
+  </div>
+
+  <div class="view" id="v-doctor">
+    <h3>Doctor tab <span class="pill p-new">redesign</span></h3>
+    <div class="term"><div class="screen">
+<div class="ln"><span class="tab">1 My PRs 3</span> <span class="tab">2 Review requested 1</span> <span class="tab">3 All open 7</span> <span class="tab">4 Branches 2</span> <span class="tab">5 Runs 4</span>  <span class="d">│</span> <span class="tab">6 Config</span> <span class="tab on">7 Doctor !</span></div>
+<div class="pane f"><span class="ttl">health · checked 14:20</span> <span class="g">✔</span> act on PATH                        0.2.82
+ <span class="g">✔</span> docker daemon reachable            28.1.1
+ <span class="g">✔</span> config ~/.config/homerun/config.yml
+ <span class="y">!</span> user_token is stored as plaintext  <span class="d">prefer {cmd: ...} or {env: ...} · enter opens Config</span>
+ <span class="g">✔</span> App key resolves                   App 123456
+ <span class="g">✔</span> GitHub token                       4,812 of 5,000 requests left this hour
+ <span class="g">✔</span> App installed on matthew-reed-holden/homerun
+<span class="sel"> <span class="r">✘</span> App installed on lordhill-digital/homerun-demo   GitHub answered 404 · o install it</span>
+ <span class="d">·</span> engine                             hosted by this TUI · 2 runs · log ~/.local/state/homerun/homerun.log
+</div>
+<div class="bar"><span class="k">ctrl+r</span> check again · <span class="k">enter</span> fix · <span class="k">o</span> open install page · <span class="k">y</span> copy log path</div>
+    </div></div>
+    <p>The same checks as <code>homerun doctor</code>, live. They run when the tab opens and on <kbd>ctrl+r</kbd>. Every failing line names its fix, and <kbd>enter</kbd> takes you there when homerun can.</p>
+  </div>
+
+  <div class="view" id="v-score">
+    <h3>Scoreboard <span class="pill p-new">redesign</span></h3>
+    <div class="term"><div class="screen"><div class="ln"><span class="d">╔════════════════════════════════════════════════════════════════════════╗</span>
+<span class="d">║</span>  <span class="y B">█ █ █▀█ █▀▄▀█ █▀▀ █▀█ █ █ █▄ █</span>                  <span class="d">LAST 9 DAYS</span>           <span class="d">║</span>
+<span class="d">║</span>  <span class="y B">█▀█ █▄█ █ ▀ █ ██▄ █▀▄ █▄█ █ ▀█</span>                                        <span class="d">║</span>
+<span class="d">╟──────────────────────────┬─────────────────────────────┬───────────────╢</span>
+<span class="d">║</span>                          <span class="d">│</span> <span class="d">M  T  W  T  F  S  S  M  T</span>   <span class="d">│</span>  <span class="d">R    H    E</span>  <span class="d">║</span>
+<span class="d">║</span> <span class="m">● homerun</span>                <span class="d">│</span> 0  1  0  2  0  0  0  1  <span class="y B">2</span>   <span class="d">│</span>  <span class="B">6</span>   <span class="g">41</span>    <span class="r">3</span>  <span class="d">║</span>
+<span class="d">║</span>   homerun-demo           <span class="d">│</span> 0  0  1  0  0  0  0  0  <span class="y">0</span>   <span class="d">│</span>  <span class="B">1</span>    <span class="g">9</span>    <span class="r">0</span>  <span class="d">║</span>
+<span class="d">╟──────────────────────────┴─────────────────────────────┴───────────────╢</span>
+<span class="d">║</span>  <span class="d">AT BAT</span>  <span class="y">⟳</span> homerun #41 daemon: cut ret…  <span class="d">ON DECK</span>  · homerun #39 tui: r…  <span class="d">║</span>
+<span class="d">╚════════════════════════════════════════════════════════════════════════╝</span></div>
+<div class="bar"><span class="k">j/k</span> repo · <span class="k">enter</span> pick and go to its PRs · <span class="k">esc</span> back</div>
+    </div></div>
+    <ul>
+      <li>Every registered repo is a team. Innings are the last nine days, today lit.</li>
+      <li><b>R</b> counts PRs merged, <b>H</b> homerun runs where every check passed, <b>E</b> runs with any failure; cancelled runs count as neither. Each day column is that day's merges. Merges come from GitHub; H and E from homerun's own run history, so they work without a token.</li>
+      <li><b>AT BAT</b> is the running run, <b>ON DECK</b> the next queued one: the one place baseball words name a status, as part of the board's art.</li>
+      <li>Shown for a moment on launch (any key skips), in an empty Runs tab, and on <kbd>S</kbd>. A merge ticks R up with a spring after the home run plays.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="preview">
+  <h2>PR preview</h2>
+  <p class="lede">Five tabs. With focus in the PR table the preview follows the selected row; <kbd>l</kbd> moves focus into it. Views that need room take the whole screen, and <kbd>esc</kbd> brings the table back.</p>
+
+  <div class="view" id="v-overview">
+    <h3>Overview <span class="pill p-now">now</span></h3>
+    <div class="term"><div class="screen">
+<div class="cols">
+<div class="pane" style="flex:0.62"><span class="ttl">My PRs</span><span class="sel"> <span class="r">✘</span> 41 daemon: cut retry backof…</span>
+ <span class="y">⟳</span> 39 tui: repos cursor only…
+ <span class="g">✔</span> 37 docs: TUI reference
+ <span class="d">·</span> 35 <span class="d">◌</span> pr: GraphQL page cache
+</div>
+<div class="pane f" style="flex:1.6"><span class="ttl">#41</span><span class="tab on">Overview</span> <span class="tab">Checks 3/5</span> <span class="tab">Reviews 1</span> <span class="tab">Files 4</span> <span class="tab">Commits 2</span>
+<span class="B b">daemon: cut retry backoff on quit</span>                            <span class="d">open · 2h</span>
+<span class="d">@matt · fix/quit-backoff → main</span>
+──────────────────────────────────────────────────────────────
+Quitting the TUI waited out gh.Retry backoff when GitHub was
+degraded. This cuts the backoff short when a foreground close
+begins, and routes claim creates through d.retry.
+──────────────────────────────────────────────────────────────
+<span class="d">2h </span> <span class="c">●</span> <span class="c">a1b2c3d</span>  route claim creates through d.retry
+<span class="d">1h </span> <span class="g">✔</span> @sam approved: “LGTM once e2e is green”
+<span class="d">40m</span> <span class="c">●</span> <span class="c">9f8e7d6</span>  cut backoff on close
+──────────────────────────────────────────────────────────────
+<span class="r">✘ Required checks failing: CI / e2e</span>
+<span class="y">⚠ 3 commits behind main</span>                                    <span class="d">[u] update</span>
+</div>
+</div>
+<div class="bar"><span class="k">[ ]</span> tabs · <span class="k">j/k</span> scroll · <span class="k">c</span> comment · <span class="k">m</span> merge · <span class="k">u</span> update · <span class="k">o</span> open · <span class="k">h</span> back to list</div>
+    </div></div>
+    <p>Today's Description page: header, rendered body, timeline oldest first, then the merge box.</p>
+  </div>
+
+  <div class="view" id="v-checks">
+    <h3>Checks, then one check <span class="pill p-now">now</span> <span class="pill p-new">redesign</span></h3>
+    <div class="term"><div class="screen">
+<div class="cols">
+<div class="pane" style="flex:0.62"><span class="ttl">My PRs</span><span class="sel"> <span class="r">✘</span> 41 daemon: cut retry backof…</span>
+ <span class="y">⟳</span> 39 tui: repos cursor only…
+ <span class="g">✔</span> 37 docs: TUI reference
+</div>
+<div class="pane f" style="flex:1.6"><span class="ttl">#41</span><span class="tab">Overview</span> <span class="tab on">Checks 3/5</span> <span class="tab">Reviews 1</span> <span class="tab">Files 4</span> <span class="tab">Commits 2</span>
+<span class="d">head 9f8e7d6</span>
+<span class="sel"><span class="r">✘</span> CI / e2e          <span class="m">homerun</span>  <span class="y">required</span>   1m12s</span>
+<span class="g">✔</span> CI / unit         <span class="m">homerun</span>  <span class="y">required</span>     34s
+<span class="g">✔</span> CI / lint         <span class="m">homerun</span>                8s
+<span class="r">✘</span> codecov/patch     <span class="d">github</span>
+<span class="y">⟳</span> pages build       <span class="d">github</span>
+</div>
+</div>
+<div class="bar"><span class="k">enter</span> details · <span class="k">r</span> rerun · <span class="k">x</span> cancel · <span class="k">o</span> open on GitHub</div>
+    </div></div>
+    <div class="term"><div class="screen">
+<div class="pane f"><span class="ttl">#41 › CI / e2e</span><span class="g">✔</span> Set up job                                                                                    1s
+<span class="g">✔</span> actions/checkout@v4                                                                           2s
+<span class="g">✔</span> actions/setup-go@v5                                                                           4s
+<span class="sel"><span class="r">✘</span> go test ./...                                                                             1m04s</span>
+    <span class="d">│</span> --- FAIL: TestCloseCutsRetryBackoffShort (0.50s)
+    <span class="d">│</span>     daemon_test.go:812: backoff not cut short by close
+    <span class="d">│</span> FAIL github.com/matthew-reed-holden/homerun/internal/daemon  6.012s
+<span class="d">○</span> Post actions/checkout@v4
+</div>
+<div class="bar"><span class="k">enter</span> full log · <span class="k">space</span> fold · <span class="k">r</span> rerun · <span class="k">esc</span> back to checks</div>
+    </div></div>
+    <ul>
+      <li>One list for homerun's checks and GitHub's, on the head commit, required ones marked.</li>
+      <li><kbd>enter</kbd> on a homerun check opens its job → step tree full width, the failed step unfolded with its last lines.</li>
+      <li><kbd>enter</kbd> on a GitHub check shows its title and summary; <kbd>o</kbd> opens it on GitHub.</li>
+    </ul>
+  </div>
+
+  <div class="view" id="v-log">
+    <h3>Log viewer <span class="pill p-now">now</span></h3>
+    <div class="term"><div class="screen">
+<div class="pane f"><span class="ttl">#41 › CI / e2e › go test ./... · log</span><span class="d"> 212</span> === RUN   TestCloseCutsRetryBackoffShort
+<span class="d"> 213</span> === PAUSE TestCloseCutsRetryBackoffShort
+<span class="d"> 214</span> === CONT  TestCloseCutsRetryBackoffShort
+<span class="sel"><span class="d"> 215</span> <span class="r">--- FAIL: TestCloseCutsRetryBackoffShort (0.50s)</span></span>
+<span class="d"> 216</span>     daemon_test.go:812: backoff not cut short by close
+<span class="d"> 217</span> FAIL
+<span class="d"> 218</span> FAIL    github.com/matthew-reed-holden/homerun/internal/daemon  6.012s
+</div>
+<div class="ln"><span class="y">/</span> FAIL                                                                     <span class="d">match 1 of 3 · n next · N previous</span></div>
+    </div></div>
+    <p>Today's log view, full width. It opens at the first failure; <kbd>f</kbd> follows a running step.</p>
+  </div>
+
+  <div class="view" id="v-files">
+    <h3>Files and diff <span class="pill p-r3">release 3</span></h3>
+    <div class="term"><div class="screen">
+<div class="ln"><span class="B b">#41 daemon: cut retry backoff on quit</span>   <span class="tab">Overview</span> <span class="tab">Checks 3/5</span> <span class="tab">Reviews 1</span> <span class="tab on">Files 1/4 viewed</span> <span class="tab">Commits 2</span></div>
+<div class="cols">
+<div class="pane" style="flex:0.5"><span class="ttl">Files 1/4</span><span class="g">✓</span> cmd/homerun/main.go   <span class="g">+2</span><span class="r">−1</span>
+▾ internal/daemon/
+<span class="sel">   daemon.go          <span class="g">+38</span><span class="r">−8</span></span>
+   daemon_test.go     <span class="g">+42</span>
+▾ internal/gh/
+   client.go          <span class="g">+9</span><span class="r">−1</span>
+</div>
+<div class="pane f" style="flex:2"><span class="ttl">internal/daemon/daemon.go  +38 −8</span><span class="d"> 574</span>   for i, c := range run.Checks {       <span class="d">│ 588</span>   for i, c := range run.Checks {
+<span class="d"> 575</span>     var id int64                       <span class="d">│ 589</span>     var id int64
+                                         <span class="d">│</span><span class="add"><span class="d"> 590</span> <span class="g">+</span>   d.mu.Lock()                       </span>
+                                         <span class="d">│</span><span class="add"><span class="d"> 591</span> <span class="g">+</span>   retry := d.retry                  </span>
+                                         <span class="d">│</span><span class="add"><span class="d"> 592</span> <span class="g">+</span>   d.mu.Unlock()                     </span>
+<span class="del"><span class="d"> 576</span> <span class="r">-</span>   err := gh.Retry(cctx, func() …   </span><span class="d">│</span><span class="add"><span class="d"> 593</span> <span class="g">+</span>   err := retry(cctx, func() …       </span>
+<span class="d"> 577</span>       id, err = d.opts.Reporter…      <span class="d">│ 594</span>       id, err = d.opts.Reporter…
+<span class="d">     ⋯ 22 unchanged lines ⋯</span>
+</div>
+</div>
+<div class="bar"><span class="k">j/k</span> file · <span class="k">] [</span> file · <span class="k">n N</span> hunk · <span class="k">v</span> viewed · <span class="k">s</span> unified · <span class="k">t</span> hide tree · <span class="k">c</span> comment · <span class="k">esc</span> back</div>
+    </div></div>
+    <div class="term"><div class="screen">
+<div class="pane f"><span class="ttl">internal/daemon/daemon.go  +38 −8 · unified</span><span class="d"> 574  588</span>   for i, c := range run.Checks {
+<span class="d"> 575  589</span>     var id int64
+<span class="add"><span class="d">      590</span> <span class="g">+</span>   d.mu.Lock()                                                                       </span>
+<span class="add"><span class="d">      591</span> <span class="g">+</span>   retry := d.retry                                                                  </span>
+<span class="add"><span class="d">      592</span> <span class="g">+</span>   d.mu.Unlock()                                                                     </span>
+<span class="del"><span class="d"> 576     </span> <span class="r">-</span>   err := gh.Retry(cctx, func() (err error) {                                        </span>
+<span class="add"><span class="d">      593</span> <span class="g">+</span>   err := retry(cctx, func() (err error) {                                           </span>
+<span class="d"> 577  594</span>       id, err = d.opts.Reporter.CreateCheck(cctx, ev.Repo, ev.SHA, c.Name, ev.Key())
+</div>
+<div class="bar">tree hidden with <span class="k">t</span> · <span class="k">s</span> side-by-side · <span class="k">esc</span> back</div>
+    </div></div>
+    <ul>
+      <li>Opening a file takes the whole screen. The tree stays on the left; moving in it changes the diff at once.</li>
+      <li><code>diff: side-by-side</code> or <code>unified</code> in config; <kbd>s</kbd> flips it for the session. Under 100 columns side-by-side falls back to unified.</li>
+      <li><kbd>v</kbd> marks the file viewed on GitHub and jumps to the next unviewed file. Syntax colors come from chroma.</li>
+      <li>Files too large for GitHub's diff say “diff too large, <kbd>o</kbd> to open on GitHub”.</li>
+    </ul>
+  </div>
+
+  <div class="view" id="v-commits">
+    <h3>Commits, then one commit <span class="pill p-new">redesign</span> <span class="pill p-r3">release 3</span></h3>
+    <div class="term"><div class="screen">
+<div class="cols">
+<div class="pane" style="flex:0.62"><span class="ttl">My PRs</span><span class="sel"> <span class="r">✘</span> 41 daemon: cut retry backof…</span>
+ <span class="y">⟳</span> 39 tui: repos cursor only…
+</div>
+<div class="pane f" style="flex:1.6"><span class="ttl">#41</span><span class="tab">Overview</span> <span class="tab">Checks 3/5</span> <span class="tab">Reviews 1</span> <span class="tab">Files 4</span> <span class="tab on">Commits 2</span>
+<span class="sel"><span class="r">✘</span> <span class="c">9f8e7d6</span>  cut backoff on close                    @matt   40m</span>
+<span class="g">✔</span> <span class="c">a1b2c3d</span>  route claim creates through d.retry     @matt    2h
+</div>
+</div>
+<div class="bar"><span class="k">enter</span> files · <span class="k">y</span> copy sha · <span class="k">o</span> open</div>
+    </div></div>
+    <div class="term"><div class="screen">
+<div class="ln"><span class="B b">#41 › </span><span class="c">9f8e7d6</span> <span class="B">cut backoff on close</span>   <span class="d">@matt · 40m · 2 files</span></div>
+<div class="cols">
+<div class="pane" style="flex:0.5"><span class="ttl">Files</span>▾ internal/daemon/
+<span class="sel">   daemon.go      <span class="g">+21</span><span class="r">−3</span></span>
+   daemon_test.go <span class="g">+42</span>
+</div>
+<div class="pane f" style="flex:2"><span class="ttl">internal/daemon/daemon.go  +21 −3</span><span class="d"> 211</span>   d.mu.Lock()                           <span class="d">│ 211</span>   d.mu.Lock()
+                                          <span class="d">│</span><span class="add"><span class="d"> 212</span> <span class="g">+</span>   if !d.closing {                    </span>
+                                          <span class="d">│</span><span class="add"><span class="d"> 213</span> <span class="g">+</span>     close(d.closed)                  </span>
+                                          <span class="d">│</span><span class="add"><span class="d"> 214</span> <span class="g">+</span>   }                                  </span>
+<span class="d"> 212</span>   d.closing = true                      <span class="d">│ 215</span>   d.closing = true
+</div>
+</div>
+<div class="bar">same keys as Files · <span class="k">esc</span> back to commits</div>
+    </div></div>
+    <p>The commit list ships with the redesign. Opening a commit uses the release 3 diff view, limited to that commit's changes.</p>
+  </div>
+
+  <div class="view" id="v-reviews">
+    <h3>Reviews <span class="pill p-r4">release 4</span></h3>
+    <div class="term"><div class="screen">
+<div class="cols">
+<div class="pane" style="flex:0.62"><span class="ttl">My PRs</span><span class="sel"> <span class="r">✘</span> 41 daemon: cut retry backof…</span>
+ <span class="y">⟳</span> 39 tui: repos cursor only…
+</div>
+<div class="pane f" style="flex:1.6"><span class="ttl">#41</span><span class="tab">Overview</span> <span class="tab">Checks 3/5</span> <span class="tab on">Reviews 1</span> <span class="tab">Files 4</span> <span class="tab">Commits 2</span>
+<span class="g">✔</span> @sam approved                                              1h
+  “LGTM once e2e is green”
+<span class="sel">  💬 internal/daemon/daemon.go:590           2 replies</span>
+  💬 internal/gh/client.go:74                <span class="d">resolved</span>
+<span class="d">◌</span> your pending review: 1 comment                       <span class="d">[a] submit</span>
+</div>
+</div>
+<div class="bar"><span class="k">enter</span> jump to line · <span class="k">r</span> reply · <span class="k">x</span> resolve · <span class="k">a</span> submit review · <span class="k">A</span> discard</div>
+    </div></div>
+    <div class="term"><div class="screen">
+<div class="pane f"><span class="ttl">#41 › internal/daemon/daemon.go</span>                                          <span class="d">│</span><span class="add"><span class="d"> 590</span> <span class="g">+</span>   d.mu.Lock()                        </span>
+                                          <span class="d">│</span><span class="add"><span class="d"> 591</span> <span class="g">+</span>   retry := d.retry                   </span>
+   <span class="d">┃</span> 💬 <span class="b">@sam</span>: could this read d.retry without the lock?
+   <span class="d">┃</span>    <span class="b">@matt</span>: closeForeground swaps it under mu, so no.
+   <span class="d">┃</span>    <span class="d">[r] reply · [x] resolve</span>
+                                          <span class="d">│</span><span class="add"><span class="d"> 592</span> <span class="g">+</span>   d.mu.Unlock()                      </span>
+</div>
+    </div></div>
+    <p>Each review with its verdict and threads. A thread opens at its line in the diff, where threads always sit inline. Comments outside the diff's hunks collect in an “Outdated” block at the top of the file.</p>
+  </div>
+</section>
+
+<section id="dialogs">
+  <h2>Dialogs</h2>
+  <p class="lede">Centred, yellow-bordered, over a dimmed screen, built with huh where they take input. While one is open it takes every key; only the named key confirms.</p>
+  <div class="grid2">
+    <div class="term"><div class="screen s60"><div class="dlg"><span class="B">Merge #41 into main?</span>
+
+<span class="sel"> ● merge commit </span>
+  ○ squash
+  ○ rebase
+
+<span class="d">tab method · [y] merge · any other key cancels</span></div></div></div>
+    <div class="term"><div class="screen s60"><div class="dlg"><span class="B">Update fix/quit-backoff (3 behind main)?</span>
+
+<span class="sel"> ● merge main into the branch </span>
+  ○ rebase onto main
+
+<span class="d">tab method · [y] update · any other key cancels</span></div></div></div>
+    <div class="term"><div class="screen s60"><div class="dlg"><span class="B">Comment on #41</span>
+
+Rerunning e2e after the fix lands.<span class="cursor"> </span>
+
+
+
+<span class="d">ctrl+s send · esc keep draft and close</span></div></div></div>
+    <div class="term"><div class="screen s60"><div class="dlg"><span class="B">Run fork PR homerun#44 from @newcontrib?</span>
+
+Untrusted code runs on this machine
+(sandboxed, no secrets).
+
+<span class="d">[y] run · any other key cancels</span></div></div></div>
+    <div class="term"><div class="screen s60"><div class="dlg"><span class="B">Cancel run 7f3a (#41)?</span>
+
+<span class="d">[y] cancel run · any other key keeps it</span></div></div></div>
+    <div class="term"><div class="screen s60"><div class="dlg"><span class="B">Quit homerun?</span>
+
+2 runs in progress will be cancelled.
+
+<span class="d">[y] quit · any other key stays</span></div></div></div>
+    <div class="term" style="grid-column:1/-1"><div class="screen s80"><div class="dlg"><span class="B">Keys</span>
+
+<span class="d">dashboard</span>  [ ] tabs   / filter   l preview   R repo   r rerun   x cancel
+<span class="d">preview  </span>  enter drill in   h back   c comment   m merge   u update
+<span class="d">diff     </span>  ] [ file   n N hunk   v viewed   s split   t tree   c comment
+
+PR pages off: config error: ~/.config/homerun/config.yml: yaml: line 3:
+  did not find expected key
+warning: user_token is stored as plaintext; prefer {cmd: ...} or {env: ...}
+log: ~/.local/state/homerun/homerun.log
+
+<span class="d">any key closes</span></div></div></div>
+  </div>
+</section>
+
+<section id="states">
+  <h2>States</h2>
+  <p class="lede">What the screen says when something is missing, slow or wrong. Each one names the cause and the fix.</p>
+
+  <div class="view">
+    <h3>No GitHub token <span class="pill p-now">now</span></h3>
+    <div class="term"><div class="screen">
+<div class="ln"><span class="tab"><s>My PRs</s></span> <span class="tab"><s>Review requested</s></span> <span class="tab"><s>All open</s></span> <span class="tab on">4 Branches 2</span> <span class="tab">5 Runs 4</span></div>
+<div class="pane f"><span class="ttl">branches homerun runs</span> <span class="g">✔</span> main            fd387ab   <span class="g">✔ 3/3</span>    10m
+ <span class="r">✘</span> spike/termsafe  0c41e9a   <span class="r">✘ 1/3</span>     1d
+</div>
+<div class="bar"><span class="y">PR tabs off: gh: not logged in. Run gh auth login or set user_token.</span>  <span class="k">?</span> details</div>
+    </div></div>
+    <p>PR tabs are struck through and skipped by <kbd>[</kbd>/<kbd>]</kbd>. homerun opens on Branches. A broken config says “config error, press ? for details” instead.</p>
+  </div>
+
+  <div class="view">
+    <h3>Loading, empty, rate-limited <span class="pill p-new">redesign</span></h3>
+    <div class="term"><div class="screen">
+<div class="cols">
+<div class="pane" style="flex:1"><span class="ttl">is:open author:@me</span>
+      <span class="d">◇</span>
+    <span class="d">◇</span>   <span class="y">◆</span>
+      <span class="d">◇</span>
+  searching GitHub…
+</div>
+<div class="pane" style="flex:1"><span class="ttl">is:open label:perf</span><span class="d"> ▁▁▁▁▁▁▁▁▁▁▁▁
+ ▂▂▂▂▂▂▂▂▂▂▂▂</span>
+  No open PRs match this search.
+  <span class="d">/ to change it · 3 for All open</span>
+</div>
+<div class="pane" style="flex:1"><span class="ttl">is:open author:@me</span> <span class="r">✘</span> 41  daemon: cut retry…  <span class="r">✘ 3/5</span>
+ <span class="y">⟳</span> 39  tui: repos cursor…  <span class="y">⟳ 2/5</span>
+<span class="d">results from 14:02</span>
+
+</div>
+</div>
+<div class="bar"><span class="y">GitHub rate limit, retrying at 14:31</span>  <span class="k">[ ]</span> tabs · <span class="k">/</span> filter</div>
+    </div></div>
+    <p>A rate-limited tab keeps its last results and says how old they are. The bar line stays until polling recovers.</p>
+  </div>
+
+  <div class="view">
+    <h3>Engine stale or failed to start <span class="pill p-now">now</span></h3>
+    <div class="term"><div class="screen">
+<div class="ln"><span class="r">✘ homerun engine unreachable since 14:05 · could not host: act not found on PATH (see: homerun doctor) · r retry</span></div>
+<div class="ln"><span class="tab on">1 My PRs 3</span> <span class="tab">2 Review requested 1</span> <span class="tab">3 All open 7</span> <span class="tab">4 Branches</span> <span class="tab">5 Runs</span></div>
+<div class="pane f"><span class="ttl">is:open author:@me</span> <span class="d">?</span> 41  daemon: cut retry backoff on quit  <span class="r">✘ 2/2</span> <span class="d">github only</span>
+ <span class="d">?</span> 39  tui: repos cursor only browses      <span class="g">✔ 1/1</span> <span class="d">github only</span>
+</div>
+    </div></div>
+    <p>The red banner leads the screen. PR tabs still work from GitHub; homerun's own column shows <code>?</code> until the engine is back.</p>
+  </div>
+
+  <div class="view">
+    <h3>Not run by homerun, merged while open <span class="pill p-new">redesign</span></h3>
+    <div class="term"><div class="screen">
+<div class="cols">
+<div class="pane f" style="flex:1"><span class="ttl">#35</span><span class="tab">Overview</span> <span class="tab on">Checks 1/1</span> <span class="tab">Reviews</span> <span class="tab">Files 6</span> <span class="tab">Commits 4</span>
+<span class="d">· not run by homerun. Its branch has no workflow homerun</span>
+<span class="d">  handles, or the PR was opened before homerun watched it.</span>
+<span class="g">✔</span> pages build       <span class="d">github</span>
+</div>
+<div class="pane f" style="flex:1"><span class="ttl">#41</span><span class="tab on">Overview</span> <span class="tab">Checks</span> <span class="tab">Reviews</span> <span class="tab">Files</span> <span class="tab">Commits</span>
+<span class="m B">✔ Merged</span> into main by @matt · 6118d02
+<span class="d">It leaves this tab on the next refresh.</span>
+<span class="d">esc back</span>
+</div>
+</div>
+    </div></div>
+  </div>
+</section>
+
+<section id="small">
+  <h2>Small terminals</h2>
+  <p class="lede">Under 100 columns the preview stacks under the table. Under 24 rows homerun asks for a bigger window, as today.</p>
+  <div class="view">
+    <h3>80×24 <span class="pill p-new">redesign</span></h3>
+    <div class="term"><div class="screen s80">
+<div class="ln"><span class="B b">homerun</span> <span class="m">homerun ▾</span>  <span class="tab on">1 Mine 3</span><span class="tab">2 Rev 1</span><span class="tab">3 All 7</span><span class="tab">4 Br</span><span class="tab">5 Runs</span></div>
+<div class="pane f"><span class="ttl">is:open author:@me</span><span class="sel"> <span class="r">✘</span> 41 daemon: cut retry backoff on quit  <span class="r">✘ 3/5</span> <span class="g">✔</span> <span class="y">↓3</span>   2h</span>
+ <span class="y">⟳</span> 39 tui: repos cursor only browses    <span class="y">⟳ 2/5</span> <span class="d">○</span>      1d
+ <span class="g">✔</span> 37 docs: TUI reference               <span class="g">✔ 5/5</span> <span class="g">✔</span>      3d
+</div>
+<div class="pane"><span class="ttl">#41</span><span class="tab on">Overview</span><span class="tab">Checks</span><span class="tab">Rev</span><span class="tab">Files</span><span class="tab">Commits</span>
+<span class="B b">daemon: cut retry backoff on quit</span>
+<span class="d">@matt · fix/quit-backoff → main · ↓3</span>
+<span class="r">✘ CI / e2e</span> · <span class="g">✔ approved</span>
+</div>
+<div class="bar"><span class="k">[ ]</span> tabs · <span class="k">/</span> filter · <span class="k">l</span> preview · <span class="k">?</span> help</div>
+    </div></div>
+    <p>Tab labels shorten, the table drops the Age column first, then Rev. A diff at this width is always unified.</p>
+  </div>
+</section>
+</main>
+</div>
+
+<script>
+(function () {
+  const el = document.getElementById('hr-stage');
+  if (!el) return;
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const cls = { y: 'y', d: 'd', B: 'B', g: 'g', yB: 'y B' };
+  function grid(w, h) { return Array.from({ length: h }, () => Array.from({ length: w }, () => [' ', ''])); }
+  function put(g, x, y, s, c) { [...s].forEach((ch, i) => { const r = g[y]; if (r && x + i >= 0 && x + i < r.length) r[x + i] = [ch, c || '']; }); }
+  function render(g) {
+    return g.map(r => { let out = '', cur = '', buf = '';
+      const flush = () => { if (buf) out += cur ? '<span class="' + cur + '">' + esc(buf) + '</span>' : esc(buf); buf = ''; };
+      for (const [ch, c] of r) { if (c !== cur) { flush(); cur = c; } buf += ch; }
+      flush(); return out; }).join('\n');
+  }
+  // Projectile: the same math harmonica.Projectile runs in Go.
+  function flight(x0, y0, vx, vy, g, n) { const p = []; let x = x0, y = y0; for (let i = 0; i < n; i++) { p.push([Math.round(x), Math.round(y)]); x += vx; y += vy; vy += g; } return p; }
+  const READY = [' O /', '/|/ ', '/ \\ '], SWING = [' O  ', '/|==', '/ \\ '], FOLLOW = ['\\O  ', ' |\\ ', '/ \\ '];
+  const HR = ['█ █ █▀█ █▀▄▀█ █▀▀   █▀█ █ █ █▄ █', '█▀█ █▄█ █ ▀ █ ██▄   █▀▄ █▄█ █ ▀█'];
+  const W = 66, H = 12, ground = H - 1, fence = 50, batY = ground - 3, batX = 3;
+  const frames = [];
+  function scene(sprite, ball, ballCls, trail, up, banner) {
+    const g = grid(W, H);
+    put(g, 0, ground, '_'.repeat(fence), cls.d);
+    for (let y = ground - 4; y <= ground; y++) put(g, fence, y, '‖', cls.d);
+    for (let k = 0; k < 4; k++) put(g, fence + 1, ground - k, (up ? (k % 2 ? 'o/\\o' : '\\o/ ') : 'o o ').repeat(4).slice(0, W - fence - 1), up ? cls.y : cls.d);
+    put(g, fence + 1, ground - 5, '▁'.repeat(W - fence - 1), cls.d);
+    sprite.forEach((l, i) => put(g, batX, batY + i, l, cls.B));
+    put(g, 30, ground, '◆', cls.d);
+    trail.forEach(([x, y]) => put(g, x, y, '·', cls.d));
+    if (ball) put(g, ball[0], ball[1], ballCls === 'hit' ? '✶' : '•', ballCls === 'hit' ? cls.yB : cls.B);
+    if (banner) { put(g, 4, 1, HR[0], cls.yB); put(g, 4, 2, HR[1], cls.yB); put(g, 4, 4, '#41 merged into main', cls.g); }
+    frames.push(render(g));
+  }
+  for (let x = 29; x >= batX + 5; x -= 5) scene(READY, [x, batY + 1], '', [], false, false);
+  scene(SWING, [batX + 5, batY + 1], 'hit', [], false, false);
+  const path = flight(batX + 4, batY + 1, 2.6, -1.55, 0.13, 26), trail = [];
+  for (const p of path) { if (p[0] >= W) break; scene(FOLLOW, p, '', trail.slice(-7), p[0] > fence, false); trail.push(p); }
+  for (let i = 0; i < 6; i++) scene(FOLLOW, null, '', [], i % 2 === 0, false);
+  for (let i = 0; i < 10; i++) scene(FOLLOW, null, '', [], i % 2 === 0, true);
+  let i = frames.length - 1;
+  el.innerHTML = frames[i]; // rest on the banner frame
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  function loop() { i = 0; const t = setInterval(() => { el.innerHTML = frames[i++]; if (i >= frames.length) { clearInterval(t); setTimeout(loop, 1800); } }, 70); }
+  setTimeout(loop, 800);
+})();
+</script>
