@@ -123,7 +123,10 @@ type model struct {
 	tickLow  bool                     // one of them found the rate limit low
 	flows    map[string][]pr.Workflow // Actions workflows by repo; nil: the token may not read them
 	flowsAt  map[string]time.Time     // when they were last asked for
-	pr       *prView                  // the PR the preview is inside; nil otherwise
+	pr       *prView                  // the PR the preview shows; nil on any other row
+	details  map[string]cachedDetail  // fetched details by "repo#n@headSHA"
+	inflight bool                     // a detail fetch is out
+	hoverDue bool                     // a PR was just shown: its rest timer is still to start
 	draft    textarea.Model           // the open PR's comment; kept across esc and failed sends
 	drafts   map[string]string        // "repo#n" -> the draft of a PR left with one
 	picked   string                   // the picked repo; "" or gone means the first
@@ -372,6 +375,7 @@ func required(gh []pr.Check) map[string]bool {
 }
 
 func (m *model) syncMain() {
+	m.follow()
 	m.tree.req = nil
 	if m.pr != nil {
 		_, m.tree.req = m.prChecks()
@@ -388,7 +392,16 @@ func (m *model) syncMain() {
 	m.tree.update(cs)
 }
 
+// Update handles msg, then starts the rest timer for a PR it showed.
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	cmd := m.update(msg)
+	if h := m.hoverCmd(); h != nil {
+		cmd = tea.Batch(cmd, h)
+	}
+	return m, cmd
+}
+
+func (m *model) update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.BackgroundColorMsg:
 		m.termDark = msg.IsDark()
@@ -412,19 +425,23 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.offered = true
 			m.openPicker()
 		}
-		return m, m.prSync()
+		return m.prSync()
 	case searchMsg:
-		return m, m.onSearch(msg)
+		return m.onSearch(msg)
 	case searchTickMsg:
-		return m, m.onTick()
+		return m.onTick()
 	case flowsMsg:
 		m.onFlows(msg)
 	case detailMsg:
-		return m, m.onDetail(msg)
+		return m.onDetail(msg)
 	case detailTickMsg:
-		return m, m.onDetailTick(msg)
+		return m.onDetailTick(msg)
+	case hoverMsg:
+		if msg.gen == m.prGen {
+			return m.settle()
+		}
 	case mutatedMsg:
-		return m, m.onMutated(msg)
+		return m.onMutated(msg)
 	case rowDetailMsg:
 		m.onRowDetail(msg)
 	case addedMsg:
@@ -442,17 +459,17 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refresh()
 	case tickMsg:
 		if m.hostErr != nil {
-			return m, tea.Batch(m.fetch(), tick())
+			return tea.Batch(m.fetch(), tick())
 		}
-		return m, tea.Batch(m.fetch(), tick(), m.host())
+		return tea.Batch(m.fetch(), tick(), m.host())
 	case hostMsg:
 		m.hostBusy, m.hostErr = false, msg.err
 		if msg.ok {
-			return m, m.fetch()
+			return m.fetch()
 		}
 	case quitSignalMsg:
 		m.closeLog()
-		return m, tea.Quit
+		return tea.Quit
 	case tea.PasteMsg:
 		if m.flt != nil {
 			in, _ := m.flt.Update(msg)
@@ -467,20 +484,20 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case logMsg:
 		if msg.gen == m.gen && m.log != nil {
 			m.log.add(msg.line)
-			return m, m.nextLine()
+			return m.nextLine()
 		}
 	case logEndMsg:
 		if msg.gen == m.gen && m.log != nil {
 			m.log.end(msg.err)
 		}
 	case tea.KeyPressMsg:
-		return m, m.key(msg)
+		return m.key(msg)
 	case tea.MouseClickMsg:
-		return m, m.click(tea.Mouse(msg))
+		return m.click(tea.Mouse(msg))
 	case tea.MouseWheelMsg:
-		return m, m.wheel(tea.Mouse(msg))
+		return m.wheel(tea.Mouse(msg))
 	}
-	return m, nil
+	return nil
 }
 
 func (m *model) hasRepo(name string) bool {
@@ -505,7 +522,16 @@ func (m *model) addRepo(name string) tea.Cmd {
 	}
 }
 
+// key handles a key press, then starts the rest timer for a PR it showed.
 func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
+	cmd := m.press(k)
+	if h := m.hoverCmd(); h != nil {
+		return tea.Batch(cmd, h)
+	}
+	return cmd
+}
+
+func (m *model) press(k tea.KeyPressMsg) tea.Cmd {
 	m.fltErr = ""
 	if k.String() == "ctrl+c" && m.dlg == nil { // the picker and filter inputs would swallow it
 		m.pk, m.flt = nil, nil
@@ -545,6 +571,10 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 		m.applyTheme()
 		m.repaint()
 		m.say("theme: " + string(m.themeChoice))
+	case key.Matches(k, keys.Tab) && m.inPR() && m.log == nil:
+		if i := int(k.String()[0] - '1'); i < len(prTabs) {
+			m.pr.section = i
+		}
 	case key.Matches(k, keys.Tab):
 		return m.switchTab(int(k.String()[0] - '1'))
 	case key.Matches(k, keys.Next), key.Matches(k, keys.Prev):
@@ -615,7 +645,7 @@ func (m *model) previewKey(k tea.KeyPressMsg) tea.Cmd {
 	switch {
 	case m.log != nil:
 		return m.logKey(k)
-	case m.pr != nil:
+	case m.inPR():
 		return m.prKey(k)
 	case key.Matches(k, keys.NextTab):
 		return m.stepTab(1)
@@ -956,7 +986,7 @@ func (m *model) dugout() string {
 	switch {
 	case m.focus == onPreview && m.log != nil:
 		ctx = inLog
-	case m.focus == onPreview && m.pr != nil && m.pr.section == 0:
+	case m.inPR() && m.pr.section != 1:
 		ctx = inPreviewOverview
 	case m.focus == onPreview:
 		ctx = inPreviewChecks
@@ -1024,15 +1054,18 @@ func (m *model) click(mo tea.Mouse) tea.Cmd {
 	case lay.inPreview(mo.X, mo.Y):
 		var cmd tea.Cmd
 		if m.focus == onTable {
-			if cmd = m.enterPreview(); m.pr != nil {
-				return cmd // a PR opens on Overview
-			}
+			cmd = m.enterPreview()
 		}
+		// Positions are the layout's as clicked, before the table narrowed.
 		y := mo.Y - lay.py
 		switch {
 		case m.log != nil:
 		case m.pr == nil:
 			m.tree.click(y - len(m.previewHead(lay.pw-2)))
+		case y == prTabsY:
+			if i := m.chipAt(mo.X-lay.px, lay.pw); i >= 0 {
+				m.pr.section = i
+			}
 		case m.pr.section == 1:
 			m.tree.click(y - (prHeadH - 1) - len(m.checksHead(lay.pw-2))) // below the header, the tabs and the Actions lines
 		}
@@ -1052,14 +1085,17 @@ func (m *model) wheel(mo tea.Mouse) tea.Cmd {
 	lay := m.layout()
 	switch {
 	case lay.inTable(mo.X, mo.Y):
-		if m.pr == nil { // inside a PR the table keeps its row
+		if !m.inPR() { // inside a PR the table keeps its row
 			m.at().rows.move(d)
 			m.syncMain()
 		}
 	case !lay.inPreview(mo.X, mo.Y):
 	case m.log != nil:
 		m.log.scroll(3 * d)
-	case m.pr != nil && m.pr.section == 0:
+	case m.pr != nil && m.pr.section != 1:
+		if m.pr.section != 0 {
+			break
+		}
 		m.syncPage(lay.pw-2, lay.ph-prHeadH)
 		if d > 0 {
 			m.pr.vp.ScrollDown(3)
@@ -1226,7 +1262,7 @@ func (m *model) open() tea.Cmd {
 	}
 	switch {
 	case u != "":
-	case m.pr != nil: // a check without a URL opens the PR, never a guess
+	case m.inPR(): // a check without a URL opens the PR, never a guess
 		if m.pr.d != nil {
 			u = m.pr.d.URL
 		}
@@ -1263,7 +1299,7 @@ func (m *model) copySHA() tea.Cmd {
 		}
 	} else if it := m.selectedItem(); it != nil {
 		sha = it.SHA
-	} else if s, ok := m.selPR(); ok && m.pr == nil {
+	} else if s, ok := m.selPR(); ok && !m.inPR() {
 		sha = s.HeadSHA
 	}
 	if sha == "" {

@@ -9,16 +9,16 @@
    #2 · typo · @b│  Pick a repo                            │           +0 −0  
     typo fix      │                                          │                  
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌│                                         │╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  #1 e2e PR · d954│                                          │                  
-  #1 e2e PR  @matt│ ▌ o/e2e ● 2 PRs                         │                  
-  Checks none     │   o/backend                             │                  
-  Reviews: none · │                                          │                  
-  2  homerun      │ enter pick · esc cancel                  │                  
-  ────────────────└──────────────────────────────────────────┘──────────────    
-    CI / pass  homerun                                                    4s   
-    CI / fail  homerun  — echo bad; exit 1                                3s   
-     exit status 1                                                              
-      Set up job                                                          1s   
-      echo bad; exit 1                                                    0s   
+  o/e2e · #1      │                                          │                  
+  e2e PR          │ ▌ o/e2e ● 2 PRs                         │                  
+   OPEN   main ← f│   o/backend                             │                  
+  ◆ Overview  ◇ Ch│                                          │                  
+  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌│ enter pick · esc cancel                  │╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+  SUMMARY         └──────────────────────────────────────────┘                  
+  No description provided.                                                      
+                                                                                
+  ACTIVITY                                                                      
+   0 comments · reviews: none                                                  
+  loading…                                                                      
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
  l/enter preview · / filter · r rerun · m merge                 PR 1/2   ? help 

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -79,17 +80,17 @@ func TestEnterOpensPR(t *testing.T) {
 		t.Fatalf("detail calls %v", f.DetailCalls)
 	}
 	out := screen(m)
-	if got := chipsLine(m); got != "◆ Overview  ◇ Checks 2/4" {
+	if got := chipsLine(m); got != "◆ Overview  ◇ Checks 2/4  ◇ Reviews 1  ◇ Files 3  ◇ Commits 1" {
 		t.Fatalf("chips %q:\n%s", got, out)
 	}
-	if !strings.Contains(out, "Timeline") || !strings.Contains(out, "Merged") {
+	if !strings.Contains(out, "ACTIVITY") || !strings.Contains(out, "Merged") {
 		t.Fatalf("no Overview page:\n%s", out)
 	}
 	if b, ok := m.behindOf(1); !ok || b != 2 {
 		t.Fatalf("behind %d %v", b, ok)
 	}
 	keysIn(m, "esc")
-	if m.pr != nil || m.focus != onTable || m.rowKey() != "pr:1" {
+	if m.pr == nil || m.focus != onTable || m.rowKey() != "pr:1" {
 		t.Fatalf("esc: pr %v focus %d row %q", m.pr != nil, m.focus, m.rowKey())
 	}
 }
@@ -131,23 +132,19 @@ func TestDescriptionPage(t *testing.T) {
 	m, _ := prOpenModel(t, detailFixture())
 	page := strings.Join(strip(m.prPage(80)), "\n")
 	indexAll(t, page,
-		"✔ Merged into main", "✔ no conflicts",
-		"Heading", "Makes the thing b optional.",
-		"Timeline",
+		"✔ Merged into main",
+		"SUMMARY", "Heading", "Makes the thing b optional.",
+		"ACTIVITY",
 		ic("commit")+" abc1234 headline · @matt · 2h ago",
 		ic("comments")+" @bob · 1h ago", "\n  looks good",
 		ic("rv-approved")+" @bob approved · 1h ago",
 		ic("pr-merged")+" @matt merged · 5m ago",
-		"Checks", ic("ci-pass")+" lint required", ic("ci-run")+" build",
-		"Merge", "Merged")
+		"MERGE", "Merged")
 	if strings.Contains(page, "e2e PR") {
 		t.Fatalf("the header has the title; the page repeats it:\n%s", page)
 	}
 	if strings.Contains(page, "# Heading") || strings.Contains(page, "**b**") {
 		t.Fatalf("markdown not rendered:\n%s", page)
-	}
-	if strings.Contains(page, ic("ci-run")+" build required") {
-		t.Fatal("build is not required")
 	}
 	for _, state := range []string{"OPEN", "CLOSED"} {
 		d := detailFixture()
@@ -174,7 +171,7 @@ func TestDescriptionScrolls(t *testing.T) {
 		t.Fatal("k")
 	}
 	keysIn(m, "G")
-	if !strings.Contains(screen(m), "Merge") {
+	if !strings.Contains(screen(m), "MERGE") {
 		t.Fatalf("G:\n%s", screen(m))
 	}
 	keysIn(m, "g")
@@ -182,7 +179,7 @@ func TestDescriptionScrolls(t *testing.T) {
 		t.Fatal("g")
 	}
 	keysIn(m, "esc")
-	if m.focus != onTable || m.pr != nil {
+	if m.focus != onTable {
 		t.Fatal("esc from Overview must leave the preview")
 	}
 }
@@ -196,11 +193,17 @@ func TestDetailRefreshEvery30s(t *testing.T) {
 	if len(f.DetailCalls) != 2 || !slices.Equal(*ticks, []time.Duration{30 * time.Second}) {
 		t.Fatalf("calls %v ticks %v", f.DetailCalls, *ticks)
 	}
-	keysIn(m, "esc")
+	keysIn(m, "esc") // the preview still shows #1: its poll goes on
 	_, cmd = m.Update(detailTickMsg{gen})
 	run(m, cmd)
-	if len(f.DetailCalls) != 2 || len(*ticks) != 1 {
+	if len(f.DetailCalls) != 3 || len(*ticks) != 2 {
 		t.Fatalf("tick after esc: calls %v ticks %v", f.DetailCalls, *ticks)
+	}
+	keysIn(m, "j") // #2 now: #1's poll stops
+	_, cmd = m.Update(detailTickMsg{gen})
+	run(m, cmd)
+	if len(f.DetailCalls) != 3 || len(*ticks) != 2 {
+		t.Fatalf("tick after moving on: calls %v ticks %v", f.DetailCalls, *ticks)
 	}
 }
 
@@ -278,7 +281,7 @@ func TestPRKeysByContext(t *testing.T) {
 		t.Fatal("esc closes the log first")
 	}
 	keysIn(m, "esc")
-	if m.focus != onTable || m.pr != nil {
+	if m.focus != onTable {
 		t.Fatal("then esc leaves the preview")
 	}
 }
@@ -654,32 +657,196 @@ func TestMergedWhileOpen(t *testing.T) {
 	}
 }
 
-func TestSummaryCappedOnShortTerminal(t *testing.T) {
-	res := goldenResult()
-	res.PRs[0].Body = "one\ntwo\nthree\nfour"
-	m := searchModel(t, &pr.Fake{Results: e2eResults(res)})
-	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	lay := m.layout()
-	head := strip(m.previewHead(lay.pw - 2))
-	sources := slices.IndexFunc(head, func(l string) bool { return strings.Contains(l, " actions ") })
-	if sources < 0 || sources > 6 {
-		t.Fatalf("summary is %d rows:\n%s", sources, strings.Join(head, "\n"))
+// hoverTicks swaps hoverTick for one that notes its delay and hands back a
+// message at once.
+func hoverTicks(t *testing.T) *[]time.Duration {
+	t.Helper()
+	var got []time.Duration
+	old := hoverTick
+	hoverTick = func(d time.Duration, gen int) tea.Cmd {
+		got = append(got, d)
+		return func() tea.Msg { return hoverMsg{gen} }
 	}
-	if left := lay.ph - 1 - len(head); left < 3 { // 1: the title
-		t.Fatalf("tree keeps %d rows:\n%s", left, strings.Join(head, "\n"))
+	t.Cleanup(func() { hoverTick = old })
+	return &got
+}
+
+// hovers is every hover message cmd produces, batches walked.
+func hovers(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
 	}
-	if !strings.HasPrefix(head[0], "#1 e2e PR") || head[sources-1] == "" {
-		t.Fatalf("cut badly:\n%s", strings.Join(head, "\n"))
+	switch msg := cmd().(type) {
+	case tea.BatchMsg:
+		var out []tea.Msg
+		for _, c := range msg {
+			out = append(out, hovers(c)...)
+		}
+		return out
+	case hoverMsg:
+		return []tea.Msg{msg}
 	}
-	if full := summaryLines(res.PRs[0], 0, false, 78); len(full) <= 6 {
-		t.Fatalf("fixture too small to prove the cap: %d rows", len(full))
+	return nil
+}
+
+func hoverModel(t *testing.T) (*model, *pr.Fake) {
+	t.Helper()
+	recordDetailTicks(t)
+	d2 := openDetail()
+	d2.Number, d2.Title, d2.HeadSHA, d2.URL = 2, "typo fix", "abc1234567", "https://github.com/o/e2e/pull/2"
+	f := &pr.Fake{Details: map[string]*pr.Detail{"o/e2e#1": openDetail(), "o/e2e#2": d2}}
+	return prModel(t, f), f
+}
+
+func TestHoverShowsFullPreview(t *testing.T) {
+	m, f := hoverModel(t)
+	if m.focus != onTable {
+		t.Fatal("not on the table")
+	}
+	ls := strings.Join(previewLines(m), "\n")
+	indexAll(t, ls, "o/e2e · #1", "e2e PR", " OPEN ", "main ← feat", "◆ Overview", "SUMMARY", "ACTIVITY", "loading…")
+	if out := screen(m); strings.Contains(out, "Reviews: ") || strings.Contains(out, "Checks none") {
+		t.Fatalf("the old summary block is still drawn:\n%s", out)
+	}
+	if len(f.DetailCalls) != 0 {
+		t.Fatalf("detail fetched before rest: %v", f.DetailCalls)
 	}
 }
 
-func TestBodyLeadingBlankLinesDropped(t *testing.T) {
-	got := strip(summaryLines(pr.Summary{Number: 1, Title: "t", Body: "\n\n\nHello"}, 0, false, 80))
-	n := len(got)
-	if got[n-1] != "Hello" || got[n-2] != "" || got[n-3] == "" {
-		t.Fatalf("%q", got)
+func TestHoverDebounce(t *testing.T) {
+	m, f := hoverModel(t)
+	ticks := hoverTicks(t)
+	var msgs []tea.Msg
+	for _, k := range []string{"j", "k", "j", "k", "j"} {
+		msgs = append(msgs, hovers(keysIn(m, k))...)
 	}
+	if len(f.DetailCalls) != 0 {
+		t.Fatalf("calls before rest %v", f.DetailCalls)
+	}
+	if len(*ticks) != 5 || (*ticks)[0] != 250*time.Millisecond {
+		t.Fatalf("hover ticks %v", *ticks)
+	}
+	for _, msg := range msgs { // every move's tick lands; only the last is current
+		_, cmd := m.Update(msg)
+		run(m, cmd)
+	}
+	if !slices.Equal(f.DetailCalls, []string{"o/e2e#2"}) {
+		t.Fatalf("calls after rest %v", f.DetailCalls)
+	}
+	if out := screen(m); !strings.Contains(out, "typo fix") || !strings.Contains(out, "ACTIVITY") || strings.Contains(out, "loading…") {
+		t.Fatalf("#2's detail not shown:\n%s", out)
+	}
+	for _, k := range []string{"k", "j"} { // #1 loads; back on #2 it is cached
+		for _, msg := range hovers(keysIn(m, k)) {
+			_, cmd := m.Update(msg)
+			run(m, cmd)
+		}
+	}
+	if !slices.Equal(f.DetailCalls, []string{"o/e2e#2", "o/e2e#1"}) {
+		t.Fatalf("calls after coming back %v", f.DetailCalls)
+	}
+	if m.pr.d == nil || m.pr.number != 2 {
+		t.Fatalf("#2 not from the cache: %+v", m.pr)
+	}
+}
+
+func TestHoverOneDetailInFlight(t *testing.T) {
+	hoverTicks(t)
+	m, f := hoverModel(t)
+	first := m.fetchDetail(false)
+	if first == nil || m.fetchDetail(false) != nil {
+		t.Fatal("a second fetch went out while one was in flight")
+	}
+	run(m, first)
+	if len(f.DetailCalls) != 2 {
+		t.Fatalf("the queued fetch did not follow: %v", f.DetailCalls)
+	}
+}
+
+func TestFiveTabs(t *testing.T) {
+	m, _ := prOpenModel(t, openDetail())
+	names := []string{"Overview", "Checks", "Reviews", "Files", "Commits", "Overview"}
+	for i, n := range names {
+		if i > 0 {
+			keysIn(m, "]")
+		}
+		if got := chipsLine(m); !strings.Contains(got, "◆ "+n) {
+			t.Fatalf("after %d ]: %q", i, got)
+		}
+	}
+	keysIn(m, "[")
+	if m.pr.section != 4 {
+		t.Fatalf("[ from Overview: %d", m.pr.section)
+	}
+	for i, k := range []string{"1", "2", "3", "4", "5"} {
+		if keysIn(m, k); m.pr.section != i || m.tab != 0 {
+			t.Fatalf("%s: section %d tab %d", k, m.pr.section, m.tab)
+		}
+	}
+	if got := chipsLine(m); !strings.Contains(got, "Files 3") || !strings.Contains(got, "Reviews 1") || !strings.Contains(got, "Commits 1") {
+		t.Fatalf("counts %q", got)
+	}
+	var opened []string
+	old := openURL
+	openURL = func(u string) error { opened = append(opened, u); return nil }
+	t.Cleanup(func() { openURL = old })
+	for k, want := range map[string]string{"3": "review threads arrive in a later release", "4": "release 3", "5": "commit list arrives with part 2"} {
+		keysIn(m, k)
+		if !strings.Contains(screen(m), want) {
+			t.Fatalf("tab %s lacks %q:\n%s", k, want, screen(m))
+		}
+	}
+	keysIn(m, "4")
+	if out := screen(m); !strings.Contains(out, "3 files") || !strings.Contains(out, "+40 −7") {
+		t.Fatalf("Files lacks what is known:\n%s", out)
+	}
+	m.Update(keysIn(m, "o")())
+	keysIn(m, "5")
+	m.Update(keysIn(m, "o")())
+	keysIn(m, "3")
+	m.Update(keysIn(m, "o")())
+	want := []string{"https://github.com/o/e2e/pull/1/files", "https://github.com/o/e2e/pull/1/commits", "https://github.com/o/e2e/pull/1"}
+	if !slices.Equal(opened, want) {
+		t.Fatalf("opened %v", opened)
+	}
+}
+
+func TestOverviewHeadings(t *testing.T) {
+	m, _ := prOpenModel(t, openDetail())
+	page := strings.Join(strip(m.prPage(80)), "\n")
+	indexAll(t, page, "SUMMARY", "ACTIVITY", "MERGE")
+	if v := strings.Join(m.prPage(80), "\n"); !strings.Contains(v, claySGR) {
+		t.Fatalf("headings not clay: %q", v)
+	}
+}
+
+func TestTabClicks(t *testing.T) {
+	m, _ := hoverModel(t)
+	lay := m.layout()
+	line := strings.Split(screen(m), "\n")[lay.py+prTabsY]
+	x := cellOf(line, "Files")
+	if x < 0 {
+		t.Fatalf("no Files tab: %q", line)
+	}
+	m.click(tea.Mouse{X: x, Y: lay.py + prTabsY, Button: tea.MouseLeft})
+	if m.focus != onPreview || m.pr == nil || m.pr.section != 3 {
+		t.Fatalf("a click on Files while hovering: focus %d section %d", m.focus, m.pr.section)
+	}
+	for i, n := range []string{"Overview", "Checks", "Reviews", "Files", "Commits"} {
+		lay := m.layout()
+		line := strings.Split(screen(m), "\n")[lay.py+prTabsY]
+		m.click(tea.Mouse{X: cellOf(line, n), Y: lay.py + prTabsY, Button: tea.MouseLeft})
+		if m.pr.section != i {
+			t.Fatalf("click on %s: section %d", n, m.pr.section)
+		}
+	}
+}
+
+// TestMain makes the hover rest timer fire at once, so the helpers that run
+// every command never sleep; hoverTicks records it where a test needs to.
+func TestMain(tm *testing.M) {
+	hoverTick = func(d time.Duration, gen int) tea.Cmd {
+		return func() tea.Msg { return hoverMsg{gen} }
+	}
+	os.Exit(tm.Run())
 }

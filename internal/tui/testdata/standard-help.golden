@@ -9,16 +9,16 @@
    │ l/enter preview          G     bottom          r      rerun         │ −0  
     │ h       table            space fold            x      cancel        │     
  ╌╌╌│ R       repo             enter log             o      open          │╌╌╌╌ 
-  #1│ /       filter           /     search          y      copy sha      │     
-  #1│ ctrl+r  reload config    n     next match      m      merge         │     
-  Ch│ T       theme            N     prev match      u      update branch │     
-  Re│ ?       help             e     next failure    c      comment       │     
-  2 │ q       quit                                   ctrl+s send          │     
-  ──│                                                                     │─    
-   │ icons: nerd | unicode | ascii, now nerd · boxes here? set unicode   │4s   
-   │                                                                     │3s   
-    │ any key closes · engine: client                                     │     
-    └─────────────────────────────────────────────────────────────────────┘1s   
-      echo bad; exit 1                                                    0s   
+  o/│ /       filter           /     search          y      copy sha      │     
+  e2│ ctrl+r  reload config    n     next match      m      merge         │     
+   O│ T       theme            N     prev match      u      update branch │     
+  ◆ │ ?       help             e     next failure    c      comment       │     
+  ╌╌│ q       quit                                   ctrl+s send          │╌    
+  SU│                                                                     │     
+  No│ icons: nerd | unicode | ascii, now nerd · boxes here? set unicode   │     
+    │                                                                     │     
+  AC│ any key closes · engine: client                                     │     
+   └─────────────────────────────────────────────────────────────────────┘     
+  loading…                                                                      
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
  l/enter preview · / filter · r rerun · m merge                 PR 1/2   ? help 

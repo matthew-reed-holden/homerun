@@ -1,20 +1,20 @@
  HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 · engine ●                                                     updated 0s ago 
  ◆ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◇ 5 Runs 3                                       
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  is:pr repo:o/e2e is:open label:bug                            ╎ #1 e2e PR · d954af8 · @matt · 5m ago                 
-   Title                      CI                           ╎ #1 e2e PR  @matt · main ← feat                       
- ▌ #1 · feat · @matt          1/2                  +0 −0    5m ╎ Checks none                                          
- ▌  e2e PR                                                       ╎ Reviews: none · Files 0 (+0 −0) ·  0                
-                                                                 ╎ 2  homerun                                           
-   #2 · typo · @bob          ◇ held                 +0 −0    3h ╎ ─────────────────────────────────────────────────    
-    typo fix                                                     ╎   CI / pass  homerun                           4s   
-                                                                 ╎   CI / fail  homerun  — echo bad; exit 1       3s   
-                                                                 ╎    exit status 1                                     
-                                                                 ╎     Set up job                                 1s   
-                                                                 ╎     echo bad; exit 1                           0s   
+  is:pr repo:o/e2e is:open label:bug                            ╎ o/e2e · #1                                           
+   Title                      CI                           ╎ e2e PR                                               
+ ▌ #1 · feat · @matt          1/2                  +0 −0    5m ╎  OPEN   main ← feat  @matt · 5m ago                  
+ ▌  e2e PR                                                       ╎ ◆ Overview ◇ Checks 1/2 ◇ Reviews ◇ Files ◇ Commits  
+                                                                 ╎ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+   #2 · typo · @bob          ◇ held                 +0 −0    3h ╎ SUMMARY                                              
+    typo fix                                                     ╎ No description provided.                             
                                                                  ╎                                                      
+                                                                 ╎ ACTIVITY                                             
+                                                                 ╎  0 comments · reviews: none                         
+                                                                 ╎ loading…                                             
                                                                  ╎                                                      
-                                                                 ╎                                                      
+                                                                 ╎ MERGE                                                
+                                                                 ╎ loading…                                             
                                                                  ╎                                                      
                                                                  ╎                                                      
                                                                  ╎                                                      

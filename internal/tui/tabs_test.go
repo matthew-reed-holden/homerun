@@ -360,6 +360,7 @@ func TestCheckSources(t *testing.T) {
 		{Name: "codecov/patch", Status: "completed", Conclusion: "success", App: "codecov"},
 	}
 	m := searchModel(t, &pr.Fake{Results: e2eResults(res)})
+	keysIn(m, "l", "]")
 	out := screen(m)
 	for _, want := range []string{"3  homerun  · 2  actions  · 1  codecov ", "CI / pass  homerun ", "build  actions ", "codecov/patch  codecov "} {
 		if !strings.Contains(out, want) {
@@ -517,7 +518,7 @@ func TestUpdateBehindUnknown(t *testing.T) {
 // chipsLine is the preview pane's first inner line, unstyled and trimmed.
 func chipsLine(m *model) string {
 	lay := m.layout()
-	l := strings.Split(screen(m), "\n")[lay.py+prHeadH-1]
+	l := strings.Split(screen(m), "\n")[lay.py+prTabsY]
 	return strings.TrimSpace(strings.Trim(ansi.Cut(l, lay.px, lay.px+lay.pw), "│"))
 }
 
@@ -528,11 +529,11 @@ func TestEnterPreviewFetchesDetail(t *testing.T) {
 	if !slices.Equal(f.DetailCalls, []string{"o/e2e#1"}) || m.focus != onPreview || m.pr == nil {
 		t.Fatalf("calls %v focus %d pr %v", f.DetailCalls, m.focus, m.pr != nil)
 	}
-	if got := chipsLine(m); got != "◆ Overview  ◇ Checks 1/3" {
+	if got := chipsLine(m); got != "◆ Overview  ◇ Checks 1/3  ◇ Reviews 1  ◇ Files 3  ◇ Commits 1" {
 		t.Fatalf("chips %q:\n%s", got, screen(m))
 	}
-	if !strings.Contains(m.chips(), claySGR+"m◆") || strings.Contains(m.chips(), "\x1b[7") {
-		t.Fatalf("active chip not marked: %q", m.chips())
+	if !strings.Contains(m.chips(80), claySGR+"m◆") || strings.Contains(m.chips(80), "\x1b[7") {
+		t.Fatalf("active chip not marked: %q", m.chips(80))
 	}
 	lay := m.layout()
 	if top := strings.Split(screen(m), "\n")[lay.py]; strings.TrimSpace(ansi.Cut(top, lay.px, lay.px+lay.pw)) != "o/e2e · #1" {
@@ -545,11 +546,11 @@ func TestEnterPreviewFetchesDetail(t *testing.T) {
 
 func TestPreviewTabsSwitch(t *testing.T) {
 	m, _ := prOpenModel(t, detailFixture())
-	if m.pr.section != 0 || !strings.Contains(screen(m), "Timeline") {
+	if m.pr.section != 0 || !strings.Contains(screen(m), "ACTIVITY") {
 		t.Fatalf("not on Overview:\n%s", screen(m))
 	}
 	keysIn(m, "]")
-	if out := screen(m); m.pr.section != 1 || !strings.Contains(out, "lint  status  required") || strings.Contains(out, "Timeline") {
+	if out := screen(m); m.pr.section != 1 || !strings.Contains(out, "lint  status  required") || strings.Contains(out, "ACTIVITY") {
 		t.Fatalf("] to Checks: section %d\n%s", m.pr.section, out)
 	}
 	keysIn(m, "[")
@@ -557,7 +558,7 @@ func TestPreviewTabsSwitch(t *testing.T) {
 		t.Fatalf("[ to Overview: section %d tab %d", m.pr.section, m.tab)
 	}
 	keysIn(m, "esc")
-	if m.focus != onTable || m.pr != nil || m.rowKey() != "pr:1" {
+	if m.focus != onTable || m.pr == nil || m.rowKey() != "pr:1" {
 		t.Fatalf("esc: focus %d pr %v row %q", m.focus, m.pr, m.rowKey())
 	}
 }
@@ -618,8 +619,8 @@ func TestCommentDraftKeptAcrossLeaving(t *testing.T) {
 	keysIn(m, "c")
 	typeIn(m, "hi")
 	keysIn(m, "esc", "esc")
-	if m.pr != nil || m.focus != onTable {
-		t.Fatalf("not left: pr %v focus %d", m.pr, m.focus)
+	if m.focus != onTable {
+		t.Fatalf("not left: focus %d", m.focus)
 	}
 	run(m, keysIn(m, "enter"))
 	keysIn(m, "c")
@@ -638,7 +639,7 @@ func TestHInChecksClosesLog(t *testing.T) {
 		t.Fatal("no log")
 	}
 	keysIn(m, "h")
-	if m.log != nil || m.focus != onTable || m.pr != nil {
+	if m.log != nil || m.focus != onTable {
 		t.Fatalf("h: log %v focus %d pr %v", m.log, m.focus, m.pr)
 	}
 	// m now merges the table's row; no log is left under the dialog.

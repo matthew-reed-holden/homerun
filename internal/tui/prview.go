@@ -20,22 +20,40 @@ import (
 	"github.com/matthew-reed-holden/homerun/internal/termsafe"
 )
 
-const prDetailPoll = 30 * time.Second
+const (
+	prDetailPoll = 30 * time.Second
+	// hoverRest is how long the cursor rests on a PR row before its detail loads.
+	hoverRest = 250 * time.Millisecond
+)
 
-// prView is the PR the preview is inside: its Overview and Checks tabs.
+// prTabs are the preview's tabs inside a PR, in order.
+var prTabs = []string{"Overview", "Checks", "Reviews", "Files", "Commits"}
+
+// prView is the PR the preview shows: the selected PR row's while the table
+// has focus, the one entered while the preview has it.
 type prView struct {
-	repo    string
-	number  int
-	section int // 0 Overview, 1 Checks
-	d       *pr.Detail
-	err     error
-	vp      viewport.Model
-	pageW   int           // the width vp's content was built for; 0 forces a rebuild
-	delay   time.Duration // the next detail poll interval
-	retry   time.Time     // when a raised detail poll runs next
-	seq     int           // numbers detail fetches in the order issued
-	shown   int           // the seq of the detail result applied last
-	typing  bool          // the comment box is open
+	repo       string
+	number     int
+	section    int // an index into prTabs
+	d          *pr.Detail
+	at         time.Time // when d was fetched
+	err        error
+	vp         viewport.Model
+	pageW      int           // the width vp's content was built for; 0 forces a rebuild
+	delay      time.Duration // the next detail poll interval
+	retry      time.Time     // when a raised detail poll runs next
+	seq        int           // numbers detail fetches in the order issued
+	shown      int           // the seq of the detail result applied last
+	typing     bool          // the comment box is open
+	polling    bool          // the detail poll runs: the cursor rested, or the preview was entered
+	queued     bool          // a fetch waits for the one in flight
+	queuedTick bool          // the waiting fetch is the poll's
+}
+
+// cachedDetail is a fetched detail and when it came.
+type cachedDetail struct {
+	d  *pr.Detail
+	at time.Time
 }
 
 type (
@@ -43,12 +61,16 @@ type (
 	detailMsg struct {
 		gen  int
 		seq  int // only a result newer than the one shown is applied
+		repo string
+		n    int
 		d    *pr.Detail
 		err  error
 		low  bool
 		tick bool // from the poll tick: only these move the interval and reschedule
 	}
 	detailTickMsg struct{ gen int }
+	// hoverMsg says the cursor rested on the PR shown under gen.
+	hoverMsg struct{ gen int }
 )
 
 // detailTick is a var so tests can read the interval without waiting it out.
@@ -56,41 +78,96 @@ var detailTick = func(d time.Duration, gen int) tea.Cmd {
 	return tea.Tick(d, func(time.Time) tea.Msg { return detailTickMsg{gen} })
 }
 
-// openPR shows repo#n in the preview, on Overview, and fetches its detail.
-func (m *model) openPR(repo string, n int) tea.Cmd {
-	m.prGen++
-	m.pr = &prView{repo: repo, number: n, delay: prDetailPoll, vp: viewport.New()}
-	m.loadDraft()
-	m.syncMain()
-	return tea.Batch(m.fetchDetail(false), detailTick(prDetailPoll, m.prGen))
+// hoverTick is a var so tests can read the delay without waiting it out.
+var hoverTick = func(d time.Duration, gen int) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg { return hoverMsg{gen} })
 }
 
-// closePR leaves the PR, keeping its comment draft.
-func (m *model) closePR() {
+func detailKey(repo string, n int, sha string) string { return fmt.Sprintf("%s#%d@%s", repo, n, sha) }
+
+// inPR is whether focus is inside the shown PR.
+func (m *model) inPR() bool { return m.pr != nil && m.focus == onPreview }
+
+// follow keeps the preview on the selected PR row while the table has focus;
+// inside the preview the PR stays put.
+func (m *model) follow() {
+	if m.inPR() {
+		return
+	}
+	s, ok := m.selPR()
+	switch {
+	case !ok || m.o.PRs == nil:
+		m.dropPR()
+	case m.pr == nil || m.pr.repo != m.repo().Name || m.pr.number != s.Number:
+		m.showPR(m.repo().Name, s.Number)
+	}
+}
+
+// showPR shows repo#n on Overview with its cached detail, when its head has
+// not moved since; the rest loads once the cursor rests on it.
+func (m *model) showPR(repo string, n int) {
+	m.dropPR()
+	m.prGen++
+	p := &prView{repo: repo, number: n, delay: prDetailPoll, vp: viewport.New()}
+	if s, ok := m.summary(repo, n); ok {
+		if c, ok := m.details[detailKey(repo, n, s.HeadSHA)]; ok {
+			p.d, p.at = c.d, c.at
+		}
+	}
+	m.pr = p
+	m.loadDraft()
+	m.hoverDue = true
+}
+
+// dropPR stops showing a PR, keeping its comment draft.
+func (m *model) dropPR() {
+	if m.pr == nil {
+		return
+	}
 	m.saveDraft()
 	m.pr = nil
 	m.prGen++
-	m.closeLog()
-	m.syncMain()
 }
 
-// enterPreview moves focus into the preview; on a PR row it opens the PR.
-func (m *model) enterPreview() tea.Cmd {
-	m.setFocus(onPreview)
-	if s, ok := m.selPR(); ok && m.o.PRs != nil {
-		return m.openPR(m.repo().Name, s.Number)
+// hoverCmd is the rest timer for a PR just shown, once.
+func (m *model) hoverCmd() tea.Cmd {
+	if !m.hoverDue {
+		return nil
 	}
-	return nil
+	m.hoverDue = false
+	if m.pr == nil {
+		return nil
+	}
+	return hoverTick(hoverRest, m.prGen)
+}
+
+// settle starts the shown PR's detail poll, fetching first unless what is
+// shown came within a poll interval.
+func (m *model) settle() tea.Cmd {
+	p := m.pr
+	if p == nil || p.polling {
+		return nil
+	}
+	p.polling = true
+	var fetch tea.Cmd
+	if p.d == nil || m.now().Sub(p.at) >= prDetailPoll {
+		fetch = m.fetchDetail(false)
+	}
+	return tea.Batch(fetch, detailTick(p.delay, m.prGen))
+}
+
+// enterPreview moves focus into the preview; on a PR row, into the PR.
+func (m *model) enterPreview() tea.Cmd {
+	m.follow()
+	m.setFocus(onPreview)
+	return m.settle()
 }
 
 // leavePreview returns focus to the table, on the row it left.
 func (m *model) leavePreview() {
-	if m.pr != nil {
-		m.closePR()
-	} else {
-		m.closeLog()
-	}
+	m.closeLog()
 	m.setFocus(onTable)
+	m.syncMain()
 }
 
 // setFocus moves focus to a, rebuilding the rows when the table narrows or
@@ -103,7 +180,7 @@ func (m *model) setFocus(a area) {
 	}
 }
 
-// refetchPR fetches the open PR's detail now, as after a mutation.
+// refetchPR fetches the shown PR's detail now, as after a mutation.
 func (m *model) refetchPR() tea.Cmd {
 	if m.pr == nil {
 		return nil
@@ -111,26 +188,57 @@ func (m *model) refetchPR() tea.Cmd {
 	return m.fetchDetail(false)
 }
 
+// fetchDetail fetches the shown PR's detail. One fetch is in flight at a
+// time: another waits for it, and the poll's waits as the poll's.
 func (m *model) fetchDetail(tick bool) tea.Cmd {
-	api, repo, n, gen := m.o.PRs, m.pr.repo, m.pr.number, m.prGen
-	if api == nil {
+	api, p, gen := m.o.PRs, m.pr, m.prGen
+	if api == nil || p == nil {
 		return nil
 	}
-	m.pr.seq++
-	seq := m.pr.seq
+	if m.inflight {
+		p.queued, p.queuedTick = true, p.queuedTick || tick
+		return nil
+	}
+	m.inflight = true
+	p.seq++
+	seq, repo, n := p.seq, p.repo, p.number
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), prTimeout)
 		defer cancel()
 		d, err := api.Detail(ctx, repo, n)
 		var rl *pr.RateLimitError
-		return detailMsg{gen: gen, seq: seq, d: d, err: err, low: api.RateLow() || errors.As(err, &rl), tick: tick}
+		return detailMsg{gen: gen, seq: seq, repo: repo, n: n, d: d, err: err, low: api.RateLow() || errors.As(err, &rl), tick: tick}
+	}
+}
+
+// remember caches a fetched detail by its head, and its behind count.
+func (m *model) remember(repo string, n int, d *pr.Detail) {
+	if m.details == nil {
+		m.details = map[string]cachedDetail{}
+	}
+	m.details[detailKey(repo, n, d.HeadSHA)] = cachedDetail{d, m.now()}
+	if d.Behind >= 0 {
+		if m.behind == nil {
+			m.behind = map[string]int{}
+		}
+		m.behind[fmt.Sprintf("%s#%d", repo, n)] = d.Behind
 	}
 }
 
 func (m *model) onDetail(msg detailMsg) tea.Cmd {
+	m.inflight = false
+	if msg.err == nil && msg.d != nil {
+		m.remember(msg.repo, msg.n, msg.d)
+	}
+	var next tea.Cmd
+	if p := m.pr; p != nil && p.queued {
+		tick := p.queuedTick
+		p.queued, p.queuedTick = false, false
+		next = m.fetchDetail(tick)
+	}
 	p := m.pr
 	if p == nil || msg.gen != m.prGen {
-		return nil
+		return next
 	}
 	// A slow poll must not undo a newer refetch, as after a mutation;
 	// it still schedules the next poll.
@@ -138,19 +246,13 @@ func (m *model) onDetail(msg detailMsg) tea.Cmd {
 		p.shown = msg.seq
 		p.err = msg.err
 		if msg.err == nil {
-			p.d = msg.d
-			if p.d.Behind >= 0 {
-				if m.behind == nil {
-					m.behind = map[string]int{}
-				}
-				m.behind[m.prRef()] = p.d.Behind
-			}
+			p.d, p.at = msg.d, m.now()
 		}
 		p.pageW = 0
 		m.refresh()
 	}
 	if !msg.tick {
-		return nil
+		return next
 	}
 	if msg.low {
 		p.delay = min(p.delay*2, prPollMax)
@@ -158,7 +260,7 @@ func (m *model) onDetail(msg detailMsg) tea.Cmd {
 	} else {
 		p.delay = prDetailPoll
 	}
-	return detailTick(p.delay, m.prGen)
+	return tea.Batch(next, detailTick(p.delay, m.prGen))
 }
 
 func (m *model) onDetailTick(msg detailTickMsg) tea.Cmd {
@@ -170,7 +272,15 @@ func (m *model) onDetailTick(msg detailTickMsg) tea.Cmd {
 
 func (m *model) prRef() string { return fmt.Sprintf("%s#%d", m.pr.repo, m.pr.number) }
 
-// prItem is the daemon's item for the open PR, nil when it has none.
+// prSummary is the shown PR's summary: the detail's, else the search's.
+func (m *model) prSummary() (pr.Summary, bool) {
+	if m.pr.d != nil {
+		return m.pr.d.Summary, true
+	}
+	return m.summary(m.pr.repo, m.pr.number)
+}
+
+// prItem is the daemon's item for the shown PR, nil when it has none.
 func (m *model) prItem() (api.Repo, *api.Item) {
 	for _, r := range m.state.Repos {
 		if r.Name != m.pr.repo {
@@ -186,13 +296,15 @@ func (m *model) prItem() (api.Repo, *api.Item) {
 }
 
 // prChecks is the Checks tab: the daemon's checks for the PR's head and
-// GitHub's (mergedChecks). req names the checks the rollup marks required.
+// GitHub's (mergedChecks), from the detail or, before it lands, the search.
+// req names the checks the rollup marks required.
 func (m *model) prChecks() (cs []api.Check, req map[string]bool) {
 	_, it := m.prItem()
-	if m.pr.d == nil {
-		return mergedChecks(it, nil), nil
+	if m.pr.d != nil {
+		return mergedChecks(it, m.pr.d.Checks), required(m.pr.d.Checks)
 	}
-	return mergedChecks(it, m.pr.d.Checks), required(m.pr.d.Checks)
+	s, _ := m.summary(m.pr.repo, m.pr.number)
+	return mergedChecks(it, s.Checks), required(s.Checks)
 }
 
 func passed(conclusion string) bool {
@@ -213,15 +325,19 @@ func passing(cs []api.Check) int {
 // prKey routes a key inside a PR's preview, outside a log.
 func (m *model) prKey(k tea.KeyPressMsg) tea.Cmd {
 	switch {
-	case key.Matches(k, keys.PrevTab), key.Matches(k, keys.NextTab):
-		m.pr.section = 1 - m.pr.section
+	case key.Matches(k, keys.NextTab):
+		m.pr.section = (m.pr.section + 1) % len(prTabs)
 		return nil
-	case m.pr.section == 0:
-		return m.overviewKey(k)
+	case key.Matches(k, keys.PrevTab):
+		m.pr.section = (m.pr.section + len(prTabs) - 1) % len(prTabs)
+		return nil
+	case m.pr.section == 1:
+		return m.checksKey(k)
 	}
-	return m.checksKey(k)
+	return m.overviewKey(k)
 }
 
+// overviewKey is the keys of every tab but Checks; only Overview scrolls.
 func (m *model) overviewKey(k tea.KeyPressMsg) tea.Cmd {
 	lay := m.layout()
 	m.syncPage(lay.pw-2, lay.ph-prHeadH)
@@ -251,12 +367,25 @@ func (m *model) overviewKey(k tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
+// prURL is the shown PR on GitHub.
+func (m *model) prURL() string {
+	if m.pr.d != nil && m.pr.d.URL != "" {
+		return m.pr.d.URL
+	}
+	if _, it := m.prItem(); it != nil && it.URL != "" {
+		return it.URL
+	}
+	return fmt.Sprintf("https://github.com/%s/pull/%d", m.pr.repo, m.pr.number)
+}
+
+// openPRURL opens the GitHub page for the tab: the files, the commits or the PR.
 func (m *model) openPRURL() tea.Cmd {
-	u := ""
-	if m.pr.d != nil {
-		u = m.pr.d.URL
-	} else if _, it := m.prItem(); it != nil {
-		u = it.URL
+	u := m.prURL()
+	switch m.pr.section {
+	case 3:
+		u += "/files"
+	case 4:
+		u += "/commits"
 	}
 	if !httpURL(u) {
 		m.say("nothing to open on github.com here")
@@ -265,55 +394,140 @@ func (m *model) openPRURL() tea.Cmd {
 	return openCmd(u)
 }
 
-// chips are the preview tabs as bases: ◆ in clay on the active one, ◇ on the
-// other; the checks count takes the rollup's colour.
-func (m *model) chips() string {
+// chipLabels are the tabs' labels with what is known of their counts:
+// Checks passing/all in the rollup's colour, then reviews, files and commits.
+func (m *model) chipLabels(counts bool) []string {
 	cs, _ := m.prChecks()
-	labels := []string{"Overview", "Checks"}
-	for i, l := range labels {
-		mark, st := th.line.Render("◇"), th.dim
-		if i == m.pr.section {
-			mark, st = th.clay.Render("◆"), th.fg.Bold(true)
-		}
-		labels[i] = mark + " " + st.Render(l)
+	out := make([]string, len(prTabs))
+	copy(out, prTabs)
+	out[1] += " " + fmt.Sprintf("%d/%d", passing(cs), len(cs))
+	if !counts {
+		return out
 	}
-	labels[1] += " " + tint(Rollup(cs), fmt.Sprintf("%d/%d", passing(cs), len(cs)))
-	return strings.Join(labels, "  ")
+	if s, ok := m.prSummary(); ok {
+		out[3] += fmt.Sprintf(" %d", s.ChangedFiles)
+	}
+	if d := m.pr.d; d != nil {
+		out[2] += fmt.Sprintf(" %d", events(d, "review"))
+		out[4] += fmt.Sprintf(" %d", events(d, "commit"))
+	}
+	return out
+}
+
+// events counts the detail's timeline entries of kind.
+func events(d *pr.Detail, kind string) int {
+	n := 0
+	for _, e := range d.Timeline {
+		if e.Kind == kind {
+			n++
+		}
+	}
+	return n
+}
+
+// chipsLayout is the tabs as bases, w wide at most, and where each label
+// starts and ends: ◆ in clay on the active one, ◇ on the others; the checks
+// count takes the rollup's colour. A narrow pane closes the gaps, then drops
+// the counts other than Checks', then the bases but the active one.
+func (m *model) chipsLayout(w int) (string, [][2]int) {
+	cs, _ := m.prChecks()
+	var plain []string
+	sep, marks := "  ", true
+	for _, try := range []struct {
+		sep    string
+		counts bool
+		marks  bool
+	}{{"  ", true, true}, {" ", true, true}, {" ", false, true}, {" ", false, false}} {
+		plain, sep, marks = m.chipLabels(try.counts), try.sep, try.marks
+		if n := ansi.StringWidth(strings.Join(plain, sep)) + 2*len(plain); n <= w || !marks {
+			break
+		}
+	}
+	var parts []string
+	var spans [][2]int
+	x := 0
+	for i, l := range plain {
+		mark, st := th.line.Render("◇")+" ", th.dim
+		if i == m.pr.section {
+			mark, st = th.clay.Render("◆")+" ", th.fg.Bold(true)
+		} else if !marks {
+			mark = ""
+		}
+		name, count, _ := strings.Cut(l, " ")
+		s := mark + st.Render(name)
+		if count != "" {
+			if i == 1 {
+				s += " " + tint(Rollup(cs), count)
+			} else {
+				s += " " + th.dim.Render(count)
+			}
+		}
+		lw := ansi.StringWidth(ansi.Strip(mark)) + ansi.StringWidth(l)
+		spans = append(spans, [2]int{x, x + lw})
+		x += lw + len(sep)
+		parts = append(parts, s)
+	}
+	return truncate(strings.Join(parts, sep), w), spans
+}
+
+func (m *model) chips(w int) string {
+	s, _ := m.chipsLayout(w)
+	return s
+}
+
+// chipAt is the tab whose label covers column x of the tabs line, -1 for none.
+func (m *model) chipAt(x, w int) int {
+	_, spans := m.chipsLayout(w)
+	for i, s := range spans {
+		if x >= s[0] && x < s[1] {
+			return i
+		}
+	}
+	return -1
 }
 
 // prHeadH is the lines above a PR's tab body: where, the title, the state
-// line and the tabs.
-const prHeadH = 4
+// line, the tabs and a foul line under them; prTabsY is the tabs' line.
+const (
+	prHeadH = 5
+	prTabsY = 3
+)
 
 // prPreviewView is the preview inside a PR: repo · #n dim, the title in bold,
 // the state tile with base ← head and author · age, the tabs, then the active tab.
 func (m *model) prPreviewView(w, h int) string {
 	focused := m.focus == onPreview
 	inner := max(0, h-prHeadH)
-	lines := append(m.prHeader(w-2), m.chips())
-	if m.pr.section == 0 {
+	lines := append(m.prHeader(w-2), m.chips(w), foul(w-2, false))
+	switch m.pr.section {
+	case 0:
 		m.syncPage(w-2, inner)
 		lines = append(lines, strings.Split(m.pr.vp.View(), "\n")...)
-	} else {
+	case 1:
 		head := m.checksHead(w - 2)
 		lines = append(lines, head...)
 		lines = append(lines, m.tree.rows(w, max(0, inner-len(head)), m.now(), focused)...)
+	default:
+		lines = append(lines, m.tabLines(w-2)...)
+	}
+	where := termsafe.Line(m.pr.repo) + fmt.Sprintf(" · #%d", m.pr.number)
+	if s, ok := m.prSummary(); ok && m.pr.section == 1 && s.HeadSHA != "" {
+		where += " · head " + short(termsafe.Line(s.HeadSHA))
 	}
 	// The where line stays dim: the foul line beside it shows the focus.
-	return section(termsafe.Line(m.pr.repo)+fmt.Sprintf(" · #%d", m.pr.number), lines, w, h, false)
+	return section(where, lines, w, h, false)
 }
 
 // prHeader is the title and the state line, w wide, from the detail or,
 // before it lands, the search's summary; blank lines while there is neither.
 func (m *model) prHeader(w int) []string {
-	p := m.pr
-	s, ok := m.summary(p.repo, p.number)
-	state := "OPEN"
-	if p.d != nil {
-		s, ok, state = p.d.Summary, true, p.d.State
-	}
+	s, ok := m.prSummary()
 	if !ok {
 		return []string{"", ""}
+	}
+	state := s.State
+	if m.pr.d != nil {
+		state = m.pr.d.State
 	}
 	title := th.fg.Bold(true).Render(truncate(termsafe.Line(s.Title), w))
 	l := stateTile(state, s.IsDraft)
@@ -330,19 +544,21 @@ func (m *model) prHeader(w int) []string {
 	return []string{title, truncate(l, w)}
 }
 
-// checksHead is what the Checks tab shows above the tree: the doubled and
-// left-to-Actions lines with a rule under them, judged by the detail's checks
-// or, before it lands, the search's, led by why homerun has not run a PR it
-// has no item for; nil when there are none.
+// checksHead is what the Checks tab shows above the tree: the checks'
+// sources, why homerun has not run a PR it has no item for, and the doubled
+// and left-to-Actions lines, judged by the detail's checks or, before it
+// lands, the search's; a rule under them, or nil when there are none.
 func (m *model) checksHead(inner int) []string {
 	var gh []pr.Check
-	if m.pr.d != nil {
-		gh = m.pr.d.Checks
-	} else if s, ok := m.summary(m.pr.repo, m.pr.number); ok {
+	if s, ok := m.prSummary(); ok {
 		gh = s.Checks
 	}
+	cs, _ := m.prChecks()
 	_, it := m.prItem()
 	var out []string
+	if l := sourceCounts(cs); l != "" {
+		out = append(out, truncate(l, inner))
+	}
 	if it == nil {
 		out = append(out, th.dim.Render(truncate("· not run by homerun: its branch has no workflow homerun handles, or the PR was opened before homerun watched it.", inner)))
 	}
@@ -365,55 +581,116 @@ func (m *model) syncPage(w, h int) {
 	}
 }
 
-// prPage is the Overview page, w wide: header, body, timeline, checks, merge.
+// heading is an Overview section's all-caps label, in clay.
+func heading(s string) string { return th.clay.Bold(true).Render(s) }
+
+func loading() string { return th.dim.Render("loading…") }
+
+// prPage is the Overview page, w wide: SUMMARY, the description; ACTIVITY,
+// the timeline; MERGE, the merge box. Before the detail lands it shows the
+// search's body and merge state, and loading… for the rest.
 func (m *model) prPage(w int) []string {
 	p := m.pr
+	s, known := m.prSummary()
+	d := p.d
 	var out []string
-	if p.d != nil && p.d.State == "MERGED" {
-		out = append(out, th.clay.Render(truncate(mergedLine(p.d), w)), th.dim.Render("It leaves this tab on the next refresh."), "")
+	if d != nil && d.State == "MERGED" {
+		out = append(out, th.clay.Render(truncate(mergedLine(d), w)), th.dim.Render("It leaves this tab on the next refresh."), "")
 	}
 	if p.err != nil {
 		out = append(out, strings.Split(th.out.Width(max(1, w)).Render(termsafe.Line(p.err.Error())), "\n")...)
 	}
-	behind, known := m.behind[m.prRef()]
-	if p.d == nil {
-		if s, ok := m.summary(p.repo, p.number); ok {
-			out = append(out, summaryLines(s, behind, known, w)[1:]...) // the header has the headline
-		} else if p.err == nil {
-			out = append(out, th.dim.Render("loading…"))
+	out = append(out, heading("SUMMARY"))
+	switch {
+	case strings.TrimSpace(s.Body) != "":
+		out = append(out, wrapLines(renderMarkdown(s.Body, w), w)...)
+	case known:
+		out = append(out, th.dim.Render("No description provided."))
+	default:
+		out = append(out, loading())
+	}
+	out = append(out, "", heading("ACTIVITY"))
+	if known {
+		out = append(out, th.dim.Render(truncate(ic("comments")+" "+plural(s.Comments, "comment")+" · reviews: "+reviewWord(s.ReviewDecision), w)))
+	}
+	switch {
+	case d == nil:
+		out = append(out, loading())
+	case len(d.Timeline) == 0:
+		out = append(out, th.dim.Render("none"))
+	}
+	if d != nil {
+		for _, e := range d.Timeline {
+			out = append(out, m.eventLines(e, w)...)
+		}
+	}
+	out = append(out, "", heading("MERGE"))
+	if d != nil {
+		for _, l := range mergeLines(d) {
+			out = append(out, wrapLines(paintMerge(l), w)...)
 		}
 		return out
 	}
-	d := p.d
-	head := d.Summary
-	head.Body = ""
-	out = append(out, summaryLines(head, behind, known, w)[1:]...) // the header has the headline
-	out = append(out, th.dim.Render(strings.Repeat("─", w)), "")
-	if strings.TrimSpace(d.Body) == "" {
-		out = append(out, th.dim.Render("No description provided."))
-	} else {
-		out = append(out, wrapLines(renderMarkdown(d.Body, w), w)...)
-	}
-	out = append(out, "", th.bold.Render("Timeline"))
-	for _, e := range d.Timeline {
-		out = append(out, m.eventLines(e, w)...)
-	}
-	out = append(out, "", th.bold.Render("Checks"))
-	if len(d.Checks) == 0 {
-		out = append(out, th.dim.Render("none"))
-	}
-	for _, c := range d.Checks {
-		l := paint(Icon(c.Status, c.Conclusion)) + " " + termsafe.Line(c.Name)
-		if c.Required {
-			l += " " + th.dim.Render("required")
+	if known {
+		behind, ok := m.behind[m.prRef()]
+		for _, l := range summaryMerge(s, behind, ok) {
+			out = append(out, truncate(l, w))
 		}
-		out = append(out, wrapLines(l, w)...)
 	}
-	out = append(out, "", th.bold.Render("Merge"))
-	for _, l := range mergeLines(d) {
-		out = append(out, wrapLines(paintMerge(l), w)...)
+	return append(out, loading())
+}
+
+// tabLines is the Reviews, Files or Commits tab, w wide: what is known
+// already, then what is still to come and where GitHub has it.
+func (m *model) tabLines(w int) []string {
+	p := m.pr
+	s, known := m.prSummary()
+	var out []string
+	note := ""
+	switch p.section {
+	case 2:
+		note = "review threads arrive in a later release · o opens the PR on GitHub"
+		if known {
+			out = append(out, "Review: "+reviewWord(s.ReviewDecision)+th.dim.Render(" · ")+ic("comments")+" "+plural(s.Comments, "comment"))
+		}
+		if p.d != nil {
+			for _, e := range p.d.Timeline {
+				if e.Kind == "review" {
+					out = append(out, m.eventLines(e, w)...)
+				}
+			}
+		} else {
+			out = append(out, loading())
+		}
+	case 3:
+		note = "diff view arrives in release 3 · o opens the files on GitHub"
+		if known {
+			out = append(out, plural(s.ChangedFiles, "file")+"  "+th.safe.Render(fmt.Sprintf("+%d", s.Additions))+" "+th.out.Render(fmt.Sprintf("−%d", s.Deletions)))
+		}
+	case 4:
+		note = "commit list arrives with part 2 · o opens the PR on GitHub"
+		switch {
+		case p.d != nil:
+			out = append(out, plural(events(p.d, "commit"), "commit")+th.dim.Render(" · head ")+th.sha.Render(short(termsafe.Line(s.HeadSHA))))
+		case known:
+			out = append(out, th.dim.Render("head ")+th.sha.Render(short(termsafe.Line(s.HeadSHA))), loading())
+		}
 	}
-	return out
+	var lines []string
+	for _, l := range out {
+		lines = append(lines, wrapLines(l, w)...)
+	}
+	if len(lines) > 0 {
+		lines = append(lines, "")
+	}
+	return append(lines, wrapLines(th.dim.Render(note), w)...)
+}
+
+func plural(n int, word string) string {
+	if n == 1 {
+		return "1 " + word
+	}
+	return fmt.Sprintf("%d %ss", n, word)
 }
 
 // mergedLine is "✔ Merged into main by @matt · 6118d02", with what GitHub gave.

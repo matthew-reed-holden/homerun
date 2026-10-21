@@ -1,22 +1,22 @@
  HOMERUN  o/e2e  engine ●  stale: daemon unreachable (since 0s) · could not start: act not found on PATH (see: homerun… 
  ◆ 1 My PRs 3  ◇ 2 Review requested 3  ◇ 3 All open 3  ◇ 4 Branches 1  ◇ 5 Runs 3                                       
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  is:pr repo:o/e2e is:open author:@me                           ╎ #1 e2e PR · d954af8 · @matt · 5m ago                 
-   Title           CI                                      ╎ #1 e2e PR  @matt · main ← feat                       
- ▌ #1 · feat · …   0/1 github only               +40 −7    5m ╎ ✔ no conflicts                                       
- ▌  e2e PR                                                       ╎ Checks ✘ 1 failing (1 required)                      
-                                                                 ╎ Reviews: approved · Files 3 (+40 −7) ·  2           
-   #2 · @bob      · github only                    +0 −0    3h ╎                                                      
-    typo fix                                                     ╎ Makes the thing                                      
-                                                                 ╎ optional.                                            
-   #5 · @sam      · github only                     +0 −0    5d ╎ 2  homerun  · 1  actions                             
-     DRAFT  pr: GraphQL page cache                               ╎ ─────────────────────────────────────────────────    
-                                                                 ╎   CI / pass  homerun                           4s   
-                                                                 ╎   CI / fail  homerun  — echo bad; exit 1       3s   
-                                                                 ╎    exit status 1                                     
-                                                                 ╎     Set up job                                 1s   
-                                                                 ╎     echo bad; exit 1                           0s   
-                                                                 ╎   ci/gh  actions  required                          
+  is:pr repo:o/e2e is:open author:@me                           ╎ o/e2e · #1                                           
+   Title           CI                                      ╎ e2e PR                                               
+ ▌ #1 · feat · …   0/1 github only               +40 −7    5m ╎  OPEN   main ← feat  @matt · 5m ago                  
+ ▌  e2e PR                                                       ╎ ◆ Overview ◇ Checks 1/3 ◇ Reviews ◇ Files ◇ Commits  
+                                                                 ╎ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+   #2 · @bob      · github only                    +0 −0    3h ╎ SUMMARY                                              
+    typo fix                                                     ╎ Makes the thing optional.                            
+                                                                 ╎                                                      
+   #5 · @sam      · github only                     +0 −0    5d ╎ ACTIVITY                                             
+     DRAFT  pr: GraphQL page cache                               ╎  2 comments · reviews: approved                     
+                                                                 ╎ loading…                                             
+                                                                 ╎                                                      
+                                                                 ╎ MERGE                                                
+                                                                 ╎ ✔ no conflicts                                       
+                                                                 ╎ Checks ✘ 1 failing (1 required)                      
+                                                                 ╎ loading…                                             
                                                                  ╎                                                      
                                                                  ╎                                                      
                                                                  ╎                                                      

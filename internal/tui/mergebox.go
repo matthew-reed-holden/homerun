@@ -156,8 +156,11 @@ func (m *model) onMutated(msg mutatedMsg) tea.Cmd {
 	} else {
 		m.say(msg.done)
 	}
-	if mine {
+	switch {
+	case mine && m.focus == onPreview:
 		return m.refetchPR()
+	case mine:
+		return tea.Batch(m.refetchPR(), m.fetchSearches(false))
 	}
 	return m.fetchSearches(false)
 }
@@ -259,7 +262,7 @@ func (m *model) rowMutate(merge bool) tea.Cmd {
 // onRowDetail opens the dialog unless the user has moved on since: another
 // row or repo, a dialog, the picker or filter bar, or into the preview.
 func (m *model) onRowDetail(msg rowDetailMsg) {
-	if m.pr != nil || m.dlg != nil || m.pk != nil || m.flt != nil || m.focus != onTable || m.repo().Name != msg.repo {
+	if m.dlg != nil || m.pk != nil || m.flt != nil || m.focus != onTable || m.repo().Name != msg.repo {
 		return
 	}
 	if s, ok := m.selPR(); !ok || s.Number != msg.n {

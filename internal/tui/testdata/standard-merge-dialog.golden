@@ -13,12 +13,12 @@
   e2e │                                                                 │       
    OPE│ [tab] switch · [y] merge · any other key cancels                │       
   ◆ Ov└─────────────────────────────────────────────────────────────────┘       
-  ✔ no conflicts                                                                
-  Checks ✔ 1 passed · ◌ 1 pending                                               
-  Reviews: approved · Files 3 (+40 −7) ·  1                                    
-  ──────────────────────────────────────────────────────────────────────────    
-                                                                                
+  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+  SUMMARY                                                                       
   Heading                                                                       
                                                                                 
+  Makes the thing b optional.                                                   
+                                                                                
+  ACTIVITY                                                                      
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
  [ ] tabs · c comment · m merge · u update branch · o open      PR 1/2   ? help 

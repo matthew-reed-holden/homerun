@@ -278,7 +278,7 @@ func TestMergedViewSaysMerged(t *testing.T) {
 	f.Details["o/e2e#1"].State = "MERGED"
 	step(m, keysIn(m, "y"))
 	page := strings.Join(strip(m.prPage(80)), "\n")
-	indexAll(t, page, "Merged into main", "Merge\nMerged")
+	indexAll(t, page, "Merged into main", "MERGE\nMerged")
 	if h := m.prHeader(80)[1]; !strings.Contains(h, tile("MERGED")) {
 		t.Fatalf("header %q", ansi.Strip(h))
 	}
@@ -286,23 +286,27 @@ func TestMergedViewSaysMerged(t *testing.T) {
 		t.Fatalf("page:\n%s", page)
 	}
 	keysIn(m, "esc")
-	if m.pr != nil {
+	if m.focus != onTable {
 		t.Fatal("esc must go back")
 	}
 }
 
-// A slow poll result that lands after a mutation's refetch must not undo it.
+// A mutation's refetch waits for a slow poll in flight and lands after it,
+// so the poll cannot undo it; the poll still schedules the next one.
 func TestRefetchWinsOverSlowTick(t *testing.T) {
 	m, f := prOpenModel(t, openDetail())
 	ticks := recordDetailTicks(t)
 	slow := m.fetchDetail(true)().(detailMsg) // fetched before the merge
 	f.Details["o/e2e#1"].State = "MERGED"
-	step(m, m.refetchPR())
+	if m.refetchPR() != nil {
+		t.Fatal("a second fetch went out while the poll was in flight")
+	}
 	_, cmd := m.Update(slow)
+	run(m, cmd)
 	if m.pr.d.State != "MERGED" {
 		t.Fatalf("stale tick overwrote the refetch: %s", m.pr.d.State)
 	}
-	if cmd == nil || len(*ticks) != 1 {
+	if len(*ticks) != 1 {
 		t.Fatal("a stale tick result must still schedule the next poll")
 	}
 }

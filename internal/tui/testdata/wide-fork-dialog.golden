@@ -1,19 +1,19 @@
  HOMERUN  o/e2e  PRs 2 · RUNS 1 ·  1  0 · engine ●                                                     updated 0s ago 
  ◆ 1 My PRs 2  ◇ 2 Review requested 2  ◇ 3 All open 2  ◇ 4 Branches 1  ◇ 5 Runs 3                                       
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  is:pr repo:o/e2e is:open author:@me                           ╎ #2 typo fix · abc1234 · @bob                         
-   Title                      CI                           ╎ #2 typo fix  @bob · main ← typo                      
-   #1 · feat · @matt          1/2                  +0 −0    5m ╎ Checks none                                          
-    e2e PR                                                       ╎ Reviews: none · Files 0 (+0 −0) ·  0                
-                                                                 ╎ ─────────────────────────────────────────────────    
- ▌ #2 · typo · @bob          ◇ held                 +0 −0    3h ╎  no checks yet                                       
- ▌  typo fix                                                     ╎                                                      
+  is:pr repo:o/e2e is:open author:@me                           ╎ o/e2e · #2                                           
+   Title                      CI                           ╎ typo fix                                             
+   #1 · feat · @matt          1/2                  +0 −0    5m ╎  OPEN   main ← typo  @bob · 3h ago                   
+    e2e PR                                                       ╎ ◆ Overview ◇ Checks 0/0 ◇ Reviews ◇ Files ◇ Commits  
+                                                                 ╎ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+ ▌ #2 · typo · @bob          ◇ held                 +0 −0    3h ╎ SUMMARY                                              
+ ▌  typo fix                                                     ╎ No description provided.                             
                                                                  ╎                                                      
+                                                                 ╎ ACTIVITY                                             
+                                                                 ╎  0 comments · reviews: none                         
+                                                                 ╎ loading…                                             
                                                                  ╎                                                      
-                                                                 ╎                                                      
-                                                                 ╎                                                      
-                                                                 ╎                                                      
-                                                                 ╎                                                      
+                                                                 ╎ MERGE                                                
                             ┌──────────────────────────────────────────────────────────────┐                            
                             │  Run fork PR e2e#2 from @bob?                               │                            
                             │                                                              │                            

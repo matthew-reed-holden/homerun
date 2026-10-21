@@ -147,29 +147,25 @@ func strip(ls []string) []string {
 	return out
 }
 
-func TestSummaryLines(t *testing.T) {
+func TestSummaryMerge(t *testing.T) {
 	s := sumFixture()
 	want := []string{
-		"#1 Make the daemon optional  @matt · main ← feat",
 		"⚠ 3 commits behind main · ✔ no conflicts",
 		"Checks ✘ 1 failing (1 required) · ✔ 4 passed",
-		"Reviews: review required · Files 12 (+302 −88) · " + ic("comments") + " 3",
-		"",
-		"Moves the engine", "behind a flag", "",
 	}
-	if got := strip(summaryLines(s, 3, true, 80)); !slices.Equal(got, want) {
+	if got := strip(summaryMerge(s, 3, true)); !slices.Equal(got, want) {
 		t.Fatalf("got %q", got)
 	}
 	s.Mergeable = "CONFLICTING"
-	if got := strip(summaryLines(s, 0, true, 80)); got[1] != "✘ conflicts" {
+	if got := strip(summaryMerge(s, 0, true)); got[0] != "✘ conflicts" {
 		t.Fatalf("conflicts: %q", got)
 	}
 	s.MergeState = "BEHIND"
-	if got := strip(summaryLines(s, 0, false, 80)); got[1] != "⚠ behind main · ✘ conflicts" {
+	if got := strip(summaryMerge(s, 0, false)); got[0] != "⚠ behind main · ✘ conflicts" {
 		t.Fatalf("unknown behind: %q", got)
 	}
 	s.Checks = nil
-	if got := strip(summaryLines(s, 0, false, 80)); got[2] != "Checks none" {
+	if got := strip(summaryMerge(s, 0, false)); len(got) != 1 {
 		t.Fatalf("no checks: %q", got)
 	}
 }
@@ -222,14 +218,14 @@ func TestPreviewClickOffsetsTree(t *testing.T) {
 	if c, step, _ := m.tree.selected(); c.Name != "homerun / CI / fail" || step != -1 {
 		t.Fatalf("clicked CI / fail, selected %q step %d (cur %d)", c.Name, step, m.tree.cur)
 	}
-	for y := range prHeadH { // the where, title, state and tabs lines
+	for y := range prHeadH { // the where, title, state, tabs and foul lines
 		m.click(tea.Mouse{X: lay.px + 5, Y: lay.py + y, Button: tea.MouseLeft})
 		if c, step, _ := m.tree.selected(); c.Name != "homerun / CI / fail" || step != -1 {
 			t.Fatalf("click on header line %d selected %q step %d", y, c.Name, step)
 		}
 	}
 	m.click(tea.Mouse{X: 5, Y: lay.top + 3, Button: tea.MouseLeft}) // the table
-	if m.pr != nil || m.focus != onTable {
+	if m.pr == nil || m.focus != onTable {
 		t.Fatalf("table click: pr %v focus %d", m.pr != nil, m.focus)
 	}
 }
@@ -242,7 +238,7 @@ func TestSearchErrorKeepsResultsSaysOnce(t *testing.T) {
 	f.Err = errors.New("github: 401 Bad credentials")
 	_, c := m.Update(searchTickMsg{})
 	runBatch(m, c)
-	if s := screen(m); !strings.Contains(s, "e2e PR") || len(m.previewHead(80)) == 0 {
+	if s := screen(m); !strings.Contains(s, "e2e PR") || m.pr == nil {
 		t.Fatalf("rows dropped:\n%s", s)
 	}
 	if !strings.Contains(m.status, "401 Bad credentials") {

@@ -4,14 +4,14 @@
   is:open author:@me               ╎ o/e2e · #1                                                                        
    Title                  CI      ╎ e2e PR                                                                            
  ▌ #1 · @matt             1/2     ╎  MERGED   main ← feat  @matt                                                      
- ▌  e2e PR                          ╎ ◆ Overview  ◇ Checks 2/4                                                          
-                                    ╎ ✔ Merged into main by @matt · 6118d02                                             
-   #2 · @bob             ◇ held    ╎ It leaves this tab on the next refresh.                                           
-    typo fix                        ╎                                                                                   
-                                    ╎ ⚠ 2 commits behind main · ✔ no conflicts                                          
-                                    ╎ Checks ✔ 1 passed · ◌ 1 pending                                                   
-                                    ╎ Reviews: approved · Files 3 (+40 −7) ·  1                                        
-                        ┌──────────────────────────────────────────────────────────────────────┐────────────────────    
+ ▌  e2e PR                          ╎ ◆ Overview  ◇ Checks 2/4  ◇ Reviews 1  ◇ Files 3  ◇ Commits 1                     
+                                    ╎ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+   #2 · @bob             ◇ held    ╎ ✔ Merged into main by @matt · 6118d02                                             
+    typo fix                        ╎ It leaves this tab on the next refresh.                                           
+                                    ╎                                                                                   
+                                    ╎ SUMMARY                                                                           
+                                    ╎ Heading                                                                           
+                        ┌──────────────────────────────────────────────────────────────────────┐                        
                         │ Comment on #1                                                        │                        
                         │                                                                      │                        
                         │ hi                                                                   │                        
@@ -25,11 +25,11 @@
                         │                                                                      │                        
                         │ ctrl+s send · esc keep draft and close                               │                        
                         └──────────────────────────────────────────────────────────────────────┘                        
-                                    ╎  lint required                                                                   
-                                    ╎  build                                                                           
                                     ╎                                                                                   
-                                    ╎ Merge                                                                             
-                                    ╎ Merged                                                                            
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
                                     ╎                                                                                   
                                     ╎                                                                                   
                                     ╎                                                                                   

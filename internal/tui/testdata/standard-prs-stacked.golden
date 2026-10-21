@@ -10,21 +10,21 @@
     typo fix                                                                              
                                                                                           
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  #1 e2e PR · d954af8 · @matt · 5m ago                                                    
-  #1 e2e PR  @matt · main ← feat                                                          
+  o/e2e · #1                                                                              
+  e2e PR                                                                                  
+   OPEN   main ← feat  @matt · 5m ago                                                     
+  ◆ Overview  ◇ Checks 1/3  ◇ Reviews  ◇ Files 3  ◇ Commits                               
+  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+  SUMMARY                                                                                 
+  Makes the thing optional.                                                               
+                                                                                          
+  ACTIVITY                                                                                
+   2 comments · reviews: approved                                                        
+  loading…                                                                                
+                                                                                          
+  MERGE                                                                                   
   ⚠ 3 commits behind main · ✔ no conflicts                                                
   Checks ✘ 1 failing (1 required)                                                         
-  Reviews: approved · Files 3 (+40 −7) ·  2                                              
-                                                                                          
-  Makes the thing                                                                         
-  optional.                                                                               
-  2  homerun  · 1  actions                                                                
-  ────────────────────────────────────────────────────────────────────────────────────    
-    CI / pass  homerun                                                              4s   
-    CI / fail  homerun  — echo bad; exit 1                                          3s   
-     exit status 1                                                                        
-      Set up job                                                                    1s   
-      echo bad; exit 1                                                              0s   
-    ci/gh  actions  required                                                             
+  loading…                                                                                
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
  l/enter preview · / filter · r rerun · m merge · u update branch         PR 1/3   ? help 

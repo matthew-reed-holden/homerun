@@ -164,6 +164,7 @@ func TestStackedPreviewKeepsPart1Lines(t *testing.T) {
 	m, _ := newTestModel(t)
 	m.Update(searchMsg{repo: "o/e2e", tab: 0, query: "is:open author:@me", res: goldenResult()})
 	m.Update(tea.WindowSizeMsg{Width: 90, Height: 30})
+	keysIn(m, "l", "]")
 	if out := screen(m); !strings.Contains(out, ic("ci-fail")+" ci/gh  actions  required") {
 		t.Fatalf("failing required check below the fold:\n%s", out)
 	}

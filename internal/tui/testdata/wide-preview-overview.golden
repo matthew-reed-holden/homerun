@@ -4,29 +4,29 @@
   is:open author:@me               ╎ o/e2e · #1                                                                        
    Title                  CI      ╎ e2e PR                                                                            
  ▌ #1 · @matt             1/2     ╎  OPEN   main ← feat  @matt                                                        
- ▌  e2e PR                          ╎ ◆ Overview  ◇ Checks 2/4                                                          
-                                    ╎ ✔ no conflicts                                                                    
-   #2 · @bob             ◇ held    ╎ Checks ✔ 1 passed · ◌ 1 pending                                                   
-    typo fix                        ╎ Reviews: approved · Files 3 (+40 −7) ·  1                                        
-                                    ╎ ──────────────────────────────────────────────────────────────────────────────    
-                                    ╎                                                                                   
-                                    ╎ Heading                                                                           
+ ▌  e2e PR                          ╎ ◆ Overview  ◇ Checks 2/4  ◇ Reviews 1  ◇ Files 3  ◇ Commits 1                     
+                                    ╎ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+   #2 · @bob             ◇ held    ╎ SUMMARY                                                                           
+    typo fix                        ╎ Heading                                                                           
                                     ╎                                                                                   
                                     ╎ Makes the thing b optional.                                                       
                                     ╎                                                                                   
-                                    ╎ Timeline                                                                          
+                                    ╎ ACTIVITY                                                                          
+                                    ╎  1 comment · reviews: approved                                                   
                                     ╎  abc1234 headline · @matt · 2h ago                                               
                                     ╎  @bob · 1h ago                                                                   
                                     ╎   looks good                                                                      
                                     ╎  @bob approved · 1h ago                                                          
                                     ╎  @matt merged · 5m ago                                                           
                                     ╎                                                                                   
-                                    ╎ Checks                                                                            
-                                    ╎  lint required                                                                   
-                                    ╎  build                                                                           
-                                    ╎                                                                                   
-                                    ╎ Merge                                                                             
+                                    ╎ MERGE                                                                             
                                     ╎ ✔ Ready to merge                                                                  
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
+                                    ╎                                                                                   
                                     ╎                                                                                   
                                     ╎                                                                                   
                                     ╎                                                                                   

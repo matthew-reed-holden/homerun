@@ -9,16 +9,16 @@
    #2 · typo · @bob                                 ◇ held              +0 −0  
     typo fix                                                                    
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
-  o/e2e · #1                                                                    
+  o/e2e · #1 · head d954af8                                                     
   e2e PR                                                                        
    MERGED   main ← feat  @matt                                                  
-  ◇ Overview  ◆ Checks 2/4                                                      
+  ◇ Overview  ◆ Checks 2/4  ◇ Reviews 1  ◇ Files 3  ◇ Commits 1                 
+  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+  2  homerun  · 2  status                                                       
+  ──────────────────────────────────────────────────────────────────────────    
   ▌ CI / pass  homerun                                                    4s   
     CI / fail  homerun  — echo bad; exit 1                                3s   
      exit status 1                                                              
       Set up job                                                          1s   
-      echo bad; exit 1                                                    0s   
-    lint  status  required                                                     
-    build  status                                                     queued   
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
  enter log · space fold · r rerun · x cancel · o open           PR 1/2   ? help 
