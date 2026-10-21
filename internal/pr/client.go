@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -168,13 +169,19 @@ func (c *Client) rest(ctx context.Context, path string, out any) error {
 }
 
 const fields = `id number state title body isDraft author{login} headRefName baseRefName headRefOid
-mergeable mergeStateStatus reviewDecision additions deletions changedFiles comments{totalCount}
+updatedAt mergeable mergeStateStatus reviewDecision additions deletions changedFiles comments{totalCount}
 commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100){nodes{__typename
-... on CheckRun{name status conclusion detailsUrl isRequired(pullRequestNumber: %[1]d)}
+... on CheckRun{name status conclusion detailsUrl isRequired(pullRequestNumber: %[1]d) checkSuite{app{slug} workflowRun{workflow{resourcePath}}}}
 ... on StatusContext{context state targetUrl}}}}}}}`
+
+// searchFields is fields without isRequired, which needs a PR number a search does not have.
+var searchFields = strings.Replace(fields, " isRequired(pullRequestNumber: %[1]d)", "", 1)
+
+const searchQuery = `query($q:String!){search(type:ISSUE,query:$q,first:50){issueCount nodes{__typename ... on PullRequest{%s}}}}`
 
 type gqlPR struct {
 	Number           int
+	UpdatedAt        time.Time
 	State            string
 	Title, Body      string
 	IsDraft          bool
@@ -199,8 +206,14 @@ type gqlPR struct {
 							Name, Status           string
 							Conclusion, DetailsUrl string
 							IsRequired             bool
-							Context, State         string
-							TargetUrl              string
+							CheckSuite             struct {
+								App         struct{ Slug string }
+								WorkflowRun *struct {
+									Workflow struct{ ResourcePath string }
+								}
+							}
+							Context, State string
+							TargetUrl      string
 						}
 					}
 				}
@@ -213,15 +226,19 @@ func (p gqlPR) summary() Summary {
 	s := Summary{Number: p.Number, Title: p.Title, Author: p.Author.Login, Body: p.Body,
 		HeadRef: p.HeadRefName, BaseRef: p.BaseRefName, HeadSHA: p.HeadRefOid, IsDraft: p.IsDraft,
 		Mergeable: p.Mergeable, MergeState: p.MergeStateStatus, ReviewDecision: p.ReviewDecision,
-		Additions: p.Additions, Deletions: p.Deletions, ChangedFiles: p.ChangedFiles, Comments: p.Comments.TotalCount}
+		Additions: p.Additions, Deletions: p.Deletions, ChangedFiles: p.ChangedFiles, Comments: p.Comments.TotalCount, Updated: p.UpdatedAt}
 	if len(p.Commits.Nodes) == 0 || p.Commits.Nodes[0].Commit.StatusCheckRollup == nil {
 		return s
 	}
 	for _, n := range p.Commits.Nodes[0].Commit.StatusCheckRollup.Contexts.Nodes {
 		switch n.Typename {
 		case "CheckRun":
-			s.Checks = append(s.Checks, Check{Name: n.Name, Status: strings.ToLower(n.Status),
-				Conclusion: strings.ToLower(n.Conclusion), URL: n.DetailsUrl, Required: n.IsRequired})
+			ck := Check{Name: n.Name, Status: strings.ToLower(n.Status),
+				Conclusion: strings.ToLower(n.Conclusion), URL: n.DetailsUrl, Required: n.IsRequired, App: n.CheckSuite.App.Slug}
+			if r := n.CheckSuite.WorkflowRun; r != nil {
+				ck.Workflow = workflowPath(r.Workflow.ResourcePath)
+			}
+			s.Checks = append(s.Checks, ck)
 		case "StatusContext":
 			st, con := statusContext(n.State)
 			s.Checks = append(s.Checks, Check{Name: n.Context, Status: st, Conclusion: con, URL: n.TargetUrl})
@@ -275,4 +292,63 @@ func (c *Client) List(ctx context.Context, repo string, numbers []int) (map[int]
 		}
 	}
 	return out, nil
+}
+
+// workflowPath reduces a resourcePath like /o/r/actions/workflows/ci.yml to .github/workflows/ci.yml.
+func workflowPath(resourcePath string) string {
+	_, file, ok := strings.Cut(resourcePath, "/actions/workflows/")
+	if !ok || file == "" {
+		return ""
+	}
+	return ".github/workflows/" + file
+}
+
+// Search runs "is:pr repo:<repo> <query>" and returns the first 50 matches.
+// The query travels as a GraphQL variable, never in the query text.
+func (c *Client) Search(ctx context.Context, repo, query string) (SearchResult, error) {
+	var data struct {
+		Search struct {
+			IssueCount int
+			Nodes      []struct {
+				Typename string `json:"__typename"`
+				gqlPR
+			}
+		}
+	}
+	q := fmt.Sprintf(searchQuery, searchFields)
+	if err := c.query(ctx, q, map[string]any{"q": "is:pr repo:" + repo + " " + query}, &data); err != nil {
+		return SearchResult{}, err
+	}
+	res := SearchResult{Total: data.Search.IssueCount}
+	for _, n := range data.Search.Nodes {
+		if n.Typename == "PullRequest" {
+			res.PRs = append(res.PRs, n.summary())
+		}
+	}
+	return res, nil
+}
+
+// Workflows lists the repo's workflows (one page of 100). A 403 or 404 is ErrNoAccess.
+func (c *Client) Workflows(ctx context.Context, repo string) ([]Workflow, error) {
+	owner, name, ok := strings.Cut(repo, "/")
+	if !ok {
+		return nil, fmt.Errorf("github: bad repo %q", repo)
+	}
+	var out struct {
+		Workflows []struct {
+			ID          int64
+			Path, State string
+		}
+	}
+	if err := c.rest(ctx, fmt.Sprintf("/repos/%s/%s/actions/workflows?per_page=100", url.PathEscape(owner), url.PathEscape(name)), &out); err != nil {
+		if e := err.Error(); strings.HasPrefix(e, "github: HTTP 403") || strings.HasPrefix(e, "github: HTTP 404") {
+			return nil, ErrNoAccess
+		}
+		return nil, err
+	}
+	ws := make([]Workflow, len(out.Workflows))
+	for i, w := range out.Workflows {
+		ws[i] = Workflow{ID: w.ID, Path: w.Path, State: w.State}
+	}
+	return ws, nil
 }

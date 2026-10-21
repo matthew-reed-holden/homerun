@@ -49,7 +49,7 @@ func TestListQueryAndParse(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("got %v", got)
 	}
-	want := []Check{{"lint", "completed", "failure", "https://x/1", true}, {"ci/x", "in_progress", "", "", false}}
+	want := []Check{{Name: "lint", Status: "completed", Conclusion: "failure", URL: "https://x/1", Required: true}, {Name: "ci/x", Status: "in_progress"}}
 	if !reflect.DeepEqual(got[14].Checks, want) {
 		t.Fatalf("checks %+v", got[14].Checks)
 	}
@@ -357,5 +357,120 @@ func TestMutations(t *testing.T) {
 	fail = true
 	if err := c.Merge(ctx, "PR1", "SQUASH", "sha1"); err == nil || !strings.Contains(err.Error(), "Head branch was modified") {
 		t.Fatal(err)
+	}
+}
+
+const searchNode = `{"__typename":"PullRequest","number":41,"state":"OPEN","title":"t","updatedAt":"2026-10-20T10:00:00Z","author":{"login":"a"},
+"commits":{"nodes":[{"commit":{"statusCheckRollup":{"contexts":{"nodes":[
+{"__typename":"CheckRun","name":"build","status":"COMPLETED","conclusion":"SUCCESS","detailsUrl":"https://x/1",
+"checkSuite":{"app":{"slug":"github-actions"},"workflowRun":{"workflow":{"resourcePath":"/o/r/actions/workflows/ci.yml"}}}},
+{"__typename":"StatusContext","context":"ci/x","state":"SUCCESS","targetUrl":""}]}}}}]}}`
+
+func TestSearchSendsQueryAsVariable(t *testing.T) {
+	var body struct {
+		Query     string
+		Variables map[string]any
+	}
+	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&body)
+		io.WriteString(w, `{"data":{"search":{"issueCount":73,"nodes":[`+searchNode+`]}}}`)
+	})
+	q := `is:open label:"x\" }"`
+	res, err := c.Search(context.Background(), "o/r", q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body.Variables["q"] != `is:pr repo:o/r `+q {
+		t.Errorf("q = %v", body.Variables["q"])
+	}
+	if !strings.Contains(body.Query, "$q") || strings.Contains(body.Query, "label:") || strings.Contains(body.Query, "isRequired") {
+		t.Errorf("query %s", body.Query)
+	}
+	if res.Total != 73 || len(res.PRs) != 1 || res.PRs[0].Number != 41 {
+		t.Fatalf("res %+v", res)
+	}
+	if want := time.Date(2026, 10, 20, 10, 0, 0, 0, time.UTC); !res.PRs[0].Updated.Equal(want) {
+		t.Errorf("updated %v", res.PRs[0].Updated)
+	}
+	if len(res.PRs[0].Checks) != 2 || res.PRs[0].Checks[0].Conclusion != "success" {
+		t.Errorf("checks %+v", res.PRs[0].Checks)
+	}
+}
+
+func TestSearchSkipsNonPRNodes(t *testing.T) {
+	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, `{"data":{"search":{"issueCount":2,"nodes":[{"__typename":"Issue"},`+searchNode+`]}}}`)
+	})
+	res, err := c.Search(context.Background(), "o/r", "")
+	if err != nil || len(res.PRs) != 1 || res.PRs[0].Number != 41 {
+		t.Fatalf("res %+v err %v", res, err)
+	}
+}
+
+func TestSearchRateLimited(t *testing.T) {
+	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Remaining", "0")
+		w.WriteHeader(403)
+	})
+	_, err := c.Search(context.Background(), "o/r", "")
+	var rl *RateLimitError
+	if !errors.As(err, &rl) || !c.RateLow() {
+		t.Fatalf("err %v low %v", err, c.RateLow())
+	}
+}
+
+func TestSearchGraphQLErrorReturnsMessage(t *testing.T) {
+	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, `{"errors":[{"message":"Invalid search query"}]}`)
+	})
+	_, err := c.Search(context.Background(), "o/r", "(")
+	if err == nil || !strings.Contains(err.Error(), "Invalid search query") {
+		t.Fatalf("err %v", err)
+	}
+}
+
+func TestFakeSearch(t *testing.T) {
+	f := &Fake{Results: map[string]SearchResult{"o/r|is:open": {Total: 3}}}
+	res, err := f.Search(context.Background(), "o/r", "is:open")
+	if err != nil || res.Total != 3 || !reflect.DeepEqual(f.Searches, []SearchCall{{"o/r", "is:open"}}) {
+		t.Fatalf("res %+v err %v searches %v", res, err, f.Searches)
+	}
+	f.SearchErr = errors.New("boom")
+	if _, err := f.Search(context.Background(), "o/r", "x"); err == nil {
+		t.Fatal("want SearchErr")
+	}
+}
+
+func TestCheckSourceParsed(t *testing.T) {
+	var p gqlPR
+	if err := json.Unmarshal([]byte(searchNode), &p); err != nil {
+		t.Fatal(err)
+	}
+	cs := p.summary().Checks
+	if cs[0].App != "github-actions" || cs[0].Workflow != ".github/workflows/ci.yml" {
+		t.Errorf("check run %+v", cs[0])
+	}
+	if cs[1].App != "" || cs[1].Workflow != "" {
+		t.Errorf("status %+v", cs[1])
+	}
+}
+
+func TestWorkflows(t *testing.T) {
+	code := 200
+	c := newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/o/r/actions/workflows" {
+			t.Errorf("path %s", r.URL.Path)
+		}
+		w.WriteHeader(code)
+		io.WriteString(w, `{"workflows":[{"id":7,"path":".github/workflows/ci.yml","state":"active"}]}`)
+	})
+	got, err := c.Workflows(context.Background(), "o/r")
+	if want := []Workflow{{7, ".github/workflows/ci.yml", "active"}}; err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v err %v", got, err)
+	}
+	for _, code = range []int{403, 404} {
+		if _, err := c.Workflows(context.Background(), "o/r"); !errors.Is(err, ErrNoAccess) {
+			t.Errorf("%d: err %v", code, err)
+		}
 	}
 }
