@@ -461,7 +461,7 @@ func baseNames(paths []string) string {
 func actionsLines(paths []string, r api.Repo, w int) []string {
 	var out []string
 	if len(paths) > 0 {
-		out = append(out, truncate(th.lights.Render("⚠")+" "+th.dim.Render(baseNames(paths)+" also runs on GitHub Actions"), w))
+		out = append(out, truncate(th.lights.Render(ic("warn"))+" "+th.dim.Render(baseNames(paths)+" also runs on GitHub Actions"), w))
 	}
 	if len(r.Unhandled) > 0 {
 		out = append(out, th.dim.Render(truncate("left to GitHub Actions: "+baseNames(r.Unhandled), w)))
@@ -478,11 +478,13 @@ func ciCell(cs []api.Check) string {
 	return tint(icon, fmt.Sprintf("%s %d/%d", ic(icon), passing(cs), len(cs)))
 }
 
+// mark is the doubled mark after a CI count: the warn icon and a 2, in the
+// stadium lights, when the workflows run on GitHub Actions too.
 func mark(paths []string) string {
 	if len(paths) == 0 {
 		return ""
 	}
-	return th.lights.Render("⚠2")
+	return th.lights.Render(ic("warn") + "2")
 }
 
 // column is a table column right of the title: its width, and whether it
@@ -523,23 +525,23 @@ func cells(w int, cols []column, vals ...string) string {
 // the number, author, title and CI.
 func (m *model) narrow() bool { return m.focus == onPreview && m.w >= 100 && !m.zoom }
 
-// prCols are a PR row's columns: CI, review, behind, diff and age. Narrow
-// screens drop age, then review; a narrow table keeps only CI.
+// prCols are a PR row's columns, CI right-aligned: CI, review, behind, diff
+// and age. Under 100 columns age drops and diff narrows; under 90 diff
+// drops; a narrow table keeps only CI.
 func (m *model) prCols() []column {
-	ci := column{w: 9}
+	ci := column{9, true}
 	if m.err != nil {
 		ci.w = 20 // room for "github only"
 	}
 	if m.narrow() {
 		return []column{ci}
 	}
-	cs := []column{ci}
-	if m.w >= 90 {
-		cs = append(cs, column{w: 1})
-	}
-	cs = append(cs, column{3, true}, column{9, true}) // behind, "+1.0k −40"
-	if m.w >= 100 {
-		cs = append(cs, column{4, true})
+	cs := []column{ci, {w: 1}, {3, true}} // review, behind
+	switch {
+	case m.w >= 100:
+		cs = append(cs, column{11, true}, column{4, true}) // "+1.0k −1.2k", age
+	case m.w >= 90:
+		cs = append(cs, column{9, true})
 	}
 	return cs
 }
@@ -551,10 +553,10 @@ func (m *model) prLine(w int, left, ci, rev, behind, diff, age string) string {
 	if m.narrow() {
 		return cells(w, m.prCols(), vals...)
 	}
+	vals = append(vals, rev, behind)
 	if m.w >= 90 {
-		vals = append(vals, rev)
+		vals = append(vals, diff)
 	}
-	vals = append(vals, behind, diff)
 	if m.w >= 100 {
 		vals = append(vals, age)
 	}
@@ -626,20 +628,22 @@ func (m *model) prRows(t *tab, w int) []entry {
 				}
 			}
 		}
+		// The first line is dim but for the number; the mockup draws the
+		// branch dim where the spec text said chalk, and the mockup wins.
 		left := th.amber.Render(fmt.Sprintf("#%d", s.Number))
 		if s.HeadRef != "" && !m.narrow() {
-			left = dot(left, th.fg.Render(termsafe.Line(s.HeadRef)))
+			left = dot(left, th.dim.Render(termsafe.Line(s.HeadRef)))
 		}
 		if s.Author != "" {
 			left = dot(left, th.dim.Render("@"+termsafe.Line(s.Author)))
 		}
-		title := th.fg.Render(termsafe.Line(s.Title))
-		if s.IsDraft {
-			title = tile("DRAFT") + " " + title
+		if s.IsDraft { // the word, not a tile: tiles belong to the preview header
+			left = dot(left, th.dim.Render("draft"))
 		}
+		title := th.fg.Render(termsafe.Line(s.Title))
 		behind := ""
 		if b, ok := m.behindOf(s.Number); ok && b > 0 {
-			behind = th.amber.Render(strconv.Itoa(b))
+			behind = th.lights.Render(strconv.Itoa(b))
 		}
 		line := m.prLine(w, left, ci, reviewMark(s.ReviewDecision), behind, diffCell(s.Additions, s.Deletions), th.dim.Render(age(s.Updated, m.now())))
 		out = append(out, entry{prState(s), line, truncate(title, w), fmt.Sprintf("pr:%d", s.Number)})
@@ -762,10 +766,13 @@ func (m *model) tableRows() {
 			t.rows.lead = m.searchLine(i, tw-1)
 			heads := []string{"Title", ic("checks") + " CI"}
 			if !m.narrow() {
+				heads = append(heads, ic("rv-approved"), ic("behind"))
 				if m.w >= 90 {
-					heads = append(heads, ic("rv-approved"))
+					heads = append(heads, ic("diff"))
 				}
-				heads = append(heads, ic("behind"), ic("diff"), ic("age"))
+				if m.w >= 100 {
+					heads = append(heads, ic("age"))
+				}
 			}
 			t.rows.head = head("pr-open", m.prCols(), heads...)
 			t.rows.empty = nil

@@ -4,16 +4,16 @@
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
   / is:pr repo:o/e2e is:open author:@me                          ╎  o/e2e · #1                                          
  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  e2e PR                                              
-  o Title                     # CI       A    v          ~     t ╎   OPEN   main ← feat  @matt · 5m ago                 
+  o Title                        # CI  A    v            ~     t ╎   OPEN   main ← feat  @matt · 5m ago                 
  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  ◆ Overview ◇ Checks 1/3 ◇ Rev ◇ Files 3 ◇ Cmts      
- ▌o #1 · feat · @matt         x 1/3      A    3     +40 −7    5m ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+ ▌o #1 · feat · @matt           x 1/3  A    3       +40 −7    5m ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
  ▌  e2e PR                                                       ╎  SUMMARY                                             
                                                                  ╎  Makes the thing optional.                           
-  o #2 · @bob                 ◇ held     .           +0 −0    3h ╎                                                      
+  o #2 · @bob                  ◇ held  .             +0 −0    3h ╎                                                      
     typo fix                                                     ╎  ACTIVITY                                            
                                                                  ╎  = 2 comments · reviews: approved                    
-  d #5 · @sam                 - not run              +0 −0    5d ╎  loading…                                            
-     DRAFT  pr: GraphQL page cache                               ╎                                                      
+  d #5 · @sam · draft       - not run                +0 −0    5d ╎  loading…                                            
+    pr: GraphQL page cache                                       ╎                                                      
                                                                  ╎  MERGE                                               
                                                                  ╎  ⚠ 3 commits behind main · ✔ no conflicts            
                                                                  ╎  Checks ✘ 1 failing (1 required)                     

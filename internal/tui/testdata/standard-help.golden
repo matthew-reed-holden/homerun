@@ -4,12 +4,12 @@
  ╌╌╌│  Keys                                                              │╌╌╌╌ 
    │                                                                     │     
  ┄┄┄│ [ ]     tabs             k/↑   up              f      follow        │┄┄┄┄ 
-   │ 1-9     tab              j/↓   down            +      zoom          │    
+   │ 1-9     tab              j/↓   down            +      zoom          │    
  ┄┄┄│ tab     table/preview    g     top             esc    back          │┄┄┄┄ 
- ▌ │ l/enter preview          G     bottom          r      rerun         │ −0  
+ ▌ │ l/enter preview          G     bottom          r      rerun         │     
  ▌  │ h       table            space fold            x      cancel        │     
     │ R       repo             enter log             o      open          │     
-   │ /       filter           /     search          y      copy sha      │ −0  
+   │ /       filter           /     search          y      copy sha      │     
     │ ctrl+r  reload config    n     next match      m      merge         │     
  ╌╌╌│ T       theme            N     prev match      u      update branch │╌╌╌╌ 
    o│ ?       help             e     next failure    c      comment       │     

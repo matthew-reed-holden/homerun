@@ -4,12 +4,12 @@
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
    is:pr repo:o/e2e is:open label:bug                           ╎  o/e2e · #1                                          
  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  e2e PR                                              
-   Title                      CI                           ╎   OPEN   main ← feat  @matt · 5m ago                 
+   Title                         CI                        ╎   OPEN   main ← feat  @matt · 5m ago                 
  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  ◆ Overview ◇ Checks 1/2 ◇ Rev ◇ Files 0 ◇ Cmts      
- ▌ #1 · feat · @matt          1/2                  +0 −0    5m ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+ ▌ #1 · feat · @matt            1/2                +0 −0    5m ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
  ▌  e2e PR                                                       ╎  SUMMARY                                             
                                                                  ╎  No description provided.                            
-   #2 · typo · @bob          ◇ held                 +0 −0    3h ╎                                                      
+   #2 · typo · @bob           ◇ held                +0 −0    3h ╎                                                      
     typo fix                                                     ╎  ACTIVITY                                            
                                                                  ╎   0 comments · reviews: none                        
                                                                  ╎  loading…                                            

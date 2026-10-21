@@ -180,7 +180,7 @@ func TestStackedPreviewKeepsPart1Lines(t *testing.T) {
 	m.Update(searchMsg{repo: "o/e2e", tab: 0, query: "is:open author:@me", res: goldenResult()})
 	m.Update(tea.WindowSizeMsg{Width: 90, Height: 30})
 	keysIn(m, "l", "]")
-	if out := screen(m); !strings.Contains(out, ic("ci-fail")+" ci/gh  actions  required") {
+	if out := screen(m); !strings.Contains(out, ic("ci-fail")+" ci/gh  ACTIONS  required") {
 		t.Fatalf("failing required check below the fold:\n%s", out)
 	}
 	if lay := m.layout(); lay.ph-1 < 13 { // part 1 had 15; the strip's blank row and the two rules took two
@@ -271,7 +271,8 @@ func wideResult() pr.SearchResult {
 	}}
 }
 
-// ciCols are the cells where each PR row's CI column starts, on its first line.
+// ciCols are the cells where each PR row's CI column ends, on its first
+// line: the column is right-aligned, so its end is what stays put.
 func ciCols(t *testing.T, m *model) []int {
 	t.Helper()
 	lay := m.layout()
@@ -284,7 +285,7 @@ func ciCols(t *testing.T, m *model) []int {
 		if c < 2 {
 			t.Fatalf("row %d lacks %q: %q", i, want, s)
 		}
-		out = append(out, c-2) // the icon and its space
+		out = append(out, c+ansi.StringWidth(want))
 	}
 	return out
 }
@@ -379,7 +380,7 @@ func TestStateTiles(t *testing.T) {
 }
 
 func TestSourceTileTruncates(t *testing.T) {
-	if s := ansi.Strip(tile("very-long-app-name")); s != " very-long… " {
+	if s := ansi.Strip(tile("very-long-app-name")); s != " VERY-LONG… " {
 		t.Fatalf("tile %q", s)
 	}
 	if !strings.Contains(tile("x"), "48;2;9;16;32") {
@@ -698,14 +699,14 @@ func TestHeadsAlign(t *testing.T) {
 		head, row := lines[l.first()-2], lines[l.first()]
 		hs, he := cellsInOrder(t, head, "Title", ic("checks")+" CI", ic("rv-approved"), ic("behind"), ic("diff"), ic("age"))
 		rs, re := cellsInOrder(t, row, "#1", ic("ci-fail")+" 1/3", ic("rv-approved"), "3", "−7", "5m")
-		for i, name := range []string{"title", "CI", "review"} { // left-aligned
+		for _, i := range []int{0, 2} { // title and review are left-aligned
 			if hs[i] != rs[i] {
-				t.Fatalf("mode %d: %s head at %d, column at %d\n%s\n%s", mode, name, hs[i], rs[i], head, row)
+				t.Fatalf("mode %d: column %d head at %d, column at %d\n%s\n%s", mode, i, hs[i], rs[i], head, row)
 			}
 		}
-		for i, name := range []string{"behind", "diff", "age"} { // right-aligned
-			if he[3+i] != re[3+i] {
-				t.Fatalf("mode %d: %s head ends at %d, column at %d\n%s\n%s", mode, name, he[3+i], re[3+i], head, row)
+		for _, i := range []int{1, 3, 4, 5} { // CI, behind, diff and age are right-aligned
+			if he[i] != re[i] {
+				t.Fatalf("mode %d: column %d head ends at %d, column at %d\n%s\n%s", mode, i, he[i], re[i], head, row)
 			}
 		}
 		keysIn(m, "4")

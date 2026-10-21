@@ -73,7 +73,8 @@ func tint(icon, s string) string {
 }
 
 // tile is word in a small square on the strip colour, one cell of padding
-// each side, coloured by its meaning; a word over 10 cells ends in "…".
+// each side, in small caps (uppercase), coloured by its meaning: a PR state
+// bold, homerun clay, any other source dim; a word over 10 cells ends in "…".
 func tile(word string) string {
 	st := th.tile.Foreground(th.p.dim)
 	switch word {
@@ -88,7 +89,7 @@ func tile(word string) string {
 	case "homerun":
 		st = th.tile.Foreground(th.p.clay)
 	}
-	return st.Render(" " + truncate(word, 10) + " ")
+	return st.Render(" " + truncate(strings.ToUpper(word), 10) + " ")
 }
 
 func dur(d time.Duration) string {

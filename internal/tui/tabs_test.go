@@ -147,17 +147,20 @@ func TestTableColumns(t *testing.T) {
 	m.refresh()
 	indexAll(t, rowText(m, 0), ic("ci-fail")+" 1/3", ic("rv-approved"), "  3  ", "+0 −0", "2h")
 	row = rowText(m, 1)
-	indexAll(t, row, ic("pr-draft")+" #7", ic("ci-skip")+" not run", ic("rv-none"), "2d", "\n   DRAFT  not run here")
+	indexAll(t, row, ic("pr-draft")+" #7", "draft", ic("ci-skip")+" not run", ic("rv-none"), "2d", "\n  not run here")
+	if strings.Contains(row, "DRAFT") {
+		t.Fatalf("draft tile in a row: %q", row)
+	}
 	if h := ansi.Strip(m.at().rows.head); !strings.Contains(h, "Title") || !strings.Contains(h, ic("checks")+" CI") {
 		t.Fatalf("head %q", ansi.Strip(m.at().rows.head))
 	}
-	// Narrow screens drop Age, then Rev.
+	// Narrow screens drop Age, then diff; review and behind stay.
 	m.Update(tea.WindowSizeMsg{Width: 95, Height: 40})
-	if r := rowText(m, 1); !strings.Contains(r, ic("rv-none")) || strings.Contains(r, "2d") {
+	if r := rowText(m, 1); !strings.Contains(r, ic("rv-none")) || strings.Contains(r, "2d") || !strings.Contains(r, "+0 −0") {
 		t.Fatalf("95 wide: %q", r)
 	}
 	m.Update(tea.WindowSizeMsg{Width: 85, Height: 40})
-	if r := rowText(m, 1); strings.Contains(r, ic("rv-none")) {
+	if r := rowText(m, 1); !strings.Contains(r, ic("rv-none")) || strings.Contains(r, "+0 −0") {
 		t.Fatalf("85 wide: %q", r)
 	}
 }
@@ -190,10 +193,11 @@ func TestTableSanitisesAndAligns(t *testing.T) {
 		lines := strings.Split(out, "\n")
 		lines[len(lines)-1] = fit(lines[len(lines)-1], w)
 		dims(t, strings.Join(lines, "\n"), w, 24)
-		ci := col(t, ansi.Strip(m.at().rows.head), ic("checks"))
+		// The CI column is right-aligned: the head and every cell end together.
+		ci := col(t, ansi.Strip(m.at().rows.head), ic("checks")) + ansi.StringWidth(ic("checks")+" CI")
 		for i, sub := range []string{ic("ci-skip") + " not run", ic("ci-fail") + " 1/2", ic("ci-skip") + " not run"} {
-			if c := 1 + col(t, rowText(m, i), sub); c != ci { // 1: the gutter
-				t.Fatalf("%d: row %d CI at %d, head at %d: %q", w, i, c, ci, rowText(m, i))
+			if c := 1 + col(t, rowText(m, i), sub) + ansi.StringWidth(sub); c != ci { // 1: the gutter
+				t.Fatalf("%d: row %d CI ends at %d, head at %d: %q", w, i, c, ci, rowText(m, i))
 			}
 		}
 	}
@@ -362,7 +366,7 @@ func TestCheckSources(t *testing.T) {
 	m := searchModel(t, &pr.Fake{Results: e2eResults(res)})
 	keysIn(m, "l", "]")
 	out := screen(m)
-	for _, want := range []string{"3  homerun  · 2  actions  · 1  codecov ", "CI / pass  homerun ", "build  actions ", "codecov/patch  codecov "} {
+	for _, want := range []string{"3  HOMERUN  · 2  ACTIONS  · 1  CODECOV ", "CI / pass  HOMERUN ", "build  ACTIONS ", "codecov/patch  CODECOV "} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("lacks %q:\n%s", want, out)
 		}
@@ -387,18 +391,18 @@ func TestDoubledWorkflows(t *testing.T) {
 	st := fixture()
 	st.Repos[0].Unhandled = r.Unhandled
 	m := searchModelState(t, &pr.Fake{Results: e2eResults(e2eResult()), Flows: map[string][]pr.Workflow{"o/e2e": flows}}, st)
-	if row := rowText(m, 0); !strings.Contains(row, ic("ci-fail")+" 1/2⚠2") {
+	if row := rowText(m, 0); !strings.Contains(row, ic("ci-fail")+" 1/2"+ic("warn")+"2") {
 		t.Fatalf("PR row %q", row)
 	}
-	if row := rowText(m, 1); strings.Contains(row, "⚠2") { // #2 has never run here
+	if row := rowText(m, 1); strings.Contains(row, ic("warn")+"2") { // #2 has never run here
 		t.Fatalf("not-run row marked: %q", row)
 	}
 	keysIn(m, "4")
-	if row := rowText(m, 0); !strings.Contains(row, ic("ci-pass")+" 1/1⚠2") {
+	if row := rowText(m, 0); !strings.Contains(row, ic("ci-pass")+" 1/1"+ic("warn")+"2") {
 		t.Fatalf("branch row %q", row)
 	}
 	out := screen(m)
-	for _, want := range []string{"⚠ ci.yml also runs on GitHub Actions", "left to GitHub Actions: pages.yml"} {
+	for _, want := range []string{ic("warn") + " ci.yml also runs on GitHub Actions", "left to GitHub Actions: pages.yml"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("branch preview lacks %q:\n%s", want, out)
 		}
@@ -408,11 +412,11 @@ func TestDoubledWorkflows(t *testing.T) {
 	res := e2eResult()
 	res.PRs[0].Checks = []pr.Check{{Name: "build", Status: "completed", Conclusion: "success", App: "github-actions", Workflow: ".github/workflows/ci.yml"}}
 	m = searchModel(t, &pr.Fake{Results: e2eResults(res), FlowsErr: pr.ErrNoAccess})
-	if row := rowText(m, 0); !strings.Contains(row, "⚠2") {
+	if row := rowText(m, 0); !strings.Contains(row, ic("warn")+"2") {
 		t.Fatalf("fallback PR row %q", row)
 	}
 	m = searchModel(t, &pr.Fake{Results: e2eResults(e2eResult()), FlowsErr: pr.ErrNoAccess})
-	if row := rowText(m, 0); strings.Contains(row, "⚠2") {
+	if row := rowText(m, 0); strings.Contains(row, ic("warn")+"2") {
 		t.Fatalf("marked with nothing known: %q", row)
 	}
 }
@@ -550,7 +554,7 @@ func TestPreviewTabsSwitch(t *testing.T) {
 		t.Fatalf("not on Overview:\n%s", screen(m))
 	}
 	keysIn(m, "]")
-	if out := screen(m); m.pr.section != 1 || !strings.Contains(out, "lint  status  required") || strings.Contains(out, "ACTIVITY") {
+	if out := screen(m); m.pr.section != 1 || !strings.Contains(out, "lint  STATUS  required") || strings.Contains(out, "ACTIVITY") {
 		t.Fatalf("] to Checks: section %d\n%s", m.pr.section, out)
 	}
 	keysIn(m, "[")
@@ -706,7 +710,7 @@ func TestPRChecksShowActionsLines(t *testing.T) {
 	run(m, keysIn(m, "enter"))
 	keysIn(m, "]")
 	out := screen(m)
-	for _, want := range []string{"⚠ ci.yml also runs on GitHub Actions", "left to GitHub Actions: pages.yml"} {
+	for _, want := range []string{ic("warn") + " ci.yml also runs on GitHub Actions", "left to GitHub Actions: pages.yml"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("PR Checks lacks %q:\n%s", want, out)
 		}

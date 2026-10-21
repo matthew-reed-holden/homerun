@@ -4,18 +4,18 @@
  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 
    is:open author:@me              ╎  o/e2e · #1 · head d954af8                                                        
  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  e2e PR                                                                           
-   Title                  CI      ╎   MERGED   main ← feat  @matt                                                     
+   Title                       CI ╎   MERGED   main ← feat  @matt                                                     
  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╎  ◇ Overview  ◆ Checks 2/4  ◇ Reviews 1  ◇ Files 3  ◇ Commits 1                    
- ▌ #1 · @matt             1/2     ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
- ▌  e2e PR                          ╎  2  homerun  · 2  status                                                          
+ ▌ #1 · @matt                 1/2 ╎  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
+ ▌  e2e PR                          ╎  2  HOMERUN  · 2  STATUS                                                          
                                     ╎  ─────────────────────────────────────────────────────────────────────────────    
-   #2 · @bob             ◇ held    ╎  ▌ CI / pass  homerun                                                       4s   
-    typo fix                        ╎    CI / fail  homerun  — echo bad; exit 1                                   3s   
+   #2 · @bob                ◇ held ╎  ▌ CI / pass  HOMERUN                                                       4s   
+    typo fix                        ╎    CI / fail  HOMERUN  — echo bad; exit 1                                   3s   
                                     ╎     exit status 1                                                                 
                                     ╎      Set up job                                                             1s   
                                     ╎      echo bad; exit 1                                                       0s   
-                                    ╎    lint  status  required                                                        
-                                    ╎    build  status                                                        queued   
+                                    ╎    lint  STATUS  required                                                        
+                                    ╎    build  STATUS                                                        queued   
                                     ╎                                                                                   
                                     ╎                                                                                   
                                     ╎                                                                                   

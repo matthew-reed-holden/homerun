@@ -444,7 +444,7 @@ func checksModel(t *testing.T) (*model, *fakeDaemon) {
 func TestChecksSection(t *testing.T) {
 	m, _ := checksModel(t)
 	out := screen(m)
-	for _, want := range []string{"pass  homerun  required", "ci/gh  status  required", ic("ci-fail") + " ci/gh", "docs  status ", "Checks 1/5"} {
+	for _, want := range []string{"pass  HOMERUN  required", "ci/gh  STATUS  required", ic("ci-fail") + " ci/gh", "docs  STATUS ", "Checks 1/5"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("lacks %q:\n%s", want, out)
 		}
