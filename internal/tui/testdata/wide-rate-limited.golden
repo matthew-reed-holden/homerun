@@ -4,7 +4,7 @@
   is:pr repo:o/e2e is:open author:@me · results from 14:02      ╎ o/e2e · #1                                           
    Title                      CI                           ╎ e2e PR                                               
  ▌ #1 · feat · @matt          1/3                +40 −7    2h ╎  OPEN   main ← feat  @matt · 2h ago                  
- ▌  e2e PR                                                       ╎ ◆ Overview ◇ Checks 1/3 ◇ Reviews ◇ Files ◇ Commits  
+ ▌  e2e PR                                                       ╎ ◆ Overview ◇ Checks 1/3 ◇ Rev ◇ Files 3 ◇ Commits    
                                                                  ╎ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
    #2 · @bob                 ◇ held                +0 −0    5h ╎ SUMMARY                                              
     typo fix                                                     ╎ Makes the thing optional.                            

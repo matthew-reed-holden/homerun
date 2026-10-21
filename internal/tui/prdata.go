@@ -54,8 +54,8 @@ func (m *model) rateLine() string {
 	if m.prDelay > prPoll {
 		at = m.prRetry
 	}
-	if p := m.pr; p != nil && p.delay > prDetailPoll && p.retry.After(at) {
-		at = p.retry
+	if m.detailDelay > prDetailPoll && m.detailRetry.After(at) {
+		at = m.detailRetry
 	}
 	if at.IsZero() {
 		return ""

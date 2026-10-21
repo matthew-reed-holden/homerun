@@ -4,7 +4,7 @@
   is:pr repo:o/e2e is:open label:bug                            ╎ o/e2e · #1                                           
    Title                      CI                           ╎ e2e PR                                               
  ▌ #1 · feat · @matt          1/2                  +0 −0    5m ╎  OPEN   main ← feat  @matt · 5m ago                  
- ▌  e2e PR                                                       ╎ ◆ Overview ◇ Checks 1/2 ◇ Reviews ◇ Files ◇ Commits  
+ ▌  e2e PR                                                       ╎ ◆ Overview ◇ Checks 1/2 ◇ Rev ◇ Files 0 ◇ Commits    
                                                                  ╎ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
    #2 · typo · @bob          ◇ held                 +0 −0    3h ╎ SUMMARY                                              
     typo fix                                                     ╎ No description provided.                             

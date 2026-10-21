@@ -4,7 +4,7 @@
   is:pr repo:o/e2e is:open author:@me                           ╎ o/e2e · #1                                           
    Title           CI                                      ╎ e2e PR                                               
  ▌ #1 · feat · …   0/1 github only               +40 −7    5m ╎  OPEN   main ← feat  @matt · 5m ago                  
- ▌  e2e PR                                                       ╎ ◆ Overview ◇ Checks 1/3 ◇ Reviews ◇ Files ◇ Commits  
+ ▌  e2e PR                                                       ╎ ◆ Overview ◇ Checks 1/3 ◇ Rev ◇ Files 3 ◇ Commits    
                                                                  ╎ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    
    #2 · @bob      · github only                    +0 −0    3h ╎ SUMMARY                                              
     typo fix                                                     ╎ Makes the thing optional.                            

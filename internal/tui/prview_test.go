@@ -850,3 +850,47 @@ func TestMain(tm *testing.M) {
 	}
 	os.Exit(tm.Run())
 }
+
+// rest delivers the shown PR's rest timer and runs what it starts.
+func rest(m *model) {
+	_, cmd := m.Update(hoverMsg{m.prGen})
+	run(m, cmd)
+}
+
+func TestHoverTabsKeepKnownCounts(t *testing.T) {
+	m := goldenModel(t, 120, 40)
+	lay := m.layout()
+	ls := previewLines(m)
+	tabs, rule := ls[prTabsY], ls[prTabsY+1]
+	if !strings.Contains(tabs, "Files 3") {
+		t.Fatalf("tabs %q lack the summary's Files count", tabs)
+	}
+	if tw, rw := ansi.StringWidth(strings.TrimRight(tabs, " ")), ansi.StringWidth(strings.TrimRight(rule, " ")); tw > rw {
+		t.Fatalf("tabs %d wide, the rule under them %d (pane %d):\n%s\n%s", tw, rw, lay.pw, tabs, rule)
+	}
+}
+
+func TestHoverRespectsRateLimit(t *testing.T) {
+	m, f := hoverModel(t)
+	f.Err = &pr.RateLimitError{}
+	rest(m) // #1: refused
+	if len(f.DetailCalls) != 1 {
+		t.Fatalf("calls %v", f.DetailCalls)
+	}
+	f.Err = nil
+	keysIn(m, "j")
+	rest(m) // #2, before the retry time
+	if len(f.DetailCalls) != 1 {
+		t.Fatalf("a rest during the backoff fetched: %v", f.DetailCalls)
+	}
+	if b := barText(m); !strings.Contains(b, "GitHub rate limit, retrying at") {
+		t.Fatalf("the rate warning went with the cursor: %q", b)
+	}
+	later := now.Add(10 * time.Minute)
+	m.now = func() time.Time { return later }
+	keysIn(m, "k")
+	rest(m) // #1, after it
+	if !slices.Equal(f.DetailCalls, []string{"o/e2e#1", "o/e2e#1"}) {
+		t.Fatalf("after the retry time: %v", f.DetailCalls)
+	}
+}

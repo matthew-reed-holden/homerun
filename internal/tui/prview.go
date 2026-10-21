@@ -39,15 +39,13 @@ type prView struct {
 	at         time.Time // when d was fetched
 	err        error
 	vp         viewport.Model
-	pageW      int           // the width vp's content was built for; 0 forces a rebuild
-	delay      time.Duration // the next detail poll interval
-	retry      time.Time     // when a raised detail poll runs next
-	seq        int           // numbers detail fetches in the order issued
-	shown      int           // the seq of the detail result applied last
-	typing     bool          // the comment box is open
-	polling    bool          // the detail poll runs: the cursor rested, or the preview was entered
-	queued     bool          // a fetch waits for the one in flight
-	queuedTick bool          // the waiting fetch is the poll's
+	pageW      int  // the width vp's content was built for; 0 forces a rebuild
+	seq        int  // numbers detail fetches in the order issued
+	shown      int  // the seq of the detail result applied last
+	typing     bool // the comment box is open
+	polling    bool // the detail poll runs: the cursor rested, or the preview was entered
+	queued     bool // a fetch waits for the one in flight
+	queuedTick bool // the waiting fetch is the poll's
 }
 
 // cachedDetail is a fetched detail and when it came.
@@ -108,7 +106,7 @@ func (m *model) follow() {
 func (m *model) showPR(repo string, n int) {
 	m.dropPR()
 	m.prGen++
-	p := &prView{repo: repo, number: n, delay: prDetailPoll, vp: viewport.New()}
+	p := &prView{repo: repo, number: n, vp: viewport.New()}
 	if s, ok := m.summary(repo, n); ok {
 		if c, ok := m.details[detailKey(repo, n, s.HeadSHA)]; ok {
 			p.d, p.at = c.d, c.at
@@ -142,18 +140,23 @@ func (m *model) hoverCmd() tea.Cmd {
 }
 
 // settle starts the shown PR's detail poll, fetching first unless what is
-// shown came within a poll interval.
+// shown came within a poll interval or GitHub's rate limit holds detail
+// fetches back; then the poll's first tick fetches.
 func (m *model) settle() tea.Cmd {
 	p := m.pr
 	if p == nil || p.polling {
 		return nil
 	}
 	p.polling = true
+	next := m.detailDelay
 	var fetch tea.Cmd
-	if p.d == nil || m.now().Sub(p.at) >= prDetailPoll {
+	switch {
+	case m.now().Before(m.detailRetry):
+		next = m.detailRetry.Sub(m.now())
+	case p.d == nil || m.now().Sub(p.at) >= prDetailPoll:
 		fetch = m.fetchDetail(false)
 	}
-	return tea.Batch(fetch, detailTick(p.delay, m.prGen))
+	return tea.Batch(fetch, detailTick(next, m.prGen))
 }
 
 // enterPreview moves focus into the preview; on a PR row, into the PR.
@@ -225,8 +228,16 @@ func (m *model) remember(repo string, n int, d *pr.Detail) {
 	}
 }
 
+// onDetail applies a detail result. A low rate limit, on any PR's fetch,
+// doubles the interval detail fetches wait, up to five minutes, for every PR.
 func (m *model) onDetail(msg detailMsg) tea.Cmd {
 	m.inflight = false
+	if msg.low {
+		m.detailDelay = min(m.detailDelay*2, prPollMax)
+		m.detailRetry = m.now().Add(m.detailDelay)
+	} else {
+		m.detailDelay, m.detailRetry = prDetailPoll, time.Time{}
+	}
 	if msg.err == nil && msg.d != nil {
 		m.remember(msg.repo, msg.n, msg.d)
 	}
@@ -254,13 +265,7 @@ func (m *model) onDetail(msg detailMsg) tea.Cmd {
 	if !msg.tick {
 		return next
 	}
-	if msg.low {
-		p.delay = min(p.delay*2, prPollMax)
-		p.retry = m.now().Add(p.delay)
-	} else {
-		p.delay = prDetailPoll
-	}
-	return tea.Batch(next, detailTick(p.delay, m.prGen))
+	return tea.Batch(next, detailTick(m.detailDelay, m.prGen))
 }
 
 func (m *model) onDetailTick(msg detailTickMsg) tea.Cmd {
@@ -394,24 +399,24 @@ func (m *model) openPRURL() tea.Cmd {
 	return openCmd(u)
 }
 
-// chipLabels are the tabs' labels with what is known of their counts:
-// Checks passing/all in the rollup's colour, then reviews, files and commits.
-func (m *model) chipLabels(counts bool) []string {
+// chipShort are the tabs' names, shorter by level.
+var chipShort = [][]string{prTabs, {"Overview", "Checks", "Rev", "Files", "Commits"}, {"Overview", "Checks", "Rev", "Files", "Cmts"}}
+
+// chipLabels are the tabs' names at a shortness level, and what is known of
+// their counts: Checks passing/all, then reviews, files and commits.
+func (m *model) chipLabels(short int) (names, counts []string) {
+	names = chipShort[short]
 	cs, _ := m.prChecks()
-	out := make([]string, len(prTabs))
-	copy(out, prTabs)
-	out[1] += " " + fmt.Sprintf("%d/%d", passing(cs), len(cs))
-	if !counts {
-		return out
-	}
+	counts = make([]string, len(prTabs))
+	counts[1] = fmt.Sprintf("%d/%d", passing(cs), len(cs))
 	if s, ok := m.prSummary(); ok {
-		out[3] += fmt.Sprintf(" %d", s.ChangedFiles)
+		counts[3] = fmt.Sprint(s.ChangedFiles)
 	}
 	if d := m.pr.d; d != nil {
-		out[2] += fmt.Sprintf(" %d", events(d, "review"))
-		out[4] += fmt.Sprintf(" %d", events(d, "commit"))
+		counts[2] = fmt.Sprint(events(d, "review"))
+		counts[4] = fmt.Sprint(events(d, "commit"))
 	}
-	return out
+	return names, counts
 }
 
 // events counts the detail's timeline entries of kind.
@@ -425,49 +430,61 @@ func events(d *pr.Detail, kind string) int {
 	return n
 }
 
-// chipsLayout is the tabs as bases, w wide at most, and where each label
+// chipFits are the ways the tabs line narrows, widest first: closer gaps,
+// short names, bases only on the active tab, then counts only on Checks.
+var chipFits = []struct {
+	sep           string
+	short         int
+	marks, counts bool
+}{
+	{"  ", 0, true, true},
+	{" ", 0, true, true},
+	{" ", 1, true, true},
+	{" ", 2, true, true},
+	{" ", 0, false, true},
+	{" ", 2, false, true},
+	{" ", 2, false, false},
+}
+
+// chipsLayout is the tabs as bases, w wide at most, and where each tab
 // starts and ends: ◆ in clay on the active one, ◇ on the others; the checks
-// count takes the rollup's colour. A narrow pane closes the gaps, then drops
-// the counts other than Checks', then the bases but the active one.
+// count takes the rollup's colour. Known counts stay while anything else can
+// give way.
 func (m *model) chipsLayout(w int) (string, [][2]int) {
 	cs, _ := m.prChecks()
-	var plain []string
-	sep, marks := "  ", true
-	for _, try := range []struct {
-		sep    string
-		counts bool
-		marks  bool
-	}{{"  ", true, true}, {" ", true, true}, {" ", false, true}, {" ", false, false}} {
-		plain, sep, marks = m.chipLabels(try.counts), try.sep, try.marks
-		if n := ansi.StringWidth(strings.Join(plain, sep)) + 2*len(plain); n <= w || !marks {
+	var line string
+	var spans [][2]int
+	for _, fit := range chipFits {
+		names, counts := m.chipLabels(fit.short)
+		var parts []string
+		spans = spans[:0]
+		x := 0
+		for i, name := range names {
+			mark, st := th.line.Render("◇")+" ", th.dim
+			if i == m.pr.section {
+				mark, st = th.clay.Render("◆")+" ", th.fg.Bold(true)
+			} else if !fit.marks {
+				mark = ""
+			}
+			p := mark + st.Render(name)
+			switch c := counts[i]; {
+			case c == "":
+			case i == 1:
+				p += " " + tint(Rollup(cs), c)
+			case fit.counts:
+				p += " " + th.dim.Render(c)
+			}
+			pw := ansi.StringWidth(p)
+			spans = append(spans, [2]int{x, x + pw})
+			x += pw + len(fit.sep)
+			parts = append(parts, p)
+		}
+		line = strings.Join(parts, fit.sep)
+		if ansi.StringWidth(line) <= w {
 			break
 		}
 	}
-	var parts []string
-	var spans [][2]int
-	x := 0
-	for i, l := range plain {
-		mark, st := th.line.Render("◇")+" ", th.dim
-		if i == m.pr.section {
-			mark, st = th.clay.Render("◆")+" ", th.fg.Bold(true)
-		} else if !marks {
-			mark = ""
-		}
-		name, count, _ := strings.Cut(l, " ")
-		s := mark + st.Render(name)
-		if count != "" {
-			if i == 1 {
-				s += " " + tint(Rollup(cs), count)
-			} else {
-				s += " " + th.dim.Render(count)
-			}
-		}
-		lw := ansi.StringWidth(ansi.Strip(mark)) + ansi.StringWidth(l)
-		spans = append(spans, [2]int{x, x + lw})
-		x += lw + len(sep)
-		parts = append(parts, s)
-	}
-	return truncate(strings.Join(parts, sep), w), spans
+	return truncate(line, w), spans
 }
 
 func (m *model) chips(w int) string {
@@ -498,7 +515,7 @@ const (
 func (m *model) prPreviewView(w, h int) string {
 	focused := m.focus == onPreview
 	inner := max(0, h-prHeadH)
-	lines := append(m.prHeader(w-2), m.chips(w), foul(w-2, false))
+	lines := append(m.prHeader(w-2), m.chips(w-2), foul(w-2, false))
 	switch m.pr.section {
 	case 0:
 		m.syncPage(w-2, inner)

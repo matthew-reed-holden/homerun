@@ -127,10 +127,14 @@ type model struct {
 	details  map[string]cachedDetail  // fetched details by "repo#n@headSHA"
 	inflight bool                     // a detail fetch is out
 	hoverDue bool                     // a PR was just shown: its rest timer is still to start
-	draft    textarea.Model           // the open PR's comment; kept across esc and failed sends
-	drafts   map[string]string        // "repo#n" -> the draft of a PR left with one
-	picked   string                   // the picked repo; "" or gone means the first
-	prGen    int                      // identifies the open PR so a stale fetch or tick is ignored
+	// detailDelay and detailRetry hold detail fetches back while GitHub's
+	// rate limit is low, whichever PR the preview shows.
+	detailDelay time.Duration
+	detailRetry time.Time
+	draft       textarea.Model    // the open PR's comment; kept across esc and failed sends
+	drafts      map[string]string // "repo#n" -> the draft of a PR left with one
+	picked      string            // the picked repo; "" or gone means the first
+	prGen       int               // identifies the open PR so a stale fetch or tick is ignored
 
 	gen      int // identifies the current log stream so a stale one is ignored
 	nextLine func() tea.Cmd
@@ -138,7 +142,7 @@ type model struct {
 }
 
 func newModel(c *api.Client, now func() time.Time, o Options) *model {
-	m := &model{c: c, now: now, o: o, hostErr: o.HostErr, prDelay: prPoll, w: 120, h: 40, tabs: newTabs(o.Tabs), draft: newDraft()}
+	m := &model{c: c, now: now, o: o, hostErr: o.HostErr, prDelay: prPoll, detailDelay: prDetailPoll, w: 120, h: 40, tabs: newTabs(o.Tabs), draft: newDraft()}
 	icons, _ = ParseIcons(o.Icons)
 	m.themeChoice, _ = parseTheme(o.Theme)
 	m.termDark = true
@@ -1063,7 +1067,7 @@ func (m *model) click(mo tea.Mouse) tea.Cmd {
 		case m.pr == nil:
 			m.tree.click(y - len(m.previewHead(lay.pw-2)))
 		case y == prTabsY:
-			if i := m.chipAt(mo.X-lay.px, lay.pw); i >= 0 {
+			if i := m.chipAt(mo.X-lay.px, lay.pw-2); i >= 0 {
 				m.pr.section = i
 			}
 		case m.pr.section == 1:
